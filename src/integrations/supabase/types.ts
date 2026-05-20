@@ -14,13 +14,230 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      aulas: {
+        Row: {
+          created_at: string | null
+          curso_id: string
+          descricao: string | null
+          id: string
+          ordem: number
+          titulo: string
+          youtube_url: string
+        }
+        Insert: {
+          created_at?: string | null
+          curso_id: string
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          titulo: string
+          youtube_url?: string
+        }
+        Update: {
+          created_at?: string | null
+          curso_id?: string
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          titulo?: string
+          youtube_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aulas_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      curso_turmas: {
+        Row: {
+          curso_id: string
+          turma_id: string
+        }
+        Insert: {
+          curso_id: string
+          turma_id: string
+        }
+        Update: {
+          curso_id?: string
+          turma_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curso_turmas_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curso_turmas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cursos: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string
+          titulo: string
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          titulo: string
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          activated_at: string | null
+          created_at: string | null
+          email: string
+          id: string
+          invite_expires_at: string | null
+          invite_token: string | null
+          reset_expires_at: string | null
+          reset_token: string | null
+          role: string
+          status: string
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string | null
+          email: string
+          id: string
+          invite_expires_at?: string | null
+          invite_token?: string | null
+          reset_expires_at?: string | null
+          reset_token?: string | null
+          role?: string
+          status?: string
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          invite_expires_at?: string | null
+          invite_token?: string | null
+          reset_expires_at?: string | null
+          reset_token?: string | null
+          role?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      progresso: {
+        Row: {
+          aula_id: string
+          concluido: boolean | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          aula_id: string
+          concluido?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          aula_id?: string
+          concluido?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progresso_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progresso_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turmas: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
+      user_turmas: {
+        Row: {
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_turmas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_turmas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
