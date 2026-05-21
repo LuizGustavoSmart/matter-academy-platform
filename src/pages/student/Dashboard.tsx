@@ -27,7 +27,7 @@ export default function StudentDashboard() {
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
       const counts: Record<string, { total: number; done: number }> = {};
-      (as ?? []).forEach((a) => {
+      (as ?? []).forEach((a: { id: string; curso_id: string }) => {
         if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
         counts[a.curso_id].total++;
         if (doneSet.has(a.id)) counts[a.curso_id].done++;
