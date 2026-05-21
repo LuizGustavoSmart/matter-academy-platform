@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
 import { getYouTubeId } from '../../lib/youtube';
 
-type Aula = { id: string; curso_id: string; titulo: string; descricao: string; youtube_url: string; ordem: number };
+type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
 type Curso = { id: string; titulo: string; turmasLabel: string };
 
 export default function AdminAulas() {
