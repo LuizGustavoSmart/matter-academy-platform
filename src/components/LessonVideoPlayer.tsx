@@ -269,10 +269,13 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     );
   }
 
-  const isLoading = playerState === -1 || playerState === 3;
+  const isBuffering = playerState === 3;
+  const isUnstarted = playerState === -1;
   const isPaused = playerState === 2;
   const isEnded = playerState === 0;
   const isPlaying = playerState === 1;
+  const showInitialLoader = !isReady;
+  const showCenterPlay = isReady && (isUnstarted || isPaused);
 
   return (
     <div
@@ -284,32 +287,43 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     >
       {/* CAMADA 0: player */}
       <div className="absolute inset-0 z-0">
-        <div ref={playerHostRef} className="w-full h-full" />
+        <div ref={playerHostRef} className="w-full h-full pointer-events-none" />
       </div>
 
-      {/* CAMADA 1: marca d'água */}
-      {userEmail && (
+      {/* CAMADA 1: clique central (play/pause) — sempre presente sobre o vídeo, exceto quando ended */}
+      {!isEnded && (
         <div
-          className="absolute z-10 pointer-events-none text-white/25 text-sm font-medium transition-all duration-1000"
-          style={{ top: wmPos.top, left: wmPos.left, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
-        >
-          {userEmail}
-        </div>
+          className="absolute left-0 right-0 top-0 z-10 cursor-pointer"
+          style={{ bottom: 64 }}
+          onClick={() => {
+            if (!isReady) return;
+            const p = playerRef.current; if (!p) return;
+            const s = p.getPlayerState?.();
+            if (s === 1) p.pauseVideo(); else p.playVideo();
+          }}
+        />
       )}
 
-      {/* CAMADA 2: loading */}
-      {isLoading && (
+      {/* CAMADA 2: loader inicial (apenas antes do player estar pronto) */}
+      {showInitialLoader && (
         <div className="absolute inset-0 z-20 bg-black grid place-items-center">
           <Loader2 className="w-10 h-10 text-[#cbfb00] animate-spin" />
         </div>
       )}
 
-      {/* CAMADA 3: pausado */}
-      {isPaused && (
-        <div className="absolute inset-0 z-20 bg-black/70 grid place-items-center">
+      {/* CAMADA 2b: buffering durante reprodução — spinner discreto, sem cobrir o vídeo */}
+      {isReady && isBuffering && (
+        <div className="absolute inset-0 z-20 grid place-items-center pointer-events-none">
+          <Loader2 className="w-10 h-10 text-white/80 animate-spin drop-shadow-lg" />
+        </div>
+      )}
+
+      {/* CAMADA 3: botão central de play (pronto e não tocando) */}
+      {showCenterPlay && (
+        <div className={`absolute inset-0 z-20 grid place-items-center ${isPaused ? 'bg-black/40' : 'bg-black/20'} pointer-events-none`}>
           <button
             onClick={() => playerRef.current?.playVideo()}
-            className="w-20 h-20 rounded-full bg-white grid place-items-center hover:scale-105 transition-transform"
+            className="pointer-events-auto w-20 h-20 rounded-full bg-white grid place-items-center hover:scale-105 transition-transform shadow-2xl"
             aria-label="Reproduzir"
           >
             <Play className="w-8 h-8 text-black fill-black ml-1" />
