@@ -357,14 +357,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
         </div>
       )}
 
-      {/* CAMADA 5: clique pra pausar (apenas playing) */}
-      {isPlaying && (
-        <div
-          className="absolute left-0 right-0 top-0 z-10 cursor-pointer"
-          style={{ bottom: 64 }}
-          onClick={togglePlay}
-        />
-      )}
+      {/* (click overlay is camada 1) */}
 
       {/* CAMADA 6: barra de controles */}
       <div
