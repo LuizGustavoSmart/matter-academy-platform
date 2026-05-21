@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
 
-type Curso = { id: string; titulo: string; descricao: string };
+type Curso = { id: string; titulo: string; descricao: string | null };
 type Turma = { id: string; nome: string };
 
 export default function AdminCursos() {

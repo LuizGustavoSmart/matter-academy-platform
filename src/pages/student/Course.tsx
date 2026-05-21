@@ -7,7 +7,7 @@ import { Button, ProgressBar } from '../../components/ui';
 import { getYouTubeEmbed } from '../../lib/youtube';
 
 type Aula = { id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
-type Curso = { id: string; titulo: string; descricao: string };
+type Curso = { id: string; titulo: string; descricao: string | null };
 
 export default function StudentCourse() {
   const { id } = useParams();
