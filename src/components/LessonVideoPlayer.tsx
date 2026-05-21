@@ -120,6 +120,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
             playerRef.current = player;
             setDuration(player.getDuration() ?? 0);
             setVolume(player.getVolume() ?? 100);
+            setIsReady(true);
             const iframe = player.getIframe?.();
             if (iframe) {
               iframe.setAttribute(
