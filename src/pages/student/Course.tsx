@@ -34,7 +34,7 @@ export default function StudentCourse() {
       const courseAulaIds = new Set((as ?? []).map((a) => a.id));
       const lastAccessed = (ps ?? [])
         .filter((p) => courseAulaIds.has(p.aula_id))
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+        .sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())[0];
       setCurrentId(lastAccessed?.aula_id ?? (as?.[0]?.id ?? null));
       setLoading(false);
     };
