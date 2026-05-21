@@ -49,7 +49,6 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const hideControlsTimer = useRef<number | null>(null);
 
   const [videoId, setVideoId] = useState<string | null>(null);
-  setUserEmail; // keep state setter for fetch (email no longer displayed)
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
   const [isReady, setIsReady] = useState(false);
