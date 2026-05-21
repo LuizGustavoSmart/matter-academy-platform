@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize2, RotateCcw, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+// watermark removed
 import { supabase } from '../lib/supabase';
 
 declare global {
