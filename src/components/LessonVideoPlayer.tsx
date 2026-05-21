@@ -165,16 +165,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     };
   }, [duration]);
 
-  // Watermark reposition
-  useEffect(() => {
-    const move = () => {
-      const top = (10 + Math.random() * 70).toFixed(1) + '%';
-      const left = (5 + Math.random() * 70).toFixed(1) + '%';
-      setWmPos({ top, left });
-    };
-    const id = window.setInterval(move, 8000);
-    return () => window.clearInterval(id);
-  }, []);
+  // (watermark removed)
 
   // Keyboard shortcuts
   useEffect(() => {
