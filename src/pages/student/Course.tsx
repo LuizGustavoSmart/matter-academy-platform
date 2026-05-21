@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar } from '../../components/ui';
-import { getYouTubeEmbed } from '../../lib/youtube';
+import LessonVideoPlayer from '../../components/LessonVideoPlayer';
 
-type Aula = { id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
+type Aula = { id: string; titulo: string; descricao: string | null; ordem: number };
 type Curso = { id: string; titulo: string; descricao: string | null };
 
 export default function StudentCourse() {
@@ -25,13 +25,17 @@ export default function StudentCourse() {
       const { data: c } = await supabase.from('cursos').select('*').eq('id', id).maybeSingle();
       if (!c) { nav('/dashboard'); return; }
       setCurso(c);
-      const { data: as } = await supabase.from('aulas').select('*').eq('curso_id', id).order('ordem');
-      setAulas(as ?? []);
+      const { data: as } = await (supabase as any)
+        .from('lessons_public')
+        .select('id,titulo,descricao,ordem')
+        .eq('curso_id', id)
+        .order('ordem');
+      setAulas((as ?? []) as Aula[]);
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id);
       const doneSet = new Set((ps ?? []).filter((p) => p.concluido).map((p) => p.aula_id));
       setDone(doneSet);
 
-      const courseAulaIds = new Set((as ?? []).map((a) => a.id));
+      const courseAulaIds = new Set((as ?? []).map((a: Aula) => a.id));
       const lastAccessed = (ps ?? [])
         .filter((p) => courseAulaIds.has(p.aula_id))
         .sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())[0];
@@ -43,7 +47,6 @@ export default function StudentCourse() {
 
   const current = useMemo(() => aulas.find((a) => a.id === currentId) ?? null, [aulas, currentId]);
   const currentIdx = useMemo(() => aulas.findIndex((a) => a.id === currentId), [aulas, currentId]);
-  const embed = current ? getYouTubeEmbed(current.youtube_url) : null;
 
   const selectAula = async (aulaId: string) => {
     setCurrentId(aulaId);
@@ -67,11 +70,26 @@ export default function StudentCourse() {
     setDone(next);
   };
 
+  const markCurrentDone = async () => {
+    if (!current || !profile || done.has(current.id)) return;
+    await supabase.from('progresso').upsert(
+      { user_id: profile.id, aula_id: current.id, concluido: true, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,aula_id' }
+    );
+    setDone((prev) => new Set(prev).add(current.id));
+  };
+
+  const goNext = () => {
+    const next = aulas[currentIdx + 1];
+    if (next) selectAula(next.id);
+  };
+
   if (loading) return <div className="max-w-6xl mx-auto px-6 py-12"><p className="meta">Carregando...</p></div>;
   if (!curso) return null;
 
   const pct = aulas.length ? Math.round((done.size / aulas.length) * 100) : 0;
   const isDone = current ? done.has(current.id) : false;
+  const hasNext = currentIdx < aulas.length - 1;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -120,18 +138,14 @@ export default function StudentCourse() {
         <section className="p-6 lg:p-10">
           {current ? (
             <>
-              <div className="aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black mb-6">
-                {embed ? (
-                  <iframe
-                    src={embed}
-                    title={current.titulo}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <div className="w-full h-full grid place-items-center text-[#434d5e] text-sm">Vídeo não disponível</div>
-                )}
+              <div className="mb-6">
+                <LessonVideoPlayer
+                  key={current.id}
+                  lessonId={current.id}
+                  hasNext={hasNext}
+                  onEnded={markCurrentDone}
+                  onNext={goNext}
+                />
               </div>
 
               <div className="flex items-start justify-between gap-4 mb-4">
@@ -155,7 +169,6 @@ export default function StudentCourse() {
                   variant="secondary"
                   onClick={() => selectAula(aulas[currentIdx - 1].id)}
                   disabled={currentIdx <= 0}
-                  icon={<ChevronLeft className="w-4 h-4" />}
                 >
                   Aula anterior
                 </Button>
@@ -164,7 +177,7 @@ export default function StudentCourse() {
                   onClick={() => selectAula(aulas[currentIdx + 1].id)}
                   disabled={currentIdx >= aulas.length - 1}
                 >
-                  Próxima aula <ChevronRight className="w-4 h-4" />
+                  Próxima aula
                 </Button>
               </div>
             </>

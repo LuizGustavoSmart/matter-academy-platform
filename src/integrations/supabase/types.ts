@@ -173,6 +173,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "progresso_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "lessons_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "progresso_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -232,9 +239,70 @@ export type Database = {
           },
         ]
       }
+      video_access_logs: {
+        Row: {
+          accessed_at: string
+          id: string
+          ip_address: string | null
+          lesson_id: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accessed_at?: string
+          id?: string
+          ip_address?: string | null
+          lesson_id: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accessed_at?: string
+          id?: string
+          ip_address?: string | null
+          lesson_id?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      lessons_public: {
+        Row: {
+          created_at: string | null
+          curso_id: string | null
+          descricao: string | null
+          id: string | null
+          ordem: number | null
+          titulo: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          curso_id?: string | null
+          descricao?: string | null
+          id?: string | null
+          ordem?: number | null
+          titulo?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          curso_id?: string | null
+          descricao?: string | null
+          id?: string | null
+          ordem?: number | null
+          titulo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aulas_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }

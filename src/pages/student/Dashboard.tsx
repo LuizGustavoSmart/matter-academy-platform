@@ -23,11 +23,11 @@ export default function StudentDashboard() {
       if (!profile) return;
       const { data: cs } = await supabase.from('cursos').select('id,titulo,descricao');
       const cursoIds = (cs ?? []).map((c) => c.id);
-      const { data: as } = await supabase.from('aulas').select('id,curso_id').in('curso_id', cursoIds.length ? cursoIds : ['00000000-0000-0000-0000-000000000000']);
+      const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', cursoIds.length ? cursoIds : ['00000000-0000-0000-0000-000000000000']);
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
       const counts: Record<string, { total: number; done: number }> = {};
-      (as ?? []).forEach((a) => {
+      (as ?? []).forEach((a: { id: string; curso_id: string }) => {
         if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
         counts[a.curso_id].total++;
         if (doneSet.has(a.id)) counts[a.curso_id].done++;
