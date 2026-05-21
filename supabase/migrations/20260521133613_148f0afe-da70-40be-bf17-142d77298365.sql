@@ -1,0 +1,1 @@
+UPDATE auth.users SET encrypted_password = crypt('TestPass123!', gen_salt('bf')) WHERE email='luiz.gustavo@smartie.com.br';
