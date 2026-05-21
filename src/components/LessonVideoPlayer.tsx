@@ -81,7 +81,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
         return;
       }
       setVideoId(data?.videoId ?? null);
-      setUserEmail(data?.userEmail ?? '');
+      // userEmail no longer needed (watermark removed)
     } catch (e) {
       setLoadErr('Erro de rede. Tente novamente.');
     } finally {
