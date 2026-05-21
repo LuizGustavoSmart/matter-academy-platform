@@ -50,14 +50,23 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (lessonErr || !lesson) return json({ error: 'Aula não encontrada' }, 404);
 
-    // Check enrollment
-    const { data: enrollment } = await admin
-      .from('curso_turmas')
-      .select('turma_id, user_turmas!inner(user_id)')
-      .eq('curso_id', lesson.curso_id)
-      .eq('user_turmas.user_id', userId)
-      .limit(1)
-      .maybeSingle();
+    // Check enrollment: find turmas the user belongs to that include this curso
+    const { data: userTurmas } = await admin
+      .from('user_turmas')
+      .select('turma_id')
+      .eq('user_id', userId);
+    const turmaIds = (userTurmas ?? []).map((t: { turma_id: string }) => t.turma_id);
+    let enrollment: { curso_id: string } | null = null;
+    if (turmaIds.length > 0) {
+      const { data: ct } = await admin
+        .from('curso_turmas')
+        .select('curso_id')
+        .eq('curso_id', lesson.curso_id)
+        .in('turma_id', turmaIds)
+        .limit(1)
+        .maybeSingle();
+      enrollment = ct;
+    }
 
     // also allow admins
     const { data: profile } = await admin
