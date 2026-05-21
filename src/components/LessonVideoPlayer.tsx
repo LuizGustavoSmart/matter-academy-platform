@@ -49,9 +49,10 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const hideControlsTimer = useRef<number | null>(null);
 
   const [videoId, setVideoId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string>('');
+  const [, setUserEmail] = useState<string>('');
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
   const [playerState, setPlayerState] = useState<number>(-1); // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering
   const [current, setCurrent] = useState(0);
@@ -60,7 +61,6 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
-  const [wmPos, setWmPos] = useState({ top: '20%', left: '15%' });
 
   // Fetch videoId from edge function
   const fetchVideo = useCallback(async () => {
