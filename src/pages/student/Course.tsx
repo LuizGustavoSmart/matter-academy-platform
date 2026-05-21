@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar } from '../../components/ui';
 import { getYouTubeEmbed } from '../../lib/youtube';
 
-type Aula = { id: string; titulo: string; descricao: string; youtube_url: string; ordem: number };
+type Aula = { id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
 type Curso = { id: string; titulo: string; descricao: string };
 
 export default function StudentCourse() {

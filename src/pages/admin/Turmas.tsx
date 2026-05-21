@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen } from 'lucide-react
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
 
-type Turma = { id: string; nome: string; descricao: string; created_at: string };
+type Turma = { id: string; nome: string; descricao: string | null; created_at: string };
 
 export default function AdminTurmas() {
   const [turmas, setTurmas] = useState<Turma[]>([]);

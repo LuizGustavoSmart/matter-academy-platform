@@ -8,7 +8,7 @@ import { Card, Empty, ProgressBar } from '../../components/ui';
 type CourseCard = {
   id: string;
   titulo: string;
-  descricao: string;
+  descricao: string | null;
   total: number;
   done: number;
 };
