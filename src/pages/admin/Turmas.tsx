@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
@@ -33,7 +33,8 @@ export default function AdminTurmas() {
 
   useEffect(() => { load(); }, []);
 
-  const del = async (t: Turma) => {
+  const del = async (e: React.MouseEvent, t: Turma) => {
+    e.stopPropagation();
     if (!confirm(`Excluir turma "${t.nome}"? Os vínculos com alunos e cursos serão removidos.`)) return;
     const { error } = await supabase.from('turmas').delete().eq('id', t.id);
     if (error) setToast(error.message);
@@ -54,17 +55,38 @@ export default function AdminTurmas() {
         turmas.length === 0 ? <Empty title="Nenhuma turma criada" description="Crie sua primeira turma para começar" /> : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {turmas.map((t) => (
-              <Card key={t.id} className="p-5">
-                <h3 className="mb-1">{t.nome}</h3>
-                <p className="text-sm mb-4 line-clamp-2 min-h-[40px]">{t.descricao || '—'}</p>
-                <div className="flex items-center gap-4 mb-4">
-                  <span className="flex items-center gap-1 text-sm text-[#d6deed]"><UsersIcon className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.alunos ?? 0} alunos</span>
-                  <span className="flex items-center gap-1 text-sm text-[#d6deed]"><BookOpen className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.cursos ?? 0} cursos</span>
+              <Card
+                key={t.id}
+                className="p-5 cursor-pointer hover:border-[#434d5e] transition-colors relative"
+                onClick={() => nav(`/admin/turmas/${t.id}`)}
+              >
+                {/* Ícones de ação no canto superior direito */}
+                <div className="absolute top-4 right-4 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditOpen(t); }}
+                    className="p-1.5 rounded text-[#d6deed] hover:bg-[#434d5e]/30 transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => del(e, t)}
+                    className="p-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  <Button variant="primary" icon={<ChevronRight className="w-4 h-4" />} onClick={() => nav(`/admin/turmas/${t.id}/cursos`)}>Ver Cursos</Button>
-                  <Button variant="secondary" icon={<Pencil className="w-4 h-4" />} onClick={() => setEditOpen(t)}>Editar</Button>
-                  <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => del(t)} />
+
+                <h3 className="mb-1 pr-16">{t.nome}</h3>
+                <p className="text-sm mb-4 line-clamp-2 min-h-[40px]">{t.descricao || '—'}</p>
+                <div className="flex items-center gap-4">
+                  <span className="flex items-center gap-1 text-sm text-[#d6deed]">
+                    <UsersIcon className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.alunos ?? 0} alunos
+                  </span>
+                  <span className="flex items-center gap-1 text-sm text-[#d6deed]">
+                    <BookOpen className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.cursos ?? 0} cursos
+                  </span>
                 </div>
               </Card>
             ))}
