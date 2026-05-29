@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
 
 type Turma = { id: string; nome: string; descricao: string | null; created_at: string | null };
 
 export default function AdminTurmas() {
+  const nav = useNavigate();
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [counts, setCounts] = useState<Record<string, { alunos: number; cursos: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,8 @@ export default function AdminTurmas() {
                   <span className="flex items-center gap-1 text-sm text-[#d6deed]"><UsersIcon className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.alunos ?? 0} alunos</span>
                   <span className="flex items-center gap-1 text-sm text-[#d6deed]"><BookOpen className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.cursos ?? 0} cursos</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button variant="primary" icon={<ChevronRight className="w-4 h-4" />} onClick={() => nav(`/admin/turmas/${t.id}/cursos`)}>Ver Cursos</Button>
                   <Button variant="secondary" icon={<Pencil className="w-4 h-4" />} onClick={() => setEditOpen(t)}>Editar</Button>
                   <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => del(t)} />
                 </div>
