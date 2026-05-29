@@ -9,8 +9,8 @@ import AdminLayout from './layouts/AdminLayout';
 import StudentLayout from './layouts/StudentLayout';
 import AdminUsers from './pages/admin/Users';
 import AdminTurmas from './pages/admin/Turmas';
-import AdminTurmaCursos from './pages/admin/TurmaCursos';
-import AdminCursoAulas from './pages/admin/CursoAulas';
+import TurmaDetalhe from './pages/admin/TurmaDetalhe';
+import CursoDetalhe from './pages/admin/CursoDetalhe';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCourse from './pages/student/Course';
 
@@ -71,8 +71,8 @@ export default function App() {
               <Route path="/admin" element={<Navigate to="/admin/usuarios" replace />} />
               <Route path="/admin/usuarios" element={<AdminUsers />} />
               <Route path="/admin/turmas" element={<AdminTurmas />} />
-              <Route path="/admin/turmas/:turmaId/cursos" element={<AdminTurmaCursos />} />
-              <Route path="/admin/turmas/:turmaId/cursos/:cursoId/aulas" element={<AdminCursoAulas />} />
+              <Route path="/admin/turmas/:turmaId" element={<TurmaDetalhe />} />
+              <Route path="/admin/turmas/:turmaId/cursos/:cursoId" element={<CursoDetalhe />} />
             </Route>
           </Route>
 
