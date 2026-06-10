@@ -56,12 +56,13 @@ Deno.serve(async (req: Request) => {
       }
       const { error: authErr } = await admin.auth.admin.updateUserById(profile.id, { password });
       if (authErr) return json({ error: authErr.message }, 400);
-      await admin.from("profiles").update({
+      const { error: updErr } = await admin.from("profiles").update({
         status: "active",
         invite_token: null,
         invite_expires_at: null,
         activated_at: new Date().toISOString(),
       }).eq("id", profile.id);
+      if (updErr) return json({ error: updErr.message }, 400);
       return json({ ok: true });
     }
 
