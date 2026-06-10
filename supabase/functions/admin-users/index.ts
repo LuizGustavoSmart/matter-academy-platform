@@ -10,6 +10,51 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
+const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
+
+type InviteEvent = "invite" | "reinvite";
+
+async function sendInviteWebhook(payload: {
+  event: InviteEvent;
+  email: string;
+  token: string;
+  expires_at: string;
+  role: string;
+}) {
+  if (!INVITE_WEBHOOK_URL) {
+    console.log("[webhook] INVITE_WEBHOOK_URL not set, skipping");
+    return;
+  }
+  const link = `${PUBLIC_APP_URL.replace(/\/$/, "")}/ativar?token=${payload.token}`;
+  const body = {
+    event: payload.event,
+    email: payload.email,
+    link,
+    expires_at: payload.expires_at,
+    role: payload.role,
+  };
+  try {
+    const res = await fetch(INVITE_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    });
+    console.log(`[webhook] ${payload.event} -> ${payload.email} status=${res.status}`);
+  } catch (e) {
+    console.error(`[webhook] failed for ${payload.email}:`, (e as Error).message);
+  }
+}
+
+function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
+  try {
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    EdgeRuntime.waitUntil(sendInviteWebhook(payload));
+  } catch {
+    sendInviteWebhook(payload);
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -89,6 +134,8 @@ Deno.serve(async (req: Request) => {
         await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
       }
 
+      fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role });
+
       return json({ user_id: created.user.id, invite_token });
     }
 
@@ -96,10 +143,15 @@ Deno.serve(async (req: Request) => {
       const { user_id } = body as { user_id: string };
       const invite_token = genToken();
       const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await admin.from("profiles")
+      const { data: updated, error } = await admin.from("profiles")
         .update({ invite_token, invite_expires_at, status: "pending" })
-        .eq("id", user_id);
+        .eq("id", user_id)
+        .select("email,role")
+        .maybeSingle();
       if (error) return json({ error: error.message }, 400);
+      if (updated?.email) {
+        fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
+      }
       return json({ invite_token });
     }
 
