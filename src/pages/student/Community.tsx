@@ -9,7 +9,7 @@ type Post = {
   id: string;
   user_id: string;
   content: string;
-  created_at: string;
+  created_at: string | null;
   profiles: { email: string } | null;
 };
 
@@ -17,12 +17,13 @@ type Comment = {
   id: string;
   user_id: string;
   content: string;
-  created_at: string;
+  created_at: string | null;
   profiles: { email: string } | null;
 };
 
 /* ── Helpers ── */
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | null): string {
+  if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60_000);
   if (m < 1) return 'agora mesmo';
