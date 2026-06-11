@@ -11,7 +11,6 @@ import AdminUsers from './pages/admin/Users';
 import AdminTurmas from './pages/admin/Turmas';
 import TurmaDetalhe from './pages/admin/TurmaDetalhe';
 import CursoDetalhe from './pages/admin/CursoDetalhe';
-import AdminProfessores from './pages/admin/Professores';
 import AdminCursos from './pages/admin/Cursos';
 import AdminAulas from './pages/admin/Aulas';
 import StudentDashboard from './pages/student/Dashboard';
@@ -77,7 +76,6 @@ export default function App() {
               <Route path="/admin/turmas" element={<AdminTurmas />} />
               <Route path="/admin/turmas/:turmaId" element={<TurmaDetalhe />} />
               <Route path="/admin/turmas/:turmaId/cursos/:cursoId" element={<CursoDetalhe />} />
-              <Route path="/admin/professores" element={<AdminProfessores />} />
               <Route path="/admin/cursos" element={<AdminCursos />} />
               <Route path="/admin/aulas" element={<AdminAulas />} />
             </Route>

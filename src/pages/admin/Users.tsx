@@ -5,15 +5,19 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
 
 type Turma = { id: string; nome: string };
-type Role = 'admin' | 'student' | 'professor';
+type Role = 'admin' | 'student' | 'professor' | 'monitor';
 type UserRow = {
   id: string; email: string; role: Role; status: string;
   created_at: string; invite_token: string | null;
   turmas: { id: string; nome: string }[];
 };
 
-const ROLE_LABEL: Record<Role, string> = { admin: 'Administrador', student: 'Aluno', professor: 'Professor' };
-const ROLE_TONE: Record<Role, 'success' | 'default' | 'warn'> = { admin: 'success', professor: 'warn', student: 'default' };
+const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Administrador', student: 'Aluno', professor: 'Professor', monitor: 'Monitor',
+};
+const ROLE_TONE: Record<Role, 'success' | 'default' | 'warn'> = {
+  admin: 'success', professor: 'warn', monitor: 'warn', student: 'default',
+};
 
 export default function AdminUsers() {
   const { profile: current } = useAuth();
@@ -188,6 +192,7 @@ export default function AdminUsers() {
             <option value="">Todos os papéis</option>
             <option value="admin">Administrador</option>
             <option value="professor">Professor</option>
+            <option value="monitor">Monitor</option>
             <option value="student">Aluno</option>
           </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="max-w-[180px]">
@@ -413,6 +418,7 @@ function CreateUserModal({
           <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             <option value="student">Aluno</option>
             <option value="professor">Professor</option>
+            <option value="monitor">Monitor</option>
             <option value="admin">Administrador</option>
           </select>
         </div>
@@ -515,6 +521,7 @@ function EditUserModal({
           <select value={role} onChange={(e) => setRole(e.target.value as Role)} disabled={isSelf}>
             <option value="student">Aluno</option>
             <option value="professor">Professor</option>
+            <option value="monitor">Monitor</option>
             <option value="admin">Administrador</option>
           </select>
           {isSelf && <p className="meta mt-1">Você não pode alterar seu próprio papel</p>}
