@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AdminLayout from './layouts/AdminLayout';
 import StudentLayout from './layouts/StudentLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/Users';
 import AdminTurmas from './pages/admin/Turmas';
 import TurmaDetalhe from './pages/admin/TurmaDetalhe';
@@ -71,7 +72,7 @@ export default function App() {
 
           <Route element={<RequireAuth roles={["admin"]} />}>
             <Route element={<AdminLayout />}>
-              <Route path="/admin" element={<Navigate to="/admin/usuarios" replace />} />
+              <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/usuarios" element={<AdminUsers />} />
               <Route path="/admin/turmas" element={<AdminTurmas />} />
               <Route path="/admin/turmas/:turmaId" element={<TurmaDetalhe />} />

@@ -1,13 +1,14 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Layers, BookOpen, PlayCircle, LogOut } from 'lucide-react';
+import { Users, Layers, BookOpen, PlayCircle, LogOut, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 
 const items = [
-  { to: '/admin/usuarios', label: 'Usuários', icon: Users },
-  { to: '/admin/turmas',   label: 'Turmas',   icon: Layers },
-  { to: '/admin/cursos',   label: 'Cursos',   icon: BookOpen },
-  { to: '/admin/aulas',    label: 'Aulas',    icon: PlayCircle },
+  { to: '/admin',          label: 'Visão Geral', icon: LayoutDashboard },
+  { to: '/admin/usuarios', label: 'Usuários',    icon: Users },
+  { to: '/admin/turmas',   label: 'Turmas',      icon: Layers },
+  { to: '/admin/cursos',   label: 'Cursos',      icon: BookOpen },
+  { to: '/admin/aulas',    label: 'Aulas',       icon: PlayCircle },
 ];
 
 export default function AdminLayout() {
