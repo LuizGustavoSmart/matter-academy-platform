@@ -22,7 +22,8 @@ type Comment = {
 };
 
 /* ── Helpers ── */
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | null): string {
+  if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60_000);
   if (m < 1) return 'agora mesmo';
