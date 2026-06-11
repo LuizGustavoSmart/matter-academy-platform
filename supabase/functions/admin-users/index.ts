@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === "POST" && action === "create") {
       const { email, turma_ids, role = "student" } = body as { email: string; turma_ids?: string[]; role?: string };
       if (!email) return json({ error: "Email obrigatório" }, 400);
-      if (!["admin", "student", "professor"].includes(role)) return json({ error: "Papel inválido" }, 400);
+      if (!["admin", "student", "professor", "monitor"].includes(role)) return json({ error: "Papel inválido" }, 400);
 
       const { data: existing } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
       if (existing) return json({ error: "Email já cadastrado" }, 400);
@@ -170,7 +170,7 @@ Deno.serve(async (req: Request) => {
       const updates: Record<string, unknown> = {};
       if (email) updates.email = email;
       if (status) updates.status = status;
-      if (role && ["admin", "student", "professor"].includes(role)) updates.role = role;
+      if (role && ["admin", "student", "professor", "monitor"].includes(role)) updates.role = role;
 
       if (email) {
         const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { email });

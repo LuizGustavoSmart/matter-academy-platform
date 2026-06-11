@@ -5,7 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 export type Profile = {
   id: string;
   email: string;
-  role: 'admin' | 'student' | 'professor';
+  role: 'admin' | 'student' | 'professor' | 'monitor';
   status: 'pending' | 'active' | 'blocked';
 };
 
