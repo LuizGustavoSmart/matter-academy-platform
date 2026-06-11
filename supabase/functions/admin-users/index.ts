@@ -128,7 +128,10 @@ Deno.serve(async (req: Request) => {
         password: tempPassword,
         email_confirm: true,
       });
-      if (createErr || !created.user) return json({ error: createErr?.message ?? "Erro ao criar usuário" }, 400);
+      if (createErr || !created.user) {
+        console.error("[admin-users:create] auth create failed", createErr?.message ?? "missing user");
+        return json({ error: createErr?.message ?? "Erro ao criar usuário" }, 400);
+      }
 
       const invite_token = genToken();
       const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -142,6 +145,7 @@ Deno.serve(async (req: Request) => {
         invite_expires_at,
       });
       if (profErr) {
+        console.error("[admin-users:create] profile insert failed", profErr.message);
         await admin.auth.admin.deleteUser(created.user.id);
         return json({ error: profErr.message }, 400);
       }
@@ -149,6 +153,7 @@ Deno.serve(async (req: Request) => {
       if (turma_ids?.length) {
         const { error: turmasErr } = await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
         if (turmasErr) {
+          console.error("[admin-users:create] turma link failed", turmasErr.message);
           await admin.from("profiles").delete().eq("id", created.user.id);
           await admin.auth.admin.deleteUser(created.user.id);
           return json({ error: turmasErr.message }, 400);
