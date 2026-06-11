@@ -24,6 +24,35 @@ function genToken() {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// ─── Webhook helper ───────────────────────────────────────────────────────────
+// Fire-and-forget: dispara o webhook pro Make.com sem bloquear a resposta.
+// Se INVITE_WEBHOOK_URL não estiver setado ou o fetch falhar, só loga e segue.
+async function sendInviteWebhook(payload: {
+  event: "invite" | "reinvite";
+  email: string;
+  link: string;
+  expires_at: string;
+  role: string;
+}) {
+  const webhookUrl = Deno.env.get("INVITE_WEBHOOK_URL");
+  if (!webhookUrl) {
+    console.log("[webhook] INVITE_WEBHOOK_URL não configurado — pulando envio.");
+    return;
+  }
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000),
+    });
+    console.log(`[webhook] OK: event=${payload.event} email=${payload.email} status=${res.status}`);
+  } catch (err) {
+    console.error(`[webhook] Falha (${payload.event} → ${payload.email}):`, err);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function requireAdmin(req: Request) {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace("Bearer ", "");
@@ -89,6 +118,16 @@ Deno.serve(async (req: Request) => {
         await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
       }
 
+      // Disparar webhook pro Make.com (fire-and-forget — não bloqueia a resposta)
+      const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
+      EdgeRuntime.waitUntil(sendInviteWebhook({
+        event: "invite",
+        email,
+        link: `${appUrl}/ativar?token=${invite_token}`,
+        expires_at: invite_expires_at,
+        role,
+      }));
+
       return json({ user_id: created.user.id, invite_token });
     }
 
@@ -96,10 +135,31 @@ Deno.serve(async (req: Request) => {
       const { user_id } = body as { user_id: string };
       const invite_token = genToken();
       const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Busca email e role antes de atualizar (precisamos pro payload do webhook)
+      const { data: targetProfile } = await admin
+        .from("profiles")
+        .select("email,role")
+        .eq("id", user_id)
+        .maybeSingle();
+
       const { error } = await admin.from("profiles")
         .update({ invite_token, invite_expires_at, status: "pending" })
         .eq("id", user_id);
       if (error) return json({ error: error.message }, 400);
+
+      // Disparar webhook pro Make.com (fire-and-forget — não bloqueia a resposta)
+      if (targetProfile?.email) {
+        const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
+        EdgeRuntime.waitUntil(sendInviteWebhook({
+          event: "reinvite",
+          email: targetProfile.email,
+          link: `${appUrl}/ativar?token=${invite_token}`,
+          expires_at: invite_expires_at,
+          role: targetProfile.role ?? "student",
+        }));
+      }
+
       return json({ invite_token });
     }
 
