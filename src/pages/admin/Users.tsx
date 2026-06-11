@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Copy, Check, Trash2, RefreshCw, Pencil, Search } from 'lucide-react';
+import { Plus, Copy, Check, Trash2, RefreshCw, Pencil, Search, Users, X } from 'lucide-react';
 import { supabase, callFn } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
@@ -30,6 +30,11 @@ export default function AdminUsers() {
   const [toast, setToast] = useState<{ msg: string; tone: 'danger' | 'success' } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const showToast = (msg: string, tone: 'danger' | 'success') => {
+    setToast({ msg, tone });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const load = async () => {
     setLoading(true);
     const [{ data: ps }, { data: ts }, { data: uts }] = await Promise.all([
@@ -52,6 +57,14 @@ export default function AdminUsers() {
 
   useEffect(() => { load(); }, []);
 
+  /* ── Stats derivadas de TODOS os usuários (não filtrados) ── */
+  const stats = useMemo(() => ({
+    total: users.length,
+    active: users.filter((u) => u.status === 'active').length,
+    pending: users.filter((u) => u.status === 'pending').length,
+    blocked: users.filter((u) => u.status === 'blocked').length,
+  }), [users]);
+
   const filtered = useMemo(() => {
     return users.filter((u) => {
       if (search && !u.email.toLowerCase().includes(search.toLowerCase())) return false;
@@ -62,6 +75,15 @@ export default function AdminUsers() {
     });
   }, [users, search, filterStatus, filterRole, filterTurma]);
 
+  const hasFilters = !!(search || filterStatus || filterRole || filterTurma);
+
+  const clearFilters = () => {
+    setSearch('');
+    setFilterStatus('');
+    setFilterRole('');
+    setFilterTurma('');
+  };
+
   const showLink = (token: string) => {
     setLinkModal(`${window.location.origin}/ativar?token=${token}`);
   };
@@ -71,17 +93,17 @@ export default function AdminUsers() {
       const r = await callFn('admin-users', 'reinvite', { user_id: u.id });
       showLink(r.invite_token);
       load();
-    } catch (e) { setToast({ msg: (e as Error).message, tone: 'danger' }); }
+    } catch (e) { showToast((e as Error).message, 'danger'); }
   };
 
   const del = async (u: UserRow) => {
-    if (u.id === current?.id) { setToast({ msg: 'Você não pode excluir sua própria conta', tone: 'danger' }); return; }
+    if (u.id === current?.id) { showToast('Você não pode excluir sua própria conta', 'danger'); return; }
     if (!confirm(`Excluir ${u.email}? Esta ação não pode ser desfeita.`)) return;
     try {
       await callFn('admin-users', 'delete', { user_id: u.id });
-      setToast({ msg: 'Usuário excluído', tone: 'success' });
+      showToast('Usuário excluído', 'success');
       load();
-    } catch (e) { setToast({ msg: (e as Error).message, tone: 'danger' }); }
+    } catch (e) { showToast((e as Error).message, 'danger'); }
   };
 
   const toggleBlock = async (u: UserRow) => {
@@ -89,7 +111,7 @@ export default function AdminUsers() {
     try {
       await callFn('admin-users', 'update', { user_id: u.id, status: newStatus });
       load();
-    } catch (e) { setToast({ msg: (e as Error).message, tone: 'danger' }); }
+    } catch (e) { showToast((e as Error).message, 'danger'); }
   };
 
   const copy = (text: string) => {
@@ -98,8 +120,17 @@ export default function AdminUsers() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  /* ── Configuração dos cards de stats ── */
+  const STAT_CARDS = [
+    { label: 'Total', value: stats.total,   filterValue: '',        valueClass: 'text-white' },
+    { label: 'Ativos',     value: stats.active,  filterValue: 'active',  valueClass: 'text-[#cbfb00]' },
+    { label: 'Pendentes',  value: stats.pending, filterValue: 'pending', valueClass: 'text-yellow-400' },
+    { label: 'Bloqueados', value: stats.blocked, filterValue: 'blocked', valueClass: 'text-red-400' },
+  ];
+
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1>Usuários</h1>
@@ -110,33 +141,107 @@ export default function AdminUsers() {
         </Button>
       </div>
 
-      <Card className="p-4 mb-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar email..." className="!pl-9" />
+      {/* ── Cards de resumo ── */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {STAT_CARDS.map((card) => {
+            const isSelected = card.filterValue !== '' && filterStatus === card.filterValue;
+            return (
+              <button
+                key={card.label}
+                onClick={() => {
+                  if (card.filterValue === '') {
+                    /* "Total" limpa o filtro de status */
+                    setFilterStatus('');
+                  } else {
+                    /* toggle: clica de novo → remove o filtro */
+                    setFilterStatus(isSelected ? '' : card.filterValue);
+                  }
+                }}
+                className={`p-4 rounded-lg border text-left transition-all ${
+                  isSelected
+                    ? 'bg-[#cbfb00]/5 border-[#cbfb00]/40'
+                    : 'bg-[#0d0d0d] border-[#1c1f26] hover:border-[#434d5e]'
+                }`}
+              >
+                <p className={`text-2xl font-bold mb-1 ${card.valueClass}`}>{card.value}</p>
+                <p className="text-[#8b929e] text-xs font-medium uppercase tracking-wider">{card.label}</p>
+              </button>
+            );
+          })}
         </div>
-        <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="max-w-[180px]">
-          <option value="">Todos os papéis</option>
-          <option value="admin">Administrador</option>
-          <option value="professor">Professor</option>
-          <option value="student">Aluno</option>
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="max-w-[180px]">
-          <option value="">Todos os status</option>
-          <option value="pending">Pendente</option>
-          <option value="active">Ativo</option>
-          <option value="blocked">Bloqueado</option>
-        </select>
-        <select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="max-w-[220px]">
-          <option value="">Todas as turmas</option>
-          {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-        </select>
+      )}
+
+      {/* ── Barra de filtros ── */}
+      <Card className="p-4 mb-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar email..."
+              className="!pl-9"
+            />
+          </div>
+          <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="max-w-[180px]">
+            <option value="">Todos os papéis</option>
+            <option value="admin">Administrador</option>
+            <option value="professor">Professor</option>
+            <option value="student">Aluno</option>
+          </select>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="max-w-[180px]">
+            <option value="">Todos os status</option>
+            <option value="pending">Pendente</option>
+            <option value="active">Ativo</option>
+            <option value="blocked">Bloqueado</option>
+          </select>
+          <select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="max-w-[220px]">
+            <option value="">Todas as turmas</option>
+            {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+          </select>
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1.5 text-xs text-[#8b929e] hover:text-[#d6deed] transition-colors whitespace-nowrap"
+            >
+              <X className="w-3.5 h-3.5" />
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
+        {/* Contador de resultados quando filtros ativos */}
+        {hasFilters && !loading && (
+          <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
+            Mostrando{' '}
+            <span className="text-white font-medium">{filtered.length}</span>
+            {' '}de{' '}
+            <span className="text-white font-medium">{users.length}</span>
+            {' '}usuários
+          </p>
+        )}
       </Card>
 
+      {/* ── Conteúdo principal ── */}
       {loading ? (
-        <p className="meta">Carregando...</p>
+        <Card className="p-10 text-center">
+          <p className="meta">Carregando usuários...</p>
+        </Card>
       ) : filtered.length === 0 ? (
-        <Empty title="Nenhum usuário encontrado" description="Convide alunos ou professores para começar" />
+        hasFilters ? (
+          <Empty
+            icon={<Search className="w-8 h-8" />}
+            title="Nenhum resultado para este filtro"
+            description="Tente ajustar a busca ou clique em 'Limpar filtros'"
+          />
+        ) : (
+          <Empty
+            icon={<Users className="w-8 h-8" />}
+            title="Nenhum usuário cadastrado"
+            description="Clique em 'Novo usuário' para convidar alunos, professores ou administradores"
+          />
+        )
       ) : (
         <Card>
           <table className="w-full text-sm">
@@ -146,33 +251,51 @@ export default function AdminUsers() {
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Turmas</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Criado</th>
+                <th className="px-4 py-3 font-medium text-[#d6deed] hidden md:table-cell">Cadastro</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111]">
-                  <td className="px-4 py-3 text-white">{u.email}{u.id === current?.id && <span className="ml-2 meta">(você)</span>}</td>
-                  <td className="px-4 py-3"><Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge></td>
+                <tr key={u.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
                   <td className="px-4 py-3">
-                    {u.status === 'active' && <Badge tone="success">Ativo</Badge>}
+                    <span className="text-white block truncate max-w-[200px]">{u.email}</span>
+                    {u.id === current?.id && (
+                      <span className="text-[#8b929e] text-xs">você</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.status === 'active'  && <Badge tone="success">Ativo</Badge>}
                     {u.status === 'pending' && <Badge tone="warn">Pendente</Badge>}
                     {u.status === 'blocked' && <Badge tone="danger">Bloqueado</Badge>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {u.turmas.length === 0 ? <span className="meta">—</span> : u.turmas.map((t) => <Badge key={t.id}>{t.nome}</Badge>)}
+                      {u.turmas.length === 0
+                        ? <span className="text-[#434d5e] text-xs">—</span>
+                        : u.turmas.map((t) => <Badge key={t.id}>{t.nome}</Badge>)
+                      }
                     </div>
                   </td>
-                  <td className="px-4 py-3 meta">{new Date(u.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-[#8b929e] text-xs">
+                    {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1 flex-wrap">
                       {u.status === 'pending' && u.invite_token && (
-                        <Button variant="ghost" onClick={() => showLink(u.invite_token!)} icon={<Copy className="w-4 h-4" />}>Link</Button>
+                        <Button variant="ghost" onClick={() => showLink(u.invite_token!)} icon={<Copy className="w-4 h-4" />}>
+                          Link
+                        </Button>
                       )}
-                      <Button variant="ghost" onClick={() => reinvite(u)} icon={<RefreshCw className="w-4 h-4" />}>Reenviar</Button>
-                      <Button variant="ghost" onClick={() => setEditOpen(u)} icon={<Pencil className="w-4 h-4" />}>Editar</Button>
+                      <Button variant="ghost" onClick={() => reinvite(u)} icon={<RefreshCw className="w-4 h-4" />}>
+                        Reenviar
+                      </Button>
+                      <Button variant="ghost" onClick={() => setEditOpen(u)} icon={<Pencil className="w-4 h-4" />}>
+                        Editar
+                      </Button>
                       {u.id !== current?.id && (
                         <>
                           <Button variant="ghost" onClick={() => toggleBlock(u)}>
@@ -190,14 +313,37 @@ export default function AdminUsers() {
         </Card>
       )}
 
-      <CreateUserModal open={createOpen} onClose={() => setCreateOpen(false)} turmas={turmas} onDone={(token) => { setCreateOpen(false); showLink(token); load(); }} />
-      <EditUserModal user={editOpen} currentId={current?.id} onClose={() => setEditOpen(null)} turmas={turmas} onDone={() => { setEditOpen(null); load(); }} />
+      {/* ── Modais ── */}
+      <CreateUserModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        turmas={turmas}
+        onDone={(token) => { setCreateOpen(false); showLink(token); load(); }}
+      />
+      <EditUserModal
+        user={editOpen}
+        currentId={current?.id}
+        onClose={() => setEditOpen(null)}
+        turmas={turmas}
+        onDone={() => { setEditOpen(null); load(); }}
+      />
 
-      <Modal open={!!linkModal} onClose={() => setLinkModal(null)} title="Link de ativação"
-        footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}>
+      <Modal
+        open={!!linkModal}
+        onClose={() => setLinkModal(null)}
+        title="Link de ativação"
+        footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}
+      >
         <p className="mb-3">Copie e envie este link ao usuário. Válido por 7 dias.</p>
-        <div className="border border-[#1c1f26] bg-black rounded-md p-3 text-sm text-[#cbfb00] break-all">{linkModal}</div>
-        <Button variant="primary" className="mt-4" onClick={() => linkModal && copy(linkModal)} icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}>
+        <div className="border border-[#1c1f26] bg-black rounded-md p-3 text-sm text-[#cbfb00] break-all">
+          {linkModal}
+        </div>
+        <Button
+          variant="primary"
+          className="mt-4"
+          onClick={() => linkModal && copy(linkModal)}
+          icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+        >
           {copied ? 'Copiado' : 'Copiar link'}
         </Button>
       </Modal>
@@ -207,7 +353,17 @@ export default function AdminUsers() {
   );
 }
 
-function CreateUserModal({ open, onClose, turmas, onDone }: { open: boolean; onClose: () => void; turmas: Turma[]; onDone: (token: string) => void }) {
+/* ─────────────────────────────────────────────────────────────── */
+/*  Modal: Criar usuário                                           */
+/* ─────────────────────────────────────────────────────────────── */
+function CreateUserModal({
+  open, onClose, turmas, onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  turmas: Turma[];
+  onDone: (token: string) => void;
+}) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('student');
   const [selected, setSelected] = useState<string[]>([]);
@@ -225,20 +381,28 @@ function CreateUserModal({ open, onClose, turmas, onDone }: { open: boolean; onC
     try {
       const r = await callFn('admin-users', 'create', { email: email.trim(), role, turma_ids: selected });
       onDone(r.invite_token);
-    } catch (e) { setErr((e as Error).message); }
-    finally { setLoading(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const toggle = (id: string) =>
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
 
   return (
-    <Modal open={open} onClose={onClose} title="Convidar usuário"
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Convidar usuário"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button variant="primary" loading={loading} onClick={submit}>Criar e gerar link</Button>
         </>
-      }>
+      }
+    >
       <div className="space-y-4">
         <div>
           <label>Email</label>
@@ -254,11 +418,18 @@ function CreateUserModal({ open, onClose, turmas, onDone }: { open: boolean; onC
         </div>
         <div>
           <label>Turmas</label>
-          {turmas.length === 0 ? <p className="meta">Nenhuma turma criada ainda</p> : (
+          {turmas.length === 0 ? (
+            <p className="meta">Nenhuma turma criada ainda</p>
+          ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
               {turmas.map((t) => (
                 <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                  <input type="checkbox" checked={selected.includes(t.id)} onChange={() => toggle(t.id)} className="!w-4 !h-4" />
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(t.id)}
+                    onChange={() => toggle(t.id)}
+                    className="!w-4 !h-4"
+                  />
                   <span className="text-white text-sm">{t.nome}</span>
                 </label>
               ))}
@@ -271,7 +442,18 @@ function CreateUserModal({ open, onClose, turmas, onDone }: { open: boolean; onC
   );
 }
 
-function EditUserModal({ user, currentId, onClose, turmas, onDone }: { user: UserRow | null; currentId?: string; onClose: () => void; turmas: Turma[]; onDone: () => void }) {
+/* ─────────────────────────────────────────────────────────────── */
+/*  Modal: Editar usuário                                          */
+/* ─────────────────────────────────────────────────────────────── */
+function EditUserModal({
+  user, currentId, onClose, turmas, onDone,
+}: {
+  user: UserRow | null;
+  currentId?: string;
+  onClose: () => void;
+  turmas: Turma[];
+  onDone: () => void;
+}) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('student');
   const [selected, setSelected] = useState<string[]>([]);
@@ -290,7 +472,8 @@ function EditUserModal({ user, currentId, onClose, turmas, onDone }: { user: Use
   if (!user) return null;
   const isSelf = user.id === currentId;
 
-  const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const toggle = (id: string) =>
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
 
   const submit = async () => {
     setErr(null);
@@ -303,18 +486,25 @@ function EditUserModal({ user, currentId, onClose, turmas, onDone }: { user: Use
         turma_ids: selected,
       });
       onDone();
-    } catch (e) { setErr((e as Error).message); }
-    finally { setLoading(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Modal open={!!user} onClose={onClose} title="Editar usuário"
+    <Modal
+      open={!!user}
+      onClose={onClose}
+      title="Editar usuário"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button variant="primary" loading={loading} onClick={submit}>Salvar</Button>
         </>
-      }>
+      }
+    >
       <div className="space-y-4">
         <div>
           <label>Email</label>
@@ -332,9 +522,16 @@ function EditUserModal({ user, currentId, onClose, turmas, onDone }: { user: Use
         <div>
           <label>Turmas</label>
           <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
-            {turmas.length === 0 ? <p className="meta">Nenhuma turma</p> : turmas.map((t) => (
+            {turmas.length === 0 ? (
+              <p className="meta">Nenhuma turma</p>
+            ) : turmas.map((t) => (
               <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                <input type="checkbox" checked={selected.includes(t.id)} onChange={() => toggle(t.id)} className="!w-4 !h-4" />
+                <input
+                  type="checkbox"
+                  checked={selected.includes(t.id)}
+                  onChange={() => toggle(t.id)}
+                  className="!w-4 !h-4"
+                />
                 <span className="text-white text-sm">{t.nome}</span>
               </label>
             ))}

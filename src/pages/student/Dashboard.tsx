@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ArrowRight } from 'lucide-react';
+import { BookOpen, ArrowRight, Users, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, Empty, ProgressBar } from '../../components/ui';
@@ -13,15 +13,21 @@ type CourseCard = {
   done: number;
 };
 
+type Turma = { id: string; nome: string; descricao: string | null };
+
 export default function StudentDashboard() {
   const { profile } = useAuth();
   const [courses, setCourses] = useState<CourseCard[]>([]);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       if (!profile) return;
-      const { data: cs } = await supabase.from('cursos').select('id,titulo,descricao');
+      const [{ data: cs }, { data: ts }] = await Promise.all([
+        supabase.from('cursos').select('id,titulo,descricao'),
+        supabase.from('turmas').select('id,nome,descricao').order('nome'),
+      ]);
       const cursoIds = (cs ?? []).map((c) => c.id);
       const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', cursoIds.length ? cursoIds : ['00000000-0000-0000-0000-000000000000']);
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
@@ -37,6 +43,7 @@ export default function StudentDashboard() {
         total: counts[c.id]?.total ?? 0,
         done: counts[c.id]?.done ?? 0,
       })));
+      setTurmas(ts ?? []);
       setLoading(false);
     };
     load();
@@ -78,6 +85,37 @@ export default function StudentDashboard() {
             })}
           </div>
         )}
+
+      {/* ── Minhas turmas ── */}
+      {!loading && turmas.length > 0 && (
+        <div className="mt-16">
+          <div className="mb-8">
+            <h2 className="mb-2">Minhas turmas</h2>
+            <p className="text-[#d6deed]">Acesse a comunidade de cada turma para trocar ideias com colegas.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {turmas.map((t) => (
+              <Card key={t.id} className="p-5 flex flex-col gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-[#cbfb00]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-medium truncate">{t.nome}</p>
+                    {t.descricao && <p className="meta text-xs mt-0.5 line-clamp-1">{t.descricao}</p>}
+                  </div>
+                </div>
+                <Link to={`/turma/${t.id}/comunidade`} className="block">
+                  <button className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors border border-[#434d5e] text-[#d6deed] hover:bg-[#434d5e]/20">
+                    <MessageSquare className="w-4 h-4" />
+                    Ver comunidade
+                  </button>
+                </Link>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
