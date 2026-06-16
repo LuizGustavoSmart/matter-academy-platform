@@ -295,18 +295,31 @@ export type Database = {
       }
       user_turmas: {
         Row: {
+          curso_id: string | null
+          id: string
           turma_id: string
           user_id: string
         }
         Insert: {
+          curso_id?: string | null
+          id?: string
           turma_id: string
           user_id: string
         }
         Update: {
+          curso_id?: string | null
+          id?: string
           turma_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_turmas_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_turmas_turma_id_fkey"
             columns: ["turma_id"]
