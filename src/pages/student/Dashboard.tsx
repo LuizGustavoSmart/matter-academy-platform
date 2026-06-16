@@ -28,14 +28,24 @@ export default function StudentDashboard() {
   useEffect(() => {
     const load = async () => {
       if (!profile) return;
-      const [{ data: cs }, { data: ts }] = await Promise.all([
-        supabase.from('cursos').select('id,titulo,descricao'),
-        supabase.from('turmas').select('id,nome,descricao').order('nome'),
+
+      // Carrega as turmas/cursos liberados para este usuário
+      const { data: ut } = await supabase
+        .from('user_turmas')
+        .select('turma_id,curso_id')
+        .eq('user_id', profile.id);
+
+      const turmaIds = [...new Set((ut ?? []).map((r: any) => r.turma_id))];
+      const cursoIds = [...new Set((ut ?? []).filter((r: any) => r.curso_id).map((r: any) => r.curso_id as string))];
+
+      const [{ data: ts }] = await Promise.all([
+        turmaIds.length
+          ? supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
+          : Promise.resolve({ data: [] }),
       ]);
 
       /* Contagem de dúvidas abertas por turma (apenas para monitores) */
-      if (isMonitor && (ts ?? []).length > 0) {
-        const turmaIds = (ts ?? []).map((t) => t.id);
+      if (isMonitor && turmaIds.length > 0) {
         const { data: duvs } = await supabase
           .from('community_posts')
           .select('turma_id')
@@ -52,21 +62,27 @@ export default function StudentDashboard() {
 
       /* Progresso de cursos via lessons_public (apenas para alunos/professores) */
       if (!isMonitor) {
-        const cursoIds = (cs ?? []).map((c) => c.id);
-        const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', cursoIds.length ? cursoIds : ['00000000-0000-0000-0000-000000000000']);
-        const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
-        const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
-        const counts: Record<string, { total: number; done: number }> = {};
-        (as ?? []).forEach((a: { id: string; curso_id: string }) => {
-          if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
-          counts[a.curso_id].total++;
-          if (doneSet.has(a.id)) counts[a.curso_id].done++;
-        });
-        setCourses((cs ?? []).map((c) => ({
-          ...c,
-          total: counts[c.id]?.total ?? 0,
-          done:  counts[c.id]?.done  ?? 0,
-        })));
+        const { data: cs } = cursoIds.length
+          ? await supabase.from('cursos').select('id,titulo,descricao').in('id', cursoIds)
+          : { data: [] };
+
+        if ((cs ?? []).length > 0) {
+          const ids = (cs ?? []).map((c) => c.id);
+          const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', ids);
+          const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
+          const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
+          const counts: Record<string, { total: number; done: number }> = {};
+          (as ?? []).forEach((a: { id: string; curso_id: string }) => {
+            if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
+            counts[a.curso_id].total++;
+            if (doneSet.has(a.id)) counts[a.curso_id].done++;
+          });
+          setCourses((cs ?? []).map((c) => ({
+            ...c,
+            total: counts[c.id]?.total ?? 0,
+            done:  counts[c.id]?.done  ?? 0,
+          })));
+        }
       }
 
       setTurmas(ts ?? []);
