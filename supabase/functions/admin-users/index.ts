@@ -10,6 +10,66 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
+const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
+
+type InviteEvent = "invite" | "reinvite";
+type UserRole = "admin" | "student" | "professor" | "monitor";
+
+const ROLE_ALIASES: Record<string, UserRole> = {
+  admin: "admin",
+  administrador: "admin",
+  student: "student",
+  aluno: "student",
+  professor: "professor",
+  monitor: "monitor",
+};
+
+function normalizeRole(value: unknown): UserRole | null {
+  if (typeof value !== "string") return null;
+  return ROLE_ALIASES[value.trim().toLowerCase()] ?? null;
+}
+
+async function sendInviteWebhook(payload: {
+  event: InviteEvent;
+  email: string;
+  token: string;
+  expires_at: string;
+  role: string;
+}) {
+  if (!INVITE_WEBHOOK_URL) {
+    console.log("[webhook] INVITE_WEBHOOK_URL not set, skipping");
+    return;
+  }
+  const link = `${PUBLIC_APP_URL.replace(/\/$/, "")}/ativar?token=${payload.token}`;
+  const body = {
+    event: payload.event,
+    email: payload.email,
+    link,
+    expires_at: payload.expires_at,
+    role: payload.role,
+  };
+  try {
+    const res = await fetch(INVITE_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    });
+    console.log(`[webhook] ${payload.event} -> ${payload.email} status=${res.status}`);
+  } catch (e) {
+    console.error(`[webhook] failed for ${payload.email}:`, (e as Error).message);
+  }
+}
+
+function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
+  try {
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    EdgeRuntime.waitUntil(sendInviteWebhook(payload));
+  } catch {
+    sendInviteWebhook(payload);
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -55,8 +115,9 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && action === "create") {
       const { email, turma_ids, role = "student" } = body as { email: string; turma_ids?: string[]; role?: string };
+      const normalizedRole = normalizeRole(role);
       if (!email) return json({ error: "Email obrigatório" }, 400);
-      if (!["admin", "student", "professor"].includes(role)) return json({ error: "Papel inválido" }, 400);
+      if (!normalizedRole) return json({ error: "Papel inválido" }, 400);
 
       const { data: existing } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
       if (existing) return json({ error: "Email já cadastrado" }, 400);
@@ -67,7 +128,10 @@ Deno.serve(async (req: Request) => {
         password: tempPassword,
         email_confirm: true,
       });
-      if (createErr || !created.user) return json({ error: createErr?.message ?? "Erro ao criar usuário" }, 400);
+      if (createErr || !created.user) {
+        console.error("[admin-users:create] auth create failed", createErr?.message ?? "missing user");
+        return json({ error: createErr?.message ?? "Erro ao criar usuário" }, 400);
+      }
 
       const invite_token = genToken();
       const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -75,19 +139,28 @@ Deno.serve(async (req: Request) => {
       const { error: profErr } = await admin.from("profiles").insert({
         id: created.user.id,
         email,
-        role,
+        role: normalizedRole,
         status: "pending",
         invite_token,
         invite_expires_at,
       });
       if (profErr) {
+        console.error("[admin-users:create] profile insert failed", profErr.message);
         await admin.auth.admin.deleteUser(created.user.id);
         return json({ error: profErr.message }, 400);
       }
 
       if (turma_ids?.length) {
-        await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
+        const { error: turmasErr } = await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
+        if (turmasErr) {
+          console.error("[admin-users:create] turma link failed", turmasErr.message);
+          await admin.from("profiles").delete().eq("id", created.user.id);
+          await admin.auth.admin.deleteUser(created.user.id);
+          return json({ error: turmasErr.message }, 400);
+        }
       }
+
+      fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
 
       return json({ user_id: created.user.id, invite_token });
     }
@@ -96,10 +169,15 @@ Deno.serve(async (req: Request) => {
       const { user_id } = body as { user_id: string };
       const invite_token = genToken();
       const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await admin.from("profiles")
+      const { data: updated, error } = await admin.from("profiles")
         .update({ invite_token, invite_expires_at, status: "pending" })
-        .eq("id", user_id);
+        .eq("id", user_id)
+        .select("email,role")
+        .maybeSingle();
       if (error) return json({ error: error.message }, 400);
+      if (updated?.email) {
+        fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
+      }
       return json({ invite_token });
     }
 
@@ -110,7 +188,11 @@ Deno.serve(async (req: Request) => {
       const updates: Record<string, unknown> = {};
       if (email) updates.email = email;
       if (status) updates.status = status;
-      if (role && ["admin", "student", "professor"].includes(role)) updates.role = role;
+      if (role) {
+        const normalizedRole = normalizeRole(role);
+        if (!normalizedRole) return json({ error: "Papel inválido" }, 400);
+        updates.role = normalizedRole;
+      }
 
       if (email) {
         const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { email });

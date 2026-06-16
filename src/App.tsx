@@ -7,18 +7,22 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AdminLayout from './layouts/AdminLayout';
 import StudentLayout from './layouts/StudentLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/Users';
 import AdminTurmas from './pages/admin/Turmas';
 import TurmaDetalhe from './pages/admin/TurmaDetalhe';
 import CursoDetalhe from './pages/admin/CursoDetalhe';
+import AdminCursos from './pages/admin/Cursos';
+import AdminAulas from './pages/admin/Aulas';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCourse from './pages/student/Course';
+import StudentCommunity from './pages/student/Community';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
 }
 
-function RequireAuth({ roles }: { roles?: Array<'admin' | 'student' | 'professor'> }) {
+function RequireAuth({ roles }: { roles?: Array<'admin' | 'student' | 'professor' | 'monitor'> }) {
   const { session, profile, loading } = useAuth();
   if (loading) return <Loading />;
   if (!session || !profile) return <Navigate to="/login" replace />;
@@ -68,18 +72,21 @@ export default function App() {
 
           <Route element={<RequireAuth roles={["admin"]} />}>
             <Route element={<AdminLayout />}>
-              <Route path="/admin" element={<Navigate to="/admin/usuarios" replace />} />
+              <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/usuarios" element={<AdminUsers />} />
               <Route path="/admin/turmas" element={<AdminTurmas />} />
               <Route path="/admin/turmas/:turmaId" element={<TurmaDetalhe />} />
               <Route path="/admin/turmas/:turmaId/cursos/:cursoId" element={<CursoDetalhe />} />
+              <Route path="/admin/cursos" element={<AdminCursos />} />
+              <Route path="/admin/aulas" element={<AdminAulas />} />
             </Route>
           </Route>
 
-          <Route element={<RequireAuth roles={["student", "professor"]} />}>
+          <Route element={<RequireAuth roles={["student", "professor", "monitor"]} />}>
             <Route element={<StudentLayout />}>
               <Route path="/dashboard" element={<StudentDashboard />} />
               <Route path="/curso/:id" element={<StudentCourse />} />
+              <Route path="/turma/:turmaId/comunidade" element={<StudentCommunity />} />
             </Route>
           </Route>
 
