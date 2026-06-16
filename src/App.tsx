@@ -17,6 +17,7 @@ import AdminAulas from './pages/admin/Aulas';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCourse from './pages/student/Course';
 import StudentCommunity from './pages/student/Community';
+import CommunityIndex from './pages/student/CommunityIndex';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -86,6 +87,7 @@ export default function App() {
             <Route element={<StudentLayout />}>
               <Route path="/dashboard" element={<StudentDashboard />} />
               <Route path="/curso/:id" element={<StudentCourse />} />
+              <Route path="/comunidade" element={<CommunityIndex />} />
               <Route path="/turma/:turmaId/comunidade" element={<StudentCommunity />} />
             </Route>
           </Route>
