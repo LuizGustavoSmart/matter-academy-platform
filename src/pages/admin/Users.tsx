@@ -49,10 +49,13 @@ export default function AdminUsers() {
     const turmasMap = new Map((ts ?? []).map((t) => [t.id, t]));
     const rows: UserRow[] = (ps ?? []).map((p: any) => ({
       ...p,
-      turmas: (uts ?? [])
-        .filter((r) => r.user_id === p.id)
-        .map((r) => turmasMap.get(r.turma_id))
-        .filter(Boolean) as Turma[],
+      turmas: [...new Map(
+        (uts ?? [])
+          .filter((r) => r.user_id === p.id)
+          .map((r) => turmasMap.get(r.turma_id))
+          .filter(Boolean)
+          .map((t: any) => [t.id, t])
+      ).values()] as Turma[],
     }));
     setUsers(rows);
     setTurmas(ts ?? []);
