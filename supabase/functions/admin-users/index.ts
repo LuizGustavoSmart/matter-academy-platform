@@ -114,7 +114,12 @@ Deno.serve(async (req: Request) => {
     const body = req.method === "POST" || req.method === "PUT" ? await req.json().catch(() => ({})) : {};
 
     if (req.method === "POST" && action === "create") {
-      const { email, turma_ids, role = "student" } = body as { email: string; turma_ids?: string[]; role?: string };
+      const { email, turma_cursos, turma_ids, role = "student" } = body as {
+        email: string;
+        turma_cursos?: { turma_id: string; curso_id: string }[];
+        turma_ids?: string[];
+        role?: string;
+      };
       const normalizedRole = normalizeRole(role);
       if (!email) return json({ error: "Email obrigatório" }, 400);
       if (!normalizedRole) return json({ error: "Papel inválido" }, 400);
@@ -150,8 +155,13 @@ Deno.serve(async (req: Request) => {
         return json({ error: profErr.message }, 400);
       }
 
-      if (turma_ids?.length) {
-        const { error: turmasErr } = await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id: created.user.id, turma_id: tid })));
+      // Suporta turma_cursos (novo formato: pares turma+curso) e turma_ids (legado)
+      const pairs: { user_id: string; turma_id: string; curso_id: string | null }[] = turma_cursos?.length
+        ? turma_cursos.map(({ turma_id, curso_id }) => ({ user_id: created.user.id, turma_id, curso_id }))
+        : (turma_ids ?? []).map((tid) => ({ user_id: created.user.id, turma_id: tid, curso_id: null }));
+
+      if (pairs.length) {
+        const { error: turmasErr } = await admin.from("user_turmas").insert(pairs);
         if (turmasErr) {
           console.error("[admin-users:create] turma link failed", turmasErr.message);
           await admin.from("profiles").delete().eq("id", created.user.id);
@@ -182,8 +192,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === "POST" && action === "update") {
-      const { user_id, email, status, role, turma_ids } = body as {
-        user_id: string; email?: string; status?: string; role?: string; turma_ids?: string[];
+      const { user_id, email, status, role, turma_cursos, turma_ids } = body as {
+        user_id: string; email?: string; status?: string; role?: string;
+        turma_cursos?: { turma_id: string; curso_id: string }[];
+        turma_ids?: string[];
       };
       const updates: Record<string, unknown> = {};
       if (email) updates.email = email;
@@ -202,10 +214,13 @@ Deno.serve(async (req: Request) => {
         const { error } = await admin.from("profiles").update(updates).eq("id", user_id);
         if (error) return json({ error: error.message }, 400);
       }
-      if (turma_ids) {
+      if (turma_cursos !== undefined || turma_ids !== undefined) {
         await admin.from("user_turmas").delete().eq("user_id", user_id);
-        if (turma_ids.length) {
-          await admin.from("user_turmas").insert(turma_ids.map((tid) => ({ user_id, turma_id: tid })));
+        const pairs: { user_id: string; turma_id: string; curso_id: string | null }[] = turma_cursos?.length
+          ? turma_cursos.map(({ turma_id, curso_id }) => ({ user_id, turma_id, curso_id }))
+          : (turma_ids ?? []).map((tid) => ({ user_id, turma_id: tid, curso_id: null }));
+        if (pairs.length) {
+          await admin.from("user_turmas").insert(pairs);
         }
       }
       return json({ ok: true });
