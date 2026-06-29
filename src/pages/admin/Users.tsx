@@ -538,6 +538,12 @@ function CreateUserModal({
   const submitBulk = async () => {
     const emails = parseEmails(bulkText);
     if (emails.length === 0) { setErr('Nenhum email válido encontrado'); return; }
+    if (isStudent) {
+      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
+      if (selection.some((s) => s.curso_ids.length === 0)) {
+        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
+      }
+    }
     setErr(null);
     setLoading(true);
     setBulkTotal(emails.length);
@@ -545,7 +551,10 @@ function CreateUserModal({
     const results: BulkResult[] = [];
     for (let i = 0; i < emails.length; i++) {
       try {
-        await callFn('admin-users', 'create', { email: emails[i], role, turma_ids: selection.map((s) => s.turma_id) });
+        const payload = isStudent
+          ? { email: emails[i], role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
+          : { email: emails[i], role, turma_ids: selection.map((s) => s.turma_id) };
+        await callFn('admin-users', 'create', payload);
         results.push({ email: emails[i], ok: true });
       } catch (e) {
         results.push({ email: emails[i], ok: false, err: (e as Error).message });
@@ -664,15 +673,15 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label>{mode === 'single' && isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
+            <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
             <TurmaCoursePicker
               turmas={turmas}
               coursesByTurma={coursesByTurma}
               value={selection}
               onChange={setSelection}
-              showCourses={mode === 'single' && isStudent}
+              showCourses={isStudent}
             />
-            {mode === 'single' && isStudent && (
+            {isStudent && (
               <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
             )}
           </div>
