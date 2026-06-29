@@ -49,10 +49,13 @@ export default function AdminUsers() {
     const turmasMap = new Map((ts ?? []).map((t) => [t.id, t]));
     const rows: UserRow[] = (ps ?? []).map((p: any) => ({
       ...p,
-      turmas: (uts ?? [])
-        .filter((r) => r.user_id === p.id)
-        .map((r) => turmasMap.get(r.turma_id))
-        .filter(Boolean) as Turma[],
+      turmas: [...new Map(
+        (uts ?? [])
+          .filter((r) => r.user_id === p.id)
+          .map((r) => turmasMap.get(r.turma_id))
+          .filter(Boolean)
+          .map((t: any) => [t.id, t])
+      ).values()] as Turma[],
     }));
     setUsers(rows);
     setTurmas(ts ?? []);
@@ -126,7 +129,7 @@ export default function AdminUsers() {
 
   /* ── Configuração dos cards de stats ── */
   const STAT_CARDS = [
-    { label: 'Total', value: stats.total,   filterValue: '',        valueClass: 'text-white' },
+    { label: 'Total',      value: stats.total,   filterValue: '',        valueClass: 'text-white' },
     { label: 'Ativos',     value: stats.active,  filterValue: 'active',  valueClass: 'text-[#cbfb00]' },
     { label: 'Pendentes',  value: stats.pending, filterValue: 'pending', valueClass: 'text-yellow-400' },
     { label: 'Bloqueados', value: stats.blocked, filterValue: 'blocked', valueClass: 'text-red-400' },
@@ -155,10 +158,8 @@ export default function AdminUsers() {
                 key={card.label}
                 onClick={() => {
                   if (card.filterValue === '') {
-                    /* "Total" limpa o filtro de status */
                     setFilterStatus('');
                   } else {
-                    /* toggle: clica de novo → remove o filtro */
                     setFilterStatus(isSelected ? '' : card.filterValue);
                   }
                 }}
@@ -216,7 +217,6 @@ export default function AdminUsers() {
           )}
         </div>
 
-        {/* Contador de resultados quando filtros ativos */}
         {hasFilters && !loading && (
           <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
             Mostrando{' '}
@@ -364,8 +364,28 @@ export default function AdminUsers() {
 }
 
 /* ─────────────────────────────────────────────────────────────── */
-/*  Helpers                                                         */
+/*  Tipos compartilhados dos modais                                */
 /* ─────────────────────────────────────────────────────────────── */
+type CursoInfo = { id: string; titulo: string };
+type TurmaSelection = { turma_id: string; curso_ids: string[] };
+type BulkResult = { email: string; ok: boolean; err?: string };
+
+async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
+  const [{ data: cts }, { data: cs }] = await Promise.all([
+    supabase.from('curso_turmas').select('turma_id,curso_id'),
+    supabase.from('cursos').select('id,titulo'),
+  ]);
+  const cursoMap = new Map((cs ?? []).map((c) => [c.id, c]));
+  const byTurma: Record<string, CursoInfo[]> = {};
+  (cts ?? []).forEach((ct) => {
+    const curso = cursoMap.get(ct.curso_id);
+    if (!curso) return;
+    if (!byTurma[ct.turma_id]) byTurma[ct.turma_id] = [];
+    byTurma[ct.turma_id].push(curso);
+  });
+  return byTurma;
+}
+
 function parseEmails(text: string): string[] {
   return [...new Set(
     text.split(/[\n,;]+/)
@@ -375,10 +395,85 @@ function parseEmails(text: string): string[] {
 }
 
 /* ─────────────────────────────────────────────────────────────── */
+/*  TurmaCoursePicker — seletor aninhado Turma > Cursos           */
+/* ─────────────────────────────────────────────────────────────── */
+function TurmaCoursePicker({
+  turmas, coursesByTurma, value, onChange, showCourses,
+}: {
+  turmas: Turma[];
+  coursesByTurma: Record<string, CursoInfo[]>;
+  value: TurmaSelection[];
+  onChange: (v: TurmaSelection[]) => void;
+  showCourses: boolean;
+}) {
+  const isTurmaSelected = (tid: string) => value.some((v) => v.turma_id === tid);
+  const getCursoIds = (tid: string) => value.find((v) => v.turma_id === tid)?.curso_ids ?? [];
+
+  const toggleTurma = (tid: string) => {
+    if (isTurmaSelected(tid)) {
+      onChange(value.filter((v) => v.turma_id !== tid));
+    } else {
+      onChange([...value, { turma_id: tid, curso_ids: [] }]);
+    }
+  };
+
+  const toggleCurso = (tid: string, cid: string) => {
+    onChange(value.map((v) => {
+      if (v.turma_id !== tid) return v;
+      const curso_ids = v.curso_ids.includes(cid)
+        ? v.curso_ids.filter((c) => c !== cid)
+        : [...v.curso_ids, cid];
+      return { ...v, curso_ids };
+    }));
+  };
+
+  if (turmas.length === 0) return <p className="meta">Nenhuma turma criada ainda</p>;
+
+  return (
+    <div className="space-y-2 max-h-64 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
+      {turmas.map((t) => {
+        const selected = isTurmaSelected(t.id);
+        const courses = coursesByTurma[t.id] ?? [];
+        const selectedCursoIds = getCursoIds(t.id);
+        const missingCourse = showCourses && selected && selectedCursoIds.length === 0;
+
+        return (
+          <div key={t.id}>
+            <label className="flex items-center gap-2 cursor-pointer !mb-0">
+              <input type="checkbox" checked={selected} onChange={() => toggleTurma(t.id)} className="!w-4 !h-4" />
+              <span className="text-white text-sm font-medium">{t.nome}</span>
+              {missingCourse && (
+                <span className="text-red-400 text-xs">selecione ao menos 1 curso</span>
+              )}
+            </label>
+
+            {selected && showCourses && (
+              <div className="ml-6 mt-2 space-y-1.5 pb-1">
+                {courses.length === 0 ? (
+                  <p className="text-[#434d5e] text-xs italic">Nenhum curso nesta turma</p>
+                ) : courses.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 cursor-pointer !mb-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedCursoIds.includes(c.id)}
+                      onChange={() => toggleCurso(t.id, c.id)}
+                      className="!w-3.5 !h-3.5"
+                    />
+                    <span className="text-[#d6deed] text-xs">{c.titulo}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────── */
 /*  Modal: Criar usuário                                           */
 /* ─────────────────────────────────────────────────────────────── */
-type BulkResult = { email: string; ok: boolean; err?: string };
-
 function CreateUserModal({
   open, onClose, turmas, onDone, onBulkDone,
 }: {
@@ -392,36 +487,46 @@ function CreateUserModal({
 
   /* single */
   const [email, setEmail] = useState('');
+  const [selection, setSelection] = useState<TurmaSelection[]>([]);
+  const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
 
   /* bulk */
-  const [bulkText, setBulkText]       = useState('');
-  const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [bulkText, setBulkText]         = useState('');
+  const [bulkResults, setBulkResults]   = useState<BulkResult[]>([]);
   const [bulkProgress, setBulkProgress] = useState(0);
-  const [bulkTotal, setBulkTotal]     = useState(0);
+  const [bulkTotal, setBulkTotal]       = useState(0);
 
   /* common */
-  const [role, setRole]       = useState<Role>('student');
-  const [selected, setSelected] = useState<string[]>([]);
+  const [role, setRole]     = useState<Role>('student');
   const [loading, setLoading] = useState(false);
-  const [err, setErr]         = useState<string | null>(null);
+  const [err, setErr]       = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setMode('single'); setEmail(''); setBulkText('');
       setBulkResults([]); setBulkProgress(0); setBulkTotal(0);
-      setRole('student'); setSelected([]); setErr(null);
+      setRole('student'); setSelection([]); setErr(null);
+      loadCoursesByTurma().then(setCoursesByTurma);
     }
   }, [open]);
 
-  const toggle = (id: string) =>
-    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const isStudent = role === 'student';
 
   const submitSingle = async () => {
     setErr(null);
     if (!email.trim()) { setErr('Email obrigatório'); return; }
+    if (isStudent) {
+      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
+      if (selection.some((s) => s.curso_ids.length === 0)) {
+        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
+      }
+    }
     setLoading(true);
     try {
-      const r = await callFn('admin-users', 'create', { email: email.trim(), role, turma_ids: selected });
+      const payload = isStudent
+        ? { email: email.trim(), role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
+        : { email: email.trim(), role, turma_ids: selection.map((s) => s.turma_id) };
+      const r = await callFn('admin-users', 'create', payload);
       onDone(r.invite_token);
     } catch (e) {
       setErr((e as Error).message);
@@ -440,7 +545,7 @@ function CreateUserModal({
     const results: BulkResult[] = [];
     for (let i = 0; i < emails.length; i++) {
       try {
-        await callFn('admin-users', 'create', { email: emails[i], role, turma_ids: selected });
+        await callFn('admin-users', 'create', { email: emails[i], role, turma_ids: selection.map((s) => s.turma_id) });
         results.push({ email: emails[i], ok: true });
       } catch (e) {
         results.push({ email: emails[i], ok: false, err: (e as Error).message });
@@ -451,8 +556,8 @@ function CreateUserModal({
     setLoading(false);
   };
 
-  const bulkDone = bulkResults.length > 0 && !loading;
-  const bulkOk   = bulkResults.filter((r) => r.ok).length;
+  const bulkDone   = bulkResults.length > 0 && !loading;
+  const bulkOk     = bulkResults.filter((r) => r.ok).length;
   const emailCount = parseEmails(bulkText).length;
 
   return (
@@ -559,23 +664,16 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label>Turmas</label>
-            {turmas.length === 0 ? (
-              <p className="meta">Nenhuma turma criada ainda</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
-                {turmas.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(t.id)}
-                      onChange={() => toggle(t.id)}
-                      className="!w-4 !h-4"
-                    />
-                    <span className="text-white text-sm">{t.nome}</span>
-                  </label>
-                ))}
-              </div>
+            <label>{mode === 'single' && isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
+            <TurmaCoursePicker
+              turmas={turmas}
+              coursesByTurma={coursesByTurma}
+              value={selection}
+              onChange={setSelection}
+              showCourses={mode === 'single' && isStudent}
+            />
+            {mode === 'single' && isStudent && (
+              <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
             )}
           </div>
 
@@ -600,35 +698,60 @@ function EditUserModal({
 }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('student');
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState<TurmaSelection[]>([]);
+  const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      setEmail(user.email);
-      setRole(user.role);
-      setSelected(user.turmas.map((t) => t.id));
-      setErr(null);
-    }
+    if (!user) return;
+    setEmail(user.email);
+    setRole(user.role);
+    setErr(null);
+
+    (async () => {
+      const [byTurma, { data: ut }] = await Promise.all([
+        loadCoursesByTurma(),
+        supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', user.id),
+      ]);
+      setCoursesByTurma(byTurma);
+
+      const grouped: Record<string, string[]> = {};
+      (ut ?? []).forEach((row: any) => {
+        if (!grouped[row.turma_id]) grouped[row.turma_id] = [];
+        if (row.curso_id) grouped[row.turma_id].push(row.curso_id);
+      });
+      setSelection(Object.entries(grouped).map(([turma_id, curso_ids]) => ({ turma_id, curso_ids })));
+    })();
   }, [user]);
 
   if (!user) return null;
   const isSelf = user.id === currentId;
-
-  const toggle = (id: string) =>
-    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const isStudent = role === 'student';
 
   const submit = async () => {
     setErr(null);
+    if (isStudent) {
+      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
+      if (selection.some((s) => s.curso_ids.length === 0)) {
+        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
+      }
+    }
     setLoading(true);
     try {
-      await callFn('admin-users', 'update', {
+      const payload: Record<string, unknown> = {
         user_id: user.id,
         email: email !== user.email ? email : undefined,
         role: role !== user.role ? role : undefined,
-        turma_ids: selected,
-      });
+      };
+      if (isStudent) {
+        payload.turma_cursos = selection.flatMap((s) =>
+          s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))
+        );
+      } else {
+        payload.turma_ids = selection.map((s) => s.turma_id);
+      }
+      await callFn('admin-users', 'update', payload);
       onDone();
     } catch (e) {
       setErr((e as Error).message);
@@ -665,22 +788,17 @@ function EditUserModal({
           {isSelf && <p className="meta mt-1">Você não pode alterar seu próprio papel</p>}
         </div>
         <div>
-          <label>Turmas</label>
-          <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
-            {turmas.length === 0 ? (
-              <p className="meta">Nenhuma turma</p>
-            ) : turmas.map((t) => (
-              <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(t.id)}
-                  onChange={() => toggle(t.id)}
-                  className="!w-4 !h-4"
-                />
-                <span className="text-white text-sm">{t.nome}</span>
-              </label>
-            ))}
-          </div>
+          <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
+          <TurmaCoursePicker
+            turmas={turmas}
+            coursesByTurma={coursesByTurma}
+            value={selection}
+            onChange={setSelection}
+            showCourses={isStudent}
+          />
+          {isStudent && (
+            <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
+          )}
         </div>
         {err && <p className="text-red-400 text-sm">{err}</p>}
       </div>

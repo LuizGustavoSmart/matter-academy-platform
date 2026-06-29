@@ -5,11 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 
 const items = [
-  { to: '/admin',          label: 'Visão Geral', icon: LayoutDashboard },
-  { to: '/admin/usuarios', label: 'Usuários',    icon: Users },
-  { to: '/admin/turmas',   label: 'Turmas',      icon: Layers },
-  { to: '/admin/cursos',   label: 'Cursos',      icon: BookOpen },
-  { to: '/admin/aulas',    label: 'Aulas',       icon: PlayCircle },
+  { to: '/admin',          label: 'Visão Geral', icon: LayoutDashboard, end: true  },
+  { to: '/admin/usuarios', label: 'Usuários',    icon: Users,            end: true  },
+  { to: '/admin/turmas',   label: 'Turmas',      icon: Layers,           end: false },
+  { to: '/admin/cursos',   label: 'Cursos',      icon: BookOpen,         end: true  },
+  { to: '/admin/aulas',    label: 'Aulas',       icon: PlayCircle,       end: true  },
 ];
 
 export default function AdminLayout() {
@@ -46,11 +46,11 @@ export default function AdminLayout() {
           </div>
 
           <nav className="space-y-1 flex-1">
-            {items.map(({ to, label, icon: Icon }) => (
+            {items.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
-                end={to === '/admin/turmas' ? false : true}
+                end={end}
                 title={collapsed ? label : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-md text-sm transition-colors
