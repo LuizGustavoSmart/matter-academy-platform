@@ -324,6 +324,11 @@ export default function AdminUsers() {
         onClose={() => setCreateOpen(false)}
         turmas={turmas}
         onDone={(token) => { setCreateOpen(false); showLink(token); load(); }}
+        onBulkDone={(ok, total) => {
+          setCreateOpen(false);
+          load();
+          showToast(`${ok} de ${total} convites enviados`, ok === total ? 'success' : 'danger');
+        }}
       />
       <EditUserModal
         user={editOpen}
@@ -359,27 +364,59 @@ export default function AdminUsers() {
 }
 
 /* ─────────────────────────────────────────────────────────────── */
+/*  Helpers                                                         */
+/* ─────────────────────────────────────────────────────────────── */
+function parseEmails(text: string): string[] {
+  return [...new Set(
+    text.split(/[\n,;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+  )];
+}
+
+/* ─────────────────────────────────────────────────────────────── */
 /*  Modal: Criar usuário                                           */
 /* ─────────────────────────────────────────────────────────────── */
+type BulkResult = { email: string; ok: boolean; err?: string };
+
 function CreateUserModal({
-  open, onClose, turmas, onDone,
+  open, onClose, turmas, onDone, onBulkDone,
 }: {
   open: boolean;
   onClose: () => void;
   turmas: Turma[];
   onDone: (token: string) => void;
+  onBulkDone: (ok: number, total: number) => void;
 }) {
+  const [mode, setMode] = useState<'single' | 'bulk'>('single');
+
+  /* single */
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('student');
+
+  /* bulk */
+  const [bulkText, setBulkText]       = useState('');
+  const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkTotal, setBulkTotal]     = useState(0);
+
+  /* common */
+  const [role, setRole]       = useState<Role>('student');
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr]         = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) { setEmail(''); setRole('student'); setSelected([]); setErr(null); }
+    if (open) {
+      setMode('single'); setEmail(''); setBulkText('');
+      setBulkResults([]); setBulkProgress(0); setBulkTotal(0);
+      setRole('student'); setSelected([]); setErr(null);
+    }
   }, [open]);
 
-  const submit = async () => {
+  const toggle = (id: string) =>
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+
+  const submitSingle = async () => {
     setErr(null);
     if (!email.trim()) { setErr('Email obrigatório'); return; }
     setLoading(true);
@@ -393,8 +430,30 @@ function CreateUserModal({
     }
   };
 
-  const toggle = (id: string) =>
-    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const submitBulk = async () => {
+    const emails = parseEmails(bulkText);
+    if (emails.length === 0) { setErr('Nenhum email válido encontrado'); return; }
+    setErr(null);
+    setLoading(true);
+    setBulkTotal(emails.length);
+    setBulkProgress(0);
+    const results: BulkResult[] = [];
+    for (let i = 0; i < emails.length; i++) {
+      try {
+        await callFn('admin-users', 'create', { email: emails[i], role, turma_ids: selected });
+        results.push({ email: emails[i], ok: true });
+      } catch (e) {
+        results.push({ email: emails[i], ok: false, err: (e as Error).message });
+      }
+      setBulkProgress(i + 1);
+      setBulkResults([...results]);
+    }
+    setLoading(false);
+  };
+
+  const bulkDone = bulkResults.length > 0 && !loading;
+  const bulkOk   = bulkResults.filter((r) => r.ok).length;
+  const emailCount = parseEmails(bulkText).length;
 
   return (
     <Modal
@@ -402,48 +461,127 @@ function CreateUserModal({
       onClose={onClose}
       title="Convidar usuário"
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Criar e gerar link</Button>
-        </>
+        bulkDone ? (
+          <Button variant="primary" onClick={() => onBulkDone(bulkOk, bulkResults.length)}>
+            Concluir
+          </Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={loading}
+              onClick={mode === 'single' ? submitSingle : submitBulk}
+            >
+              {mode === 'single'
+                ? 'Criar e gerar link'
+                : `Convidar${emailCount > 0 ? ` ${emailCount}` : ''}`
+              }
+            </Button>
+          </>
+        )
       }
     >
-      <div className="space-y-4">
+      {/* Tabs */}
+      <div className="flex rounded-md border border-[#1c1f26] mb-4 overflow-hidden">
+        {(['single', 'bulk'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => { setMode(m); setErr(null); }}
+            className={`flex-1 py-2 text-sm font-medium transition-colors
+              ${mode === m ? 'bg-[#cbfb00] text-black' : 'text-[#d6deed] hover:bg-[#434d5e]/20'}`}
+          >
+            {m === 'single' ? 'Individual' : 'Em lote'}
+          </button>
+        ))}
+      </div>
+
+      {/* Bulk results */}
+      {bulkDone ? (
         <div>
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div className={`p-3 rounded-md mb-3 text-sm font-medium ${
+            bulkOk === bulkResults.length
+              ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/30'
+              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+          }`}>
+            {bulkOk} de {bulkResults.length} convites enviados com sucesso
+          </div>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {bulkResults.map((r) => (
+              <div
+                key={r.email}
+                className={`flex items-center justify-between text-xs p-2 rounded ${
+                  r.ok ? 'text-[#d6deed]' : 'text-red-400 bg-red-500/5'
+                }`}
+              >
+                <span className="truncate">{r.email}</span>
+                <span className="ml-2 flex-shrink-0">{r.ok ? '✓' : r.err ?? 'Erro'}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div>
-          <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="student">Aluno</option>
-            <option value="professor">Professor</option>
-            <option value="monitor">Monitor</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
-        <div>
-          <label>Turmas</label>
-          {turmas.length === 0 ? (
-            <p className="meta">Nenhuma turma criada ainda</p>
+      ) : (
+        <div className="space-y-4">
+          {mode === 'single' ? (
+            <div>
+              <label>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
           ) : (
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
-              {turmas.map((t) => (
-                <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(t.id)}
-                    onChange={() => toggle(t.id)}
-                    className="!w-4 !h-4"
-                  />
-                  <span className="text-white text-sm">{t.nome}</span>
-                </label>
-              ))}
+            <div>
+              <label>Emails (um por linha)</label>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={5}
+                placeholder={"aluno1@exemplo.com\naluno2@exemplo.com\naluno3@exemplo.com"}
+                className="w-full resize-none"
+              />
+              {emailCount > 0 && !loading && (
+                <p className="text-xs text-[#8b929e] mt-1">{emailCount} email(s) válido(s)</p>
+              )}
+              {loading && bulkTotal > 0 && (
+                <p className="text-xs text-[#cbfb00] mt-1">
+                  Enviando... {bulkProgress}/{bulkTotal}
+                </p>
+              )}
             </div>
           )}
+
+          <div>
+            <label>Papel</label>
+            <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <option value="student">Aluno</option>
+              <option value="professor">Professor</option>
+              <option value="monitor">Monitor</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Turmas</label>
+            {turmas.length === 0 ? (
+              <p className="meta">Nenhuma turma criada ainda</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
+                {turmas.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(t.id)}
+                      onChange={() => toggle(t.id)}
+                      className="!w-4 !h-4"
+                    />
+                    <span className="text-white text-sm">{t.nome}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {err && <p className="text-red-400 text-sm">{err}</p>}
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
-      </div>
+      )}
     </Modal>
   );
 }
