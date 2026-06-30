@@ -1,5 +1,5 @@
-import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { BookOpen, MessageSquare, LogOut } from 'lucide-react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { BookOpen, MessageSquare, LogOut, ClipboardList, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 
@@ -9,8 +9,11 @@ export default function StudentLayout() {
   const location = useLocation();
   const logout = async () => { await signOut(); nav('/login'); };
 
-  const isAulas = location.pathname === '/dashboard' || location.pathname.startsWith('/curso/');
-  const isComunidade = location.pathname === '/comunidade' || location.pathname.startsWith('/turma/');
+  const { pathname } = location;
+  const isAulas      = pathname === '/dashboard' || pathname.startsWith('/curso/');
+  const isComunidade = pathname === '/comunidade' || pathname.startsWith('/turma/');
+  const isAtividades = pathname === '/atividades' || pathname.startsWith('/atividades/');
+  const isDuvidas    = pathname === '/duvidas';
 
   const navClass = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
@@ -28,6 +31,14 @@ export default function StudentLayout() {
           <button onClick={() => nav('/dashboard')} className={navClass(isAulas)}>
             <BookOpen className="w-4 h-4" />
             Aulas
+          </button>
+          <button onClick={() => nav('/atividades')} className={navClass(isAtividades)}>
+            <ClipboardList className="w-4 h-4" />
+            Atividades
+          </button>
+          <button onClick={() => nav('/duvidas')} className={navClass(isDuvidas)}>
+            <HelpCircle className="w-4 h-4" />
+            Dúvidas
           </button>
           <button onClick={() => nav('/comunidade')} className={navClass(isComunidade)}>
             <MessageSquare className="w-4 h-4" />
