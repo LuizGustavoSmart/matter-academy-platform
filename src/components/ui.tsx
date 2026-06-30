@@ -31,14 +31,14 @@ export function Card({ className = '', children, ...rest }: HTMLAttributes<HTMLD
   );
 }
 
-export function Badge({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'success' | 'warn' | 'danger' }) {
+export function Badge({ children, tone = 'default', className = '' }: { children: ReactNode; tone?: 'default' | 'success' | 'warn' | 'danger'; className?: string }) {
   const tones = {
     default: 'bg-[#434d5e]/20 text-[#d6deed] border-[#434d5e]',
     success: 'bg-[#cbfb00]/10 text-[#cbfb00] border-[#cbfb00]/30',
     warn: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
     danger: 'bg-red-500/10 text-red-400 border-red-500/30',
   }[tone];
-  return <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded border ${tones}`}>{children}</span>;
+  return <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded border ${tones} ${className}`}>{children}</span>;
 }
 
 export function Modal({ open, onClose, title, children, footer }: {

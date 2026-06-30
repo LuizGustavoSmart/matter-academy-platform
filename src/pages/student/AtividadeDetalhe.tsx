@@ -18,8 +18,8 @@ type Atividade = {
 type Aluno = {
   id: string;
   email: string;
-  full_name: string | null;
 };
+
 
 type Submissao = {
   id: string;
@@ -70,7 +70,7 @@ export default function AtividadeDetalhe() {
       if (alunoIds.length) {
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id,email,full_name')
+          .select('id,email')
           .in('id', alunoIds)
           .eq('role', 'student')
           .order('email');
@@ -163,7 +163,7 @@ export default function AtividadeDetalhe() {
                           {initials(a.email)}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{a.full_name || a.email}</p>
+                          <p className="text-white text-sm font-medium truncate">{a.email}</p>
                           {!isOpen && (
                             <p className="text-[#8b929e] text-xs line-clamp-1 mt-0.5">{sub.conteudo}</p>
                           )}
@@ -195,7 +195,7 @@ export default function AtividadeDetalhe() {
                       {initials(a.email)}
                     </span>
                     <div>
-                      <p className="text-white text-sm">{a.full_name || a.email}</p>
+                      <p className="text-white text-sm">{a.email}</p>
                       <p className="text-[#8b929e] text-xs">Aguardando envio</p>
                     </div>
                   </Card>
