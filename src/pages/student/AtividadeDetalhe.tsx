@@ -18,8 +18,8 @@ type Atividade = {
 type Aluno = {
   id: string;
   email: string;
-  full_name: string | null;
 };
+
 
 type Submissao = {
   id: string;
