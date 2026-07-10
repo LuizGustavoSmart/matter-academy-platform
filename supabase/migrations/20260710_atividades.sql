@@ -1,5 +1,5 @@
 -- Atividades (tarefas) vinculadas a um curso ("faixa") dentro de uma turma
-CREATE TABLE public.atividades (
+CREATE TABLE IF NOT EXISTS public.atividades (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   turma_id uuid NOT NULL REFERENCES public.turmas(id) ON DELETE CASCADE,
   curso_id uuid NOT NULL REFERENCES public.cursos(id) ON DELETE CASCADE,
@@ -14,8 +14,18 @@ CREATE TABLE public.atividades (
   created_at timestamptz DEFAULT now()
 );
 
+-- Garante as colunas mesmo se a tabela já existia com um schema antigo/parcial
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCES public.cursos(id) ON DELETE CASCADE;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS aula_id uuid REFERENCES public.aulas(id) ON DELETE SET NULL;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS anexo_url text;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS anexo_nome text;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS nota_maxima numeric NOT NULL DEFAULT 10;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS prazo timestamptz;
+ALTER TABLE public.atividades ADD COLUMN IF NOT EXISTS professor_id uuid REFERENCES public.profiles(id);
+DELETE FROM public.atividades WHERE curso_id IS NULL;
+
 -- Envios/respostas dos alunos para cada atividade
-CREATE TABLE public.atividade_envios (
+CREATE TABLE IF NOT EXISTS public.atividade_envios (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   atividade_id uuid NOT NULL REFERENCES public.atividades(id) ON DELETE CASCADE,
   aluno_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
