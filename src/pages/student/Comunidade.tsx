@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadComunidadeFile } from '../../lib/storage';
 import { Empty } from '../../components/ui';
+import { FileLink } from '../../components/FileLink';
 
 type Pair = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: string };
 type Message = {
@@ -133,7 +134,7 @@ export default function Comunidade() {
       let arquivo_nome: string | null = null;
       if (file) {
         const up = await uploadComunidadeFile(file, `${selected.turmaId}/${selected.cursoId}`);
-        arquivo_url = up.url;
+        arquivo_url = up.path;
         arquivo_nome = up.nome;
       }
       const { error } = await supabase.from('community_messages').insert({
@@ -252,9 +253,9 @@ export default function Comunidade() {
                         {!mine && <p className="text-xs opacity-70 mb-0.5">{m.profiles?.email}</p>}
                         {m.content && <p className="text-sm whitespace-pre-line">{m.content}</p>}
                         {m.arquivo_url && (
-                          <a href={m.arquivo_url} target="_blank" rel="noopener" className={`inline-flex items-center gap-1 text-xs underline mt-1 ${mine ? 'text-black/80' : 'text-[#cbfb00]'}`}>
-                            <Paperclip className="w-3 h-3" /> {m.arquivo_nome ?? 'Anexo'}
-                          </a>
+                          <FileLink bucket="comunidade" path={m.arquivo_url} className={`inline-flex items-center gap-1 text-xs underline mt-1 ${mine ? 'text-black/80' : 'text-[#cbfb00]'}`}>
+                            <Paperclip className="w-3 h-3 inline mr-1" /> {m.arquivo_nome ?? 'Anexo'}
+                          </FileLink>
                         )}
                         <p className={`text-[10px] mt-1 ${mine ? 'text-black/60' : 'text-[#434d5e]'}`}>
                           {new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

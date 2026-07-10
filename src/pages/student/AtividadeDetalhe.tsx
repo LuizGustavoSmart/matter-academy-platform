@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Card, Badge, Toast } from '../../components/ui';
+import { FileLink } from '../../components/FileLink';
 
 type Atividade = {
   id: string; turma_id: string; curso_id: string; aula_id: string | null;
@@ -95,7 +96,7 @@ export default function AtividadeDetalhe() {
       let arquivo_nome = envio?.arquivo_nome ?? null;
       if (file) {
         const up = await uploadAtividadeFile(file, `envios/${atividade.id}/${profile.id}`);
-        arquivo_url = up.url;
+        arquivo_url = up.path;
         arquivo_nome = up.nome;
       }
       const { error } = await supabase.from('atividade_envios').upsert(
@@ -171,9 +172,9 @@ export default function AtividadeDetalhe() {
       {atividade.descricao && <p className="text-[#d6deed] leading-relaxed mb-6 whitespace-pre-line">{atividade.descricao}</p>}
 
       {atividade.anexo_url && (
-        <a href={atividade.anexo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline mb-6">
-          <Paperclip className="w-4 h-4" /> {atividade.anexo_nome ?? 'Anexo do professor'}
-        </a>
+        <FileLink bucket="atividades" path={atividade.anexo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline mb-6">
+          <Paperclip className="w-4 h-4 inline mr-1" /> {atividade.anexo_nome ?? 'Anexo do professor'}
+        </FileLink>
       )}
 
       {atividade.aula_id && (
@@ -206,17 +207,17 @@ export default function AtividadeDetalhe() {
                 </div>
               )}
               {envio.arquivo_url && (
-                <a href={envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
-                  <Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'}
-                </a>
+                <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {envio.arquivo_nome ?? 'Arquivo enviado'}
+                </FileLink>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               {envio?.arquivo_url && (
-                <a href={envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
-                  <Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'} (atual)
-                </a>
+                <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {envio.arquivo_nome ?? 'Arquivo enviado'} (atual)
+                </FileLink>
               )}
               <div>
                 <label>Resposta (opcional)</label>
@@ -249,9 +250,9 @@ export default function AtividadeDetalhe() {
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <p className="text-white text-sm font-medium">{row.email}</p>
                       {row.envio?.arquivo_url ? (
-                        <a href={row.envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
-                          <Paperclip className="w-4 h-4" /> {row.envio.arquivo_nome ?? 'Arquivo'}
-                        </a>
+                        <FileLink bucket="atividades" path={row.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
+                          <Paperclip className="w-4 h-4 inline mr-1" /> {row.envio.arquivo_nome ?? 'Arquivo'}
+                        </FileLink>
                       ) : (
                         <span className="meta flex-shrink-0">Não enviado</span>
                       )}
