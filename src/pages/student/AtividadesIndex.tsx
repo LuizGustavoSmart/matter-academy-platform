@@ -13,14 +13,13 @@ export default function AtividadesIndex() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isProfessor = profile?.role === 'professor';
-  const isMonitor = profile?.role === 'monitor';
+  const isStaff = profile?.role === 'professor' || profile?.role === 'monitor';
 
   useEffect(() => {
-    if (!profile || isMonitor) { setLoading(false); return; }
+    if (!profile) { setLoading(false); return; }
 
     (async () => {
-      if (isProfessor) {
+      if (isStaff) {
         // Turmas em que o professor está atribuído
         const { data: ut } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id);
         const turmaIds = [...new Set((ut ?? []).map((r: any) => r.turma_id))];
@@ -105,20 +104,12 @@ export default function AtividadesIndex() {
     })();
   }, [profile]);
 
-  if (isMonitor) {
-    return (
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <Empty icon={<ClipboardList className="w-10 h-10" />} title="Não disponível" description="Atividades não estão disponíveis para monitores" />
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
       <div className="mb-10">
         <h1 className="mb-2">Atividades</h1>
         <p className="text-[#d6deed]">
-          {isProfessor ? 'Selecione uma turma para ver e corrigir as atividades.' : 'Selecione uma faixa para ver suas atividades.'}
+          {isStaff ? 'Selecione uma turma para ver e corrigir as atividades.' : 'Selecione uma faixa para ver suas atividades.'}
         </p>
       </div>
 
@@ -127,7 +118,7 @@ export default function AtividadesIndex() {
           <Empty
             icon={<ClipboardList className="w-10 h-10" />}
             title="Nenhuma atividade disponível"
-            description={isProfessor ? 'Você ainda não está atribuído a nenhuma turma' : 'Aguarde o administrador liberar conteúdo para suas turmas'}
+            description={isStaff ? 'Você ainda não está atribuído a nenhuma turma' : 'Aguarde o administrador liberar conteúdo para suas turmas'}
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -144,10 +135,10 @@ export default function AtividadesIndex() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-white font-medium truncate">{b.turmaNome} {b.cursoTitulo}</p>
-                      {isProfessor && <p className="meta text-xs mt-0.5">—</p>}
+                      {isStaff && <p className="meta text-xs mt-0.5">—</p>}
                     </div>
                   </div>
-                  {isProfessor && b.pendencias > 0 && (
+                  {isStaff && b.pendencias > 0 && (
                     <Badge tone="warn">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>
                   )}
                 </div>

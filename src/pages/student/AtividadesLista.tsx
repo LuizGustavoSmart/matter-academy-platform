@@ -22,7 +22,7 @@ export default function AtividadesLista() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
   const nav = useNavigate();
   const { profile } = useAuth();
-  const isProfessor = profile?.role === 'professor' || profile?.role === 'admin';
+  const isProfessor = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
 
   const [turmaNome, setTurmaNome] = useState('');
   const [cursoTitulo, setCursoTitulo] = useState('');

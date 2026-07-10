@@ -21,7 +21,7 @@ export default function AtividadeDetalhe() {
   const { atividadeId } = useParams<{ atividadeId: string }>();
   const nav = useNavigate();
   const { profile } = useAuth();
-  const isProfessor = profile?.role === 'professor' || profile?.role === 'admin';
+  const isProfessor = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
 
   const [atividade, setAtividade] = useState<Atividade | null>(null);
   const [loading, setLoading] = useState(true);

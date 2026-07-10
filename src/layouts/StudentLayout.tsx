@@ -15,9 +15,7 @@ export default function StudentLayout() {
 
   const items = [
     { label: 'Aulas',      icon: BookOpen,      onClick: () => nav('/dashboard'),   isActive: isAulas      },
-    ...(profile?.role !== 'monitor'
-      ? [{ label: 'Atividades', icon: ClipboardList, onClick: () => nav('/atividades'), isActive: isAtividades }]
-      : []),
+    { label: 'Atividades', icon: ClipboardList, onClick: () => nav('/atividades'),  isActive: isAtividades },
     { label: 'Comunidade', icon: MessageSquare, onClick: () => nav('/comunidade'),  isActive: isComunidade },
   ] as const;
 
