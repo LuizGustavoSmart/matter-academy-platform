@@ -17,7 +17,7 @@ export default function StudentLayout() {
     { label: 'Aulas',      icon: BookOpen,      onClick: () => nav('/dashboard'),   isActive: isAulas      },
     { label: 'Atividades', icon: ClipboardList, onClick: () => nav('/atividades'),  isActive: isAtividades },
     { label: 'Comunidade', icon: MessageSquare, onClick: () => nav('/comunidade'),  isActive: isComunidade },
-  ] as const;
+  ];
 
   return (
     <div className="min-h-screen flex">

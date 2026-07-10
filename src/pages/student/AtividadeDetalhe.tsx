@@ -7,7 +7,7 @@ import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Card, Badge, Toast } from '../../components/ui';
 
 type Atividade = {
-  id: string; turma_id: string; curso_id: string; aula_id: string | null;
+  id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
   titulo: string; descricao: string | null; anexo_url: string | null; anexo_nome: string | null;
   nota_maxima: number; prazo: string | null;
 };

@@ -7,7 +7,7 @@ const items = [
   { to: '/admin',          label: 'Visão Geral', icon: LayoutDashboard, end: true  },
   { to: '/admin/usuarios', label: 'Usuários',    icon: Users,            end: true  },
   { to: '/admin/turmas',   label: 'Turmas',      icon: Layers,           end: false },
-] as const;
+];
 
 export default function AdminLayout() {
   const { signOut, profile } = useAuth();
