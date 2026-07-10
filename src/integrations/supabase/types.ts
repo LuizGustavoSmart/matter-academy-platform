@@ -16,36 +16,72 @@ export type Database = {
     Tables: {
       atividades: {
         Row: {
+          anexo_nome: string | null
+          anexo_url: string | null
+          aula_id: string | null
           created_at: string
           criado_por: string | null
           descricao: string | null
           id: string
+          nota_maxima: number
           prazo: string | null
+          professor_id: string | null
           titulo: string
           turma_id: string
         }
         Insert: {
+          anexo_nome?: string | null
+          anexo_url?: string | null
+          aula_id?: string | null
           created_at?: string
           criado_por?: string | null
           descricao?: string | null
           id?: string
+          nota_maxima?: number
           prazo?: string | null
+          professor_id?: string | null
           titulo: string
           turma_id: string
         }
         Update: {
+          anexo_nome?: string | null
+          anexo_url?: string | null
+          aula_id?: string | null
           created_at?: string
           criado_por?: string | null
           descricao?: string | null
           id?: string
+          nota_maxima?: number
           prazo?: string | null
+          professor_id?: string | null
           titulo?: string
           turma_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "atividades_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "atividades_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "lessons_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "atividades_criado_por_fkey"
             columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "atividades_professor_id_fkey"
+            columns: ["professor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
