@@ -7,7 +7,7 @@ import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Card, Badge, Toast } from '../../components/ui';
 
 type Atividade = {
-  id: string; turma_id: string; curso_id: string; aula_id: string | null;
+  id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
   titulo: string; descricao: string | null; anexo_url: string | null; anexo_nome: string | null;
   nota_maxima: number; prazo: string | null;
 };
@@ -50,7 +50,7 @@ export default function AtividadeDetalhe() {
   };
 
   const loadProfessor = async (a: Atividade) => {
-    const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', a.turma_id).eq('curso_id', a.curso_id);
+    const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', a.turma_id).eq('curso_id', a.curso_id!);
     const userIds = (ut ?? []).map((r: any) => r.user_id);
     if (!userIds.length) { setAlunos([]); return; }
     const { data: profiles } = await supabase.from('profiles').select('id,email,role').in('id', userIds);
