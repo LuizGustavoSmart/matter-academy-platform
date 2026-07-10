@@ -50,7 +50,7 @@ export default function AtividadeDetalhe() {
   };
 
   const loadProfessor = async (a: Atividade) => {
-    const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', a.turma_id).eq('curso_id', a.curso_id);
+    const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', a.turma_id).eq('curso_id', a.curso_id!);
     const userIds = (ut ?? []).map((r: any) => r.user_id);
     if (!userIds.length) { setAlunos([]); return; }
     const { data: profiles } = await supabase.from('profiles').select('id,email,role').in('id', userIds);
