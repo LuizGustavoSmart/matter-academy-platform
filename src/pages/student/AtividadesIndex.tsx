@@ -120,32 +120,67 @@ export default function AtividadesIndex() {
             title="Nenhuma atividade disponível"
             description={isStaff ? 'Você ainda não está atribuído a nenhuma turma' : 'Aguarde o administrador liberar conteúdo para suas turmas'}
           />
-        ) : (
+        ) : isStaff ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {blocks.map((b) => (
-              <Card
-                key={`${b.turmaId}:${b.cursoId}`}
-                className="p-5 flex flex-col gap-4 cursor-pointer hover:border-[#cbfb00]/40 transition-colors"
-                onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center flex-shrink-0">
-                      <ClipboardList className="w-5 h-5 text-[#cbfb00]" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white font-medium truncate">{b.turmaNome} {b.cursoTitulo}</p>
-                      {isStaff && <p className="meta text-xs mt-0.5">—</p>}
-                    </div>
-                  </div>
-                  {isStaff && b.pendencias > 0 && (
-                    <Badge tone="warn">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>
-                  )}
-                </div>
-              </Card>
+              <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={`${b.turmaNome} ${b.cursoTitulo}`} showPend nav={nav} />
             ))}
           </div>
+        ) : (
+          (() => {
+            const turmaIds = [...new Set(blocks.map((b) => b.turmaId))];
+            const multiTurma = turmaIds.length > 1;
+            if (!multiTurma) {
+              return (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {blocks.map((b) => (
+                    <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} nav={nav} />
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div className="space-y-8">
+                {turmaIds.map((tId) => {
+                  const group = blocks.filter((b) => b.turmaId === tId);
+                  return (
+                    <div key={tId}>
+                      <p className="meta uppercase tracking-wider mb-3">{group[0].turmaNome}</p>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {group.map((b) => (
+                          <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} nav={nav} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
     </div>
+  );
+}
+
+function BlockCard({ b, label, showPend, nav }: { b: Block; label: string; showPend?: boolean; nav: (path: string) => void }) {
+  return (
+    <Card
+      className="p-5 flex flex-col gap-4 cursor-pointer hover:border-[#cbfb00]/40 transition-colors"
+      onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center flex-shrink-0">
+            <ClipboardList className="w-5 h-5 text-[#cbfb00]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-white font-medium truncate">{label}</p>
+          </div>
+        </div>
+        {showPend && b.pendencias > 0 && (
+          <Badge tone="warn">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>
+        )}
+      </div>
+    </Card>
   );
 }
