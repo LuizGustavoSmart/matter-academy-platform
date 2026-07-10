@@ -1,13 +1,16 @@
+import { Outlet, useNavigate } from 'react-router-dom';
+import { Users, Layers, LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Users, Layers, BookOpen, PlayCircle, LogOut, LayoutDashboard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Logo } from '../components/Logo';
+import { AppSidebar } from './AppSidebar';
 
 const items = [
   { to: '/admin',          label: 'Visão Geral', icon: LayoutDashboard, end: true  },
   { to: '/admin/usuarios', label: 'Usuários',    icon: Users,            end: true  },
   { to: '/admin/turmas',   label: 'Turmas',      icon: Layers,           end: false },
+] as const;
   { to: '/admin/cursos',   label: 'Cursos',      icon: BookOpen,         end: true  },
   { to: '/admin/aulas',    label: 'Aulas',       icon: PlayCircle,       end: true  },
 ];
@@ -15,6 +18,16 @@ const items = [
 export default function AdminLayout() {
   const { signOut, profile } = useAuth();
   const nav = useNavigate();
+  const logout = async () => { await signOut(); nav('/login'); };
+
+  return (
+    <div className="min-h-screen flex">
+      <AppSidebar
+        items={items}
+        profile={profile}
+        onLogout={logout}
+        subtitle="Painel admin"
+      />
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('admin-sb') === '1'
   );

@@ -1,7 +1,8 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { BookOpen, MessageSquare, ClipboardList } from 'lucide-react';
 import { BookOpen, MessageSquare, LogOut, ClipboardList, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Logo } from '../components/Logo';
+import { AppSidebar } from './AppSidebar';
 
 export default function StudentLayout() {
   const { signOut, profile } = useAuth();
@@ -9,19 +10,28 @@ export default function StudentLayout() {
   const location = useLocation();
   const logout = async () => { await signOut(); nav('/login'); };
 
+  const isAulas       = location.pathname === '/dashboard' || location.pathname.startsWith('/curso/');
+  const isComunidade  = location.pathname === '/comunidade' || location.pathname.startsWith('/turma/');
+  const isAtividades  = location.pathname.startsWith('/atividades') || location.pathname.startsWith('/atividade/');
   const { pathname } = location;
   const isAulas      = pathname === '/dashboard' || pathname.startsWith('/curso/');
   const isComunidade = pathname === '/comunidade' || pathname.startsWith('/turma/');
   const isAtividades = pathname === '/atividades' || pathname.startsWith('/atividades/');
   const isDuvidas    = pathname === '/duvidas';
 
-  const navClass = (active: boolean) =>
-    `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-      active ? 'bg-[#cbfb00] text-black font-medium' : 'text-[#d6deed] hover:bg-[#434d5e]/20'
-    }`;
+  const items = [
+    { label: 'Aulas',      icon: BookOpen,      onClick: () => nav('/dashboard'),   isActive: isAulas      },
+    { label: 'Atividades', icon: ClipboardList, onClick: () => nav('/atividades'),  isActive: isAtividades },
+    { label: 'Comunidade', icon: MessageSquare, onClick: () => nav('/comunidade'),  isActive: isComunidade },
+  ] as const;
 
   return (
     <div className="min-h-screen flex">
+      <AppSidebar
+        items={items}
+        profile={profile}
+        onLogout={logout}
+      />
       <aside className="w-60 border-r border-[#1c1f26] bg-[#000000] p-4 flex flex-col flex-shrink-0">
         <div className="mb-10 px-2">
           <Logo height={88} />
