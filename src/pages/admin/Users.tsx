@@ -129,7 +129,7 @@ export default function AdminUsers() {
 
   /* ── Configuração dos cards de stats ── */
   const STAT_CARDS = [
-    { label: 'Total', value: stats.total,   filterValue: '',        valueClass: 'text-white' },
+    { label: 'Total',      value: stats.total,   filterValue: '',        valueClass: 'text-white' },
     { label: 'Ativos',     value: stats.active,  filterValue: 'active',  valueClass: 'text-[#cbfb00]' },
     { label: 'Pendentes',  value: stats.pending, filterValue: 'pending', valueClass: 'text-yellow-400' },
     { label: 'Bloqueados', value: stats.blocked, filterValue: 'blocked', valueClass: 'text-red-400' },
@@ -158,10 +158,8 @@ export default function AdminUsers() {
                 key={card.label}
                 onClick={() => {
                   if (card.filterValue === '') {
-                    /* "Total" limpa o filtro de status */
                     setFilterStatus('');
                   } else {
-                    /* toggle: clica de novo → remove o filtro */
                     setFilterStatus(isSelected ? '' : card.filterValue);
                   }
                 }}
@@ -219,7 +217,6 @@ export default function AdminUsers() {
           )}
         </div>
 
-        {/* Contador de resultados quando filtros ativos */}
         {hasFilters && !loading && (
           <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
             Mostrando{' '}
@@ -327,6 +324,11 @@ export default function AdminUsers() {
         onClose={() => setCreateOpen(false)}
         turmas={turmas}
         onDone={(token) => { setCreateOpen(false); showLink(token); load(); }}
+        onBulkDone={(ok, total) => {
+          setCreateOpen(false);
+          load();
+          showToast(`${ok} de ${total} convites enviados`, ok === total ? 'success' : 'danger');
+        }}
       />
       <EditUserModal
         user={editOpen}
@@ -366,8 +368,8 @@ export default function AdminUsers() {
 /* ─────────────────────────────────────────────────────────────── */
 type CursoInfo = { id: string; titulo: string };
 type TurmaSelection = { turma_id: string; curso_ids: string[] };
+type BulkResult = { email: string; ok: boolean; err?: string };
 
-/* Carrega os cursos de cada turma via curso_turmas */
 async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
   const [{ data: cts }, { data: cs }] = await Promise.all([
     supabase.from('curso_turmas').select('turma_id,curso_id'),
@@ -382,6 +384,14 @@ async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
     byTurma[ct.turma_id].push(curso);
   });
   return byTurma;
+}
+
+function parseEmails(text: string): string[] {
+  return [...new Set(
+    text.split(/[\n,;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+  )];
 }
 
 /* ─────────────────────────────────────────────────────────────── */
@@ -465,30 +475,44 @@ function TurmaCoursePicker({
 /*  Modal: Criar usuário                                           */
 /* ─────────────────────────────────────────────────────────────── */
 function CreateUserModal({
-  open, onClose, turmas, onDone,
+  open, onClose, turmas, onDone, onBulkDone,
 }: {
   open: boolean;
   onClose: () => void;
   turmas: Turma[];
   onDone: (token: string) => void;
+  onBulkDone: (ok: number, total: number) => void;
 }) {
+  const [mode, setMode] = useState<'single' | 'bulk'>('single');
+
+  /* single */
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('student');
   const [selection, setSelection] = useState<TurmaSelection[]>([]);
   const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
+
+  /* bulk */
+  const [bulkText, setBulkText]         = useState('');
+  const [bulkResults, setBulkResults]   = useState<BulkResult[]>([]);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkTotal, setBulkTotal]       = useState(0);
+
+  /* common */
+  const [role, setRole]     = useState<Role>('student');
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr]       = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setEmail(''); setRole('student'); setSelection([]); setErr(null);
+      setMode('single'); setEmail(''); setBulkText('');
+      setBulkResults([]); setBulkProgress(0); setBulkTotal(0);
+      setRole('student'); setSelection([]); setErr(null);
       loadCoursesByTurma().then(setCoursesByTurma);
     }
   }, [open]);
 
   const isStudent = role === 'student';
 
-  const submit = async () => {
+  const submitSingle = async () => {
     setErr(null);
     if (!email.trim()) { setErr('Email obrigatório'); return; }
     if (isStudent) {
@@ -511,47 +535,160 @@ function CreateUserModal({
     }
   };
 
+  const submitBulk = async () => {
+    const emails = parseEmails(bulkText);
+    if (emails.length === 0) { setErr('Nenhum email válido encontrado'); return; }
+    if (isStudent) {
+      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
+      if (selection.some((s) => s.curso_ids.length === 0)) {
+        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
+      }
+    }
+    setErr(null);
+    setLoading(true);
+    setBulkTotal(emails.length);
+    setBulkProgress(0);
+    const results: BulkResult[] = [];
+    for (let i = 0; i < emails.length; i++) {
+      try {
+        const payload = isStudent
+          ? { email: emails[i], role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
+          : { email: emails[i], role, turma_ids: selection.map((s) => s.turma_id) };
+        await callFn('admin-users', 'create', payload);
+        results.push({ email: emails[i], ok: true });
+      } catch (e) {
+        results.push({ email: emails[i], ok: false, err: (e as Error).message });
+      }
+      setBulkProgress(i + 1);
+      setBulkResults([...results]);
+    }
+    setLoading(false);
+  };
+
+  const bulkDone   = bulkResults.length > 0 && !loading;
+  const bulkOk     = bulkResults.filter((r) => r.ok).length;
+  const emailCount = parseEmails(bulkText).length;
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Convidar usuário"
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Criar e gerar link</Button>
-        </>
+        bulkDone ? (
+          <Button variant="primary" onClick={() => onBulkDone(bulkOk, bulkResults.length)}>
+            Concluir
+          </Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={loading}
+              onClick={mode === 'single' ? submitSingle : submitBulk}
+            >
+              {mode === 'single'
+                ? 'Criar e gerar link'
+                : `Convidar${emailCount > 0 ? ` ${emailCount}` : ''}`
+              }
+            </Button>
+          </>
+        )
       }
     >
-      <div className="space-y-4">
-        <div>
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="student">Aluno</option>
-            <option value="professor">Professor</option>
-            <option value="monitor">Monitor</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
-        <div>
-          <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
-          <TurmaCoursePicker
-            turmas={turmas}
-            coursesByTurma={coursesByTurma}
-            value={selection}
-            onChange={setSelection}
-            showCourses={isStudent}
-          />
-          {isStudent && (
-            <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
-          )}
-        </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+      {/* Tabs */}
+      <div className="flex rounded-md border border-[#1c1f26] mb-4 overflow-hidden">
+        {(['single', 'bulk'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => { setMode(m); setErr(null); }}
+            className={`flex-1 py-2 text-sm font-medium transition-colors
+              ${mode === m ? 'bg-[#cbfb00] text-black' : 'text-[#d6deed] hover:bg-[#434d5e]/20'}`}
+          >
+            {m === 'single' ? 'Individual' : 'Em lote'}
+          </button>
+        ))}
       </div>
+
+      {/* Bulk results */}
+      {bulkDone ? (
+        <div>
+          <div className={`p-3 rounded-md mb-3 text-sm font-medium ${
+            bulkOk === bulkResults.length
+              ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/30'
+              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+          }`}>
+            {bulkOk} de {bulkResults.length} convites enviados com sucesso
+          </div>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {bulkResults.map((r) => (
+              <div
+                key={r.email}
+                className={`flex items-center justify-between text-xs p-2 rounded ${
+                  r.ok ? 'text-[#d6deed]' : 'text-red-400 bg-red-500/5'
+                }`}
+              >
+                <span className="truncate">{r.email}</span>
+                <span className="ml-2 flex-shrink-0">{r.ok ? '✓' : r.err ?? 'Erro'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {mode === 'single' ? (
+            <div>
+              <label>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+          ) : (
+            <div>
+              <label>Emails (um por linha)</label>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={5}
+                placeholder={"aluno1@exemplo.com\naluno2@exemplo.com\naluno3@exemplo.com"}
+                className="w-full resize-none"
+              />
+              {emailCount > 0 && !loading && (
+                <p className="text-xs text-[#8b929e] mt-1">{emailCount} email(s) válido(s)</p>
+              )}
+              {loading && bulkTotal > 0 && (
+                <p className="text-xs text-[#cbfb00] mt-1">
+                  Enviando... {bulkProgress}/{bulkTotal}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label>Papel</label>
+            <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <option value="student">Aluno</option>
+              <option value="professor">Professor</option>
+              <option value="monitor">Monitor</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+
+          <div>
+            <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
+            <TurmaCoursePicker
+              turmas={turmas}
+              coursesByTurma={coursesByTurma}
+              value={selection}
+              onChange={setSelection}
+              showCourses={isStudent}
+            />
+            {isStudent && (
+              <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
+            )}
+          </div>
+
+          {err && <p className="text-red-400 text-sm">{err}</p>}
+        </div>
+      )}
     </Modal>
   );
 }
@@ -588,7 +725,6 @@ function EditUserModal({
       ]);
       setCoursesByTurma(byTurma);
 
-      // Agrupa as linhas de user_turmas por turma_id
       const grouped: Record<string, string[]> = {};
       (ut ?? []).forEach((row: any) => {
         if (!grouped[row.turma_id]) grouped[row.turma_id] = [];
