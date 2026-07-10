@@ -25,6 +25,7 @@ export type Database = {
           enviado_em: string | null
           id: string
           nota: number | null
+          texto: string | null
           updated_at: string | null
         }
         Insert: {
@@ -37,6 +38,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           nota?: number | null
+          texto?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -49,6 +51,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           nota?: number | null
+          texto?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -229,6 +232,61 @@ export type Database = {
           },
           {
             foreignKeyName: "community_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_messages: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          content: string | null
+          created_at: string
+          curso_id: string
+          id: string
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          content?: string | null
+          created_at?: string
+          curso_id: string
+          id?: string
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          content?: string | null
+          created_at?: string
+          curso_id?: string
+          id?: string
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_messages_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_messages_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_messages_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
