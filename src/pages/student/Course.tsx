@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Circle, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +12,7 @@ type Curso = { id: string; titulo: string; descricao: string | null };
 export default function StudentCourse() {
   const { id } = useParams();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const [curso, setCurso] = useState<Curso | null>(null);
   const [aulas, setAulas] = useState<Aula[]>([]);
@@ -36,6 +37,12 @@ export default function StudentCourse() {
       setDone(doneSet);
 
       const courseAulaIds = new Set((as ?? []).map((a: Aula) => a.id));
+      const requestedAula = searchParams.get('aula');
+      if (requestedAula && courseAulaIds.has(requestedAula)) {
+        setCurrentId(requestedAula);
+        setLoading(false);
+        return;
+      }
       const lastAccessed = (ps ?? [])
         .filter((p) => courseAulaIds.has(p.aula_id))
         .sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())[0];
