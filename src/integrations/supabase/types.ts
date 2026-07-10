@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      atividade_envios: {
+        Row: {
+          aluno_id: string
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          atividade_id: string
+          comentario_professor: string | null
+          corrigido_em: string | null
+          enviado_em: string | null
+          id: string
+          nota: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          aluno_id: string
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          atividade_id: string
+          comentario_professor?: string | null
+          corrigido_em?: string | null
+          enviado_em?: string | null
+          id?: string
+          nota?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          aluno_id?: string
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          atividade_id?: string
+          comentario_professor?: string | null
+          corrigido_em?: string | null
+          enviado_em?: string | null
+          id?: string
+          nota?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atividade_envios_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "atividade_envios_atividade_id_fkey"
+            columns: ["atividade_id"]
+            isOneToOne: false
+            referencedRelation: "atividades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       atividades: {
         Row: {
           anexo_nome: string | null
@@ -21,6 +75,7 @@ export type Database = {
           aula_id: string | null
           created_at: string
           criado_por: string | null
+          curso_id: string | null
           descricao: string | null
           id: string
           nota_maxima: number
@@ -35,6 +90,7 @@ export type Database = {
           aula_id?: string | null
           created_at?: string
           criado_por?: string | null
+          curso_id?: string | null
           descricao?: string | null
           id?: string
           nota_maxima?: number
@@ -49,6 +105,7 @@ export type Database = {
           aula_id?: string | null
           created_at?: string
           criado_por?: string | null
+          curso_id?: string | null
           descricao?: string | null
           id?: string
           nota_maxima?: number
@@ -77,6 +134,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "atividades_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
             referencedColumns: ["id"]
           },
           {
@@ -353,48 +417,6 @@ export type Database = {
           },
         ]
       }
-      submissoes: {
-        Row: {
-          aluno_id: string
-          atividade_id: string
-          conteudo: string
-          created_at: string
-          id: string
-          updated_at: string
-        }
-        Insert: {
-          aluno_id: string
-          atividade_id: string
-          conteudo: string
-          created_at?: string
-          id?: string
-          updated_at?: string
-        }
-        Update: {
-          aluno_id?: string
-          atividade_id?: string
-          conteudo?: string
-          created_at?: string
-          id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "submissoes_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "submissoes_atividade_id_fkey"
-            columns: ["atividade_id"]
-            isOneToOne: false
-            referencedRelation: "atividades"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       turmas: {
         Row: {
           created_at: string | null
@@ -525,7 +547,12 @@ export type Database = {
       }
     }
     Functions: {
+      has_access_to_turma_curso: {
+        Args: { c_id: string; t_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
+      is_professor_of_turma: { Args: { t_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
