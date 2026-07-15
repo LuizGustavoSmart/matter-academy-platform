@@ -21,6 +21,8 @@ import Comunidade from './pages/student/Comunidade';
 import AtividadesIndex from './pages/student/AtividadesIndex';
 import AtividadesLista from './pages/student/AtividadesLista';
 import AtividadeDetalhe from './pages/student/AtividadeDetalhe';
+import DuvidasIndex from './pages/student/DuvidasIndex';
+import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -95,6 +97,8 @@ export default function App() {
               <Route path="/atividades" element={<AtividadesIndex />} />
               <Route path="/atividades/:turmaId/:cursoId" element={<AtividadesLista />} />
               <Route path="/atividade/:atividadeId" element={<AtividadeDetalhe />} />
+              <Route path="/duvidas" element={<DuvidasIndex />} />
+              <Route path="/duvidas/:duvidaId" element={<DuvidaDetalhe />} />
             </Route>
           </Route>
 

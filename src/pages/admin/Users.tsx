@@ -7,7 +7,7 @@ import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
 type Turma = { id: string; nome: string };
 type Role = 'admin' | 'student' | 'professor' | 'monitor';
 type UserRow = {
-  id: string; email: string; role: Role; status: string;
+  id: string; email: string; nome: string | null; role: Role; status: string;
   created_at: string; invite_token: string | null;
   turmas: { id: string; nome: string }[];
 };
@@ -74,7 +74,7 @@ export default function AdminUsers() {
 
   const filtered = useMemo(() => {
     return users.filter((u) => {
-      if (search && !u.email.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !u.email.toLowerCase().includes(search.toLowerCase()) && !(u.nome ?? '').toLowerCase().includes(search.toLowerCase())) return false;
       if (filterStatus && u.status !== filterStatus) return false;
       if (filterRole && u.role !== filterRole) return false;
       if (filterTurma && !u.turmas.some((t) => t.id === filterTurma)) return false;
@@ -255,6 +255,7 @@ export default function AdminUsers() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#1c1f26] text-left">
+                <th className="px-4 py-3 font-medium text-[#d6deed]">Nome</th>
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Email</th>
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
                 <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
@@ -266,6 +267,9 @@ export default function AdminUsers() {
             <tbody>
               {filtered.map((u) => (
                 <tr key={u.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
+                  <td className="px-4 py-3">
+                    <span className="text-white block truncate max-w-[160px]">{u.nome || '—'}</span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-white block truncate max-w-[200px]">{u.email}</span>
                     {u.id === current?.id && (
@@ -473,6 +477,7 @@ function CreateUserModal({
   onDone: (token: string) => void;
 }) {
   const [email, setEmail] = useState('');
+  const [nome, setNome] = useState('');
   const [role, setRole] = useState<Role>('student');
   const [selection, setSelection] = useState<TurmaSelection[]>([]);
   const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
@@ -481,7 +486,7 @@ function CreateUserModal({
 
   useEffect(() => {
     if (open) {
-      setEmail(''); setRole('student'); setSelection([]); setErr(null);
+      setEmail(''); setNome(''); setRole('student'); setSelection([]); setErr(null);
       loadCoursesByTurma().then(setCoursesByTurma);
     }
   }, [open]);
@@ -500,8 +505,8 @@ function CreateUserModal({
     setLoading(true);
     try {
       const payload = isStudent
-        ? { email: email.trim(), role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
-        : { email: email.trim(), role, turma_ids: selection.map((s) => s.turma_id) };
+        ? { email: email.trim(), nome: nome.trim(), role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
+        : { email: email.trim(), nome: nome.trim(), role, turma_ids: selection.map((s) => s.turma_id) };
       const r = await callFn('admin-users', 'create', payload);
       onDone(r.invite_token);
     } catch (e) {
@@ -524,6 +529,10 @@ function CreateUserModal({
       }
     >
       <div className="space-y-4">
+        <div>
+          <label>Nome</label>
+          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
+        </div>
         <div>
           <label>Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -569,6 +578,7 @@ function EditUserModal({
   onDone: () => void;
 }) {
   const [email, setEmail] = useState('');
+  const [nome, setNome] = useState('');
   const [role, setRole] = useState<Role>('student');
   const [selection, setSelection] = useState<TurmaSelection[]>([]);
   const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
@@ -578,6 +588,7 @@ function EditUserModal({
   useEffect(() => {
     if (!user) return;
     setEmail(user.email);
+    setNome(user.nome ?? '');
     setRole(user.role);
     setErr(null);
 
@@ -615,6 +626,7 @@ function EditUserModal({
       const payload: Record<string, unknown> = {
         user_id: user.id,
         email: email !== user.email ? email : undefined,
+        nome: nome !== (user.nome ?? '') ? nome : undefined,
         role: role !== user.role ? role : undefined,
       };
       if (isStudent) {
@@ -646,6 +658,10 @@ function EditUserModal({
       }
     >
       <div className="space-y-4">
+        <div>
+          <label>Nome</label>
+          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
+        </div>
         <div>
           <label>Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />

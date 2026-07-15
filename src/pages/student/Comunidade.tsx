@@ -10,11 +10,15 @@ type Pair = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: 
 type Message = {
   id: string; turma_id: string; curso_id: string; user_id: string;
   content: string | null; arquivo_url: string | null; arquivo_nome: string | null;
-  created_at: string; profiles: { email: string } | null;
+  created_at: string; profiles: { email: string; nome: string | null } | null;
 };
 
-function initials(email: string) {
-  return email.split('@')[0]?.slice(0, 2).toUpperCase() ?? '??';
+function displayName(p: { email: string; nome: string | null } | null | undefined) {
+  return p?.nome || p?.email || '??';
+}
+
+function initials(label: string) {
+  return label.split(/[\s@]/)[0]?.slice(0, 2).toUpperCase() ?? '??';
 }
 
 export default function Comunidade() {
@@ -100,7 +104,7 @@ export default function Comunidade() {
     setMsgLoading(true);
     const { data } = await supabase
       .from('community_messages')
-      .select('*, profiles(email)')
+      .select('*, profiles(email,nome)')
       .eq('turma_id', p.turmaId)
       .eq('curso_id', p.cursoId)
       .order('created_at', { ascending: true });
@@ -247,10 +251,10 @@ export default function Comunidade() {
                   return (
                     <div key={m.id} className={`flex gap-3 ${mine ? 'flex-row-reverse' : ''}`}>
                       <div className="w-8 h-8 rounded-full bg-[#1c1f26] grid place-items-center flex-shrink-0 text-xs text-[#d6deed]">
-                        {initials(m.profiles?.email ?? '??')}
+                        {initials(displayName(m.profiles))}
                       </div>
                       <div className={`max-w-[70%] rounded-lg px-3 py-2 ${mine ? 'bg-[#cbfb00] text-black' : 'bg-[#0d0d0d] border border-[#1c1f26] text-[#d6deed]'}`}>
-                        {!mine && <p className="text-xs opacity-70 mb-0.5">{m.profiles?.email}</p>}
+                        {!mine && <p className="text-xs font-medium opacity-80 mb-0.5">{displayName(m.profiles)}</p>}
                         {m.content && <p className="text-sm whitespace-pre-line">{m.content}</p>}
                         {m.arquivo_url && (
                           <FileLink bucket="comunidade" path={m.arquivo_url} className={`inline-flex items-center gap-1 text-xs underline mt-1 ${mine ? 'text-black/80' : 'text-[#cbfb00]'}`}>
