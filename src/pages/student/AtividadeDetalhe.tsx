@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Card, Badge, Toast } from '../../components/ui';
+import { FileLink } from '../../components/FileLink';
 
 type Atividade = {
   id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
@@ -12,7 +13,7 @@ type Atividade = {
   nota_maxima: number; prazo: string | null;
 };
 type Envio = {
-  id?: string; arquivo_url: string | null; arquivo_nome: string | null; enviado_em: string | null;
+  id?: string; arquivo_url: string | null; arquivo_nome: string | null; texto: string | null; enviado_em: string | null;
   nota: number | null; comentario_professor: string | null; corrigido_em: string | null;
 };
 type AlunoRow = { id: string; email: string; envio: Envio | null };
@@ -30,6 +31,7 @@ export default function AtividadeDetalhe() {
   // Aluno
   const [envio, setEnvio] = useState<Envio | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [texto, setTexto] = useState('');
   const [uploading, setUploading] = useState(false);
 
   // Professor
@@ -47,6 +49,7 @@ export default function AtividadeDetalhe() {
     if (!profile) return;
     const { data } = await supabase.from('atividade_envios').select('*').eq('atividade_id', a.id).eq('aluno_id', profile.id).maybeSingle();
     setEnvio(data ?? null);
+    setTexto(data?.texto ?? '');
   };
 
   const loadProfessor = async (a: Atividade) => {
@@ -85,16 +88,24 @@ export default function AtividadeDetalhe() {
   })();
 
   const submitEnvio = async () => {
-    if (!atividade || !profile || !file) return;
+    if (!atividade || !profile) return;
+    if (!file && !texto.trim()) return;
     setUploading(true);
     try {
-      const up = await uploadAtividadeFile(file, `envios/${atividade.id}/${profile.id}`);
+      let arquivo_url = envio?.arquivo_url ?? null;
+      let arquivo_nome = envio?.arquivo_nome ?? null;
+      if (file) {
+        const up = await uploadAtividadeFile(file, `envios/${atividade.id}/${profile.id}`);
+        arquivo_url = up.path;
+        arquivo_nome = up.nome;
+      }
       const { error } = await supabase.from('atividade_envios').upsert(
         {
           atividade_id: atividade.id,
           aluno_id: profile.id,
-          arquivo_url: up.url,
-          arquivo_nome: up.nome,
+          arquivo_url,
+          arquivo_nome,
+          texto: texto.trim() || null,
           enviado_em: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -161,9 +172,9 @@ export default function AtividadeDetalhe() {
       {atividade.descricao && <p className="text-[#d6deed] leading-relaxed mb-6 whitespace-pre-line">{atividade.descricao}</p>}
 
       {atividade.anexo_url && (
-        <a href={atividade.anexo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline mb-6">
-          <Paperclip className="w-4 h-4" /> {atividade.anexo_nome ?? 'Anexo do professor'}
-        </a>
+        <FileLink bucket="atividades" path={atividade.anexo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline mb-6">
+          <Paperclip className="w-4 h-4 inline mr-1" /> {atividade.anexo_nome ?? 'Anexo do professor'}
+        </FileLink>
       )}
 
       {atividade.aula_id && (
@@ -189,24 +200,34 @@ export default function AtividadeDetalhe() {
                   <p className="text-[#d6deed] whitespace-pre-line">{envio.comentario_professor}</p>
                 </div>
               )}
+              {envio.texto && (
+                <div>
+                  <p className="meta mb-1">Sua resposta</p>
+                  <p className="text-[#d6deed] whitespace-pre-line">{envio.texto}</p>
+                </div>
+              )}
               {envio.arquivo_url && (
-                <a href={envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
-                  <Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'}
-                </a>
+                <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {envio.arquivo_nome ?? 'Arquivo enviado'}
+                </FileLink>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               {envio?.arquivo_url && (
-                <a href={envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
-                  <Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'} (atual)
-                </a>
+                <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {envio.arquivo_nome ?? 'Arquivo enviado'} (atual)
+                </FileLink>
               )}
               <div>
-                <label>{envio ? 'Substituir arquivo' : 'Anexar documento (PDF, foto, etc.)'}</label>
+                <label>Resposta (opcional)</label>
+                <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} placeholder="Escreva sua resposta aqui..." />
+              </div>
+              <div>
+                <label>{envio ? 'Substituir arquivo (opcional)' : 'Anexar documento (opcional — PDF, foto, etc.)'}</label>
                 <input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </div>
-              <Button variant="primary" icon={<Upload className="w-4 h-4" />} loading={uploading} disabled={!file} onClick={submitEnvio}>
+              <Button variant="primary" icon={<Upload className="w-4 h-4" />} loading={uploading} disabled={!file && !texto.trim()} onClick={submitEnvio}>
                 {envio ? 'Reenviar atividade' : 'Enviar atividade'}
               </Button>
             </div>
@@ -229,13 +250,16 @@ export default function AtividadeDetalhe() {
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <p className="text-white text-sm font-medium">{row.email}</p>
                       {row.envio?.arquivo_url ? (
-                        <a href={row.envio.arquivo_url} target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
-                          <Paperclip className="w-4 h-4" /> {row.envio.arquivo_nome ?? 'Arquivo'}
-                        </a>
+                        <FileLink bucket="atividades" path={row.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
+                          <Paperclip className="w-4 h-4 inline mr-1" /> {row.envio.arquivo_nome ?? 'Arquivo'}
+                        </FileLink>
                       ) : (
                         <span className="meta flex-shrink-0">Não enviado</span>
                       )}
                     </div>
+                    {row.envio?.texto && (
+                      <p className="text-[#d6deed] text-sm whitespace-pre-line mb-3 bg-[#111] rounded-md p-3">{row.envio.texto}</p>
+                    )}
                     <div className="grid sm:grid-cols-[120px_1fr_auto] gap-3 items-start">
                       <div>
                         <label className="text-xs">Nota (máx. {atividade.nota_maxima})</label>

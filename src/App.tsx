@@ -17,7 +17,7 @@ import AdminAulas from './pages/admin/Aulas';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCourse from './pages/student/Course';
 import StudentCommunity from './pages/student/Community';
-import CommunityIndex from './pages/student/CommunityIndex';
+import Comunidade from './pages/student/Comunidade';
 import AtividadesIndex from './pages/student/AtividadesIndex';
 import AtividadesLista from './pages/student/AtividadesLista';
 import AtividadeDetalhe from './pages/student/AtividadeDetalhe';
@@ -90,7 +90,7 @@ export default function App() {
             <Route element={<StudentLayout />}>
               <Route path="/dashboard" element={<StudentDashboard />} />
               <Route path="/curso/:id" element={<StudentCourse />} />
-              <Route path="/comunidade" element={<CommunityIndex />} />
+              <Route path="/comunidade" element={<Comunidade />} />
               <Route path="/turma/:turmaId/comunidade" element={<StudentCommunity />} />
               <Route path="/atividades" element={<AtividadesIndex />} />
               <Route path="/atividades/:turmaId/:cursoId" element={<AtividadesLista />} />

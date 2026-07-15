@@ -38,7 +38,7 @@ export default function CriarAtividadeModal({
       let anexo_nome: string | null = null;
       if (file) {
         const up = await uploadAtividadeFile(file, `atividades/${turmaId}/${cursoId}`);
-        anexo_url = up.url;
+        anexo_url = up.path;
         anexo_nome = up.nome;
       }
       const { error } = await supabase.from('atividades').insert({
