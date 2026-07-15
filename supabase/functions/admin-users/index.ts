@@ -114,8 +114,9 @@ Deno.serve(async (req: Request) => {
     const body = req.method === "POST" || req.method === "PUT" ? await req.json().catch(() => ({})) : {};
 
     if (req.method === "POST" && action === "create") {
-      const { email, turma_cursos, turma_ids, role = "student" } = body as {
+      const { email, nome, turma_cursos, turma_ids, role = "student" } = body as {
         email: string;
+        nome?: string;
         turma_cursos?: { turma_id: string; curso_id: string }[];
         turma_ids?: string[];
         role?: string;
@@ -144,6 +145,7 @@ Deno.serve(async (req: Request) => {
       const { error: profErr } = await admin.from("profiles").insert({
         id: created.user.id,
         email,
+        nome: nome?.trim() || null,
         role: normalizedRole,
         status: "pending",
         invite_token,
@@ -192,13 +194,14 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === "POST" && action === "update") {
-      const { user_id, email, status, role, turma_cursos, turma_ids } = body as {
-        user_id: string; email?: string; status?: string; role?: string;
+      const { user_id, email, nome, status, role, turma_cursos, turma_ids } = body as {
+        user_id: string; email?: string; nome?: string; status?: string; role?: string;
         turma_cursos?: { turma_id: string; curso_id: string }[];
         turma_ids?: string[];
       };
       const updates: Record<string, unknown> = {};
       if (email) updates.email = email;
+      if (nome !== undefined) updates.nome = nome.trim() || null;
       if (status) updates.status = status;
       if (role) {
         const normalizedRole = normalizeRole(role);

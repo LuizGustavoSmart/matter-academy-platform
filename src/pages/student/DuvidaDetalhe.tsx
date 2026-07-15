@@ -20,6 +20,7 @@ export default function DuvidaDetalhe() {
 
   const [duvida, setDuvida] = useState<Duvida | null>(null);
   const [aulaTitulo, setAulaTitulo] = useState('');
+  const [alunoLabel, setAlunoLabel] = useState('');
   const [loading, setLoading] = useState(true);
   const [resposta, setResposta] = useState('');
   const [saving, setSaving] = useState(false);
@@ -33,6 +34,10 @@ export default function DuvidaDetalhe() {
     if (data?.aula_id) {
       const { data: aula } = await supabase.from('aulas').select('titulo').eq('id', data.aula_id).maybeSingle();
       setAulaTitulo(aula?.titulo ?? '');
+    }
+    if (data?.aluno_id && (profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin')) {
+      const { data: aluno } = await supabase.from('profiles').select('nome,email').eq('id', data.aluno_id).maybeSingle();
+      setAlunoLabel(aluno?.nome || aluno?.email || '');
     }
     setLoading(false);
   };
@@ -73,7 +78,10 @@ export default function DuvidaDetalhe() {
       <div className="flex items-start justify-between mb-6 gap-4">
         <div>
           <h1 className="mb-2">{duvida.titulo}</h1>
-          <p className="meta">Enviada em {new Date(duvida.created_at).toLocaleString('pt-BR')}</p>
+          <p className="meta">
+            {alunoLabel && <>{alunoLabel} · </>}
+            Enviada em {new Date(duvida.created_at).toLocaleString('pt-BR')}
+          </p>
         </div>
         <Badge tone={duvida.status === 'resolvida' ? 'success' : 'warn'}>{duvida.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>
       </div>

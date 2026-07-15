@@ -16,7 +16,7 @@ type Envio = {
   id?: string; arquivo_url: string | null; arquivo_nome: string | null; texto: string | null; enviado_em: string | null;
   nota: number | null; comentario_professor: string | null; corrigido_em: string | null;
 };
-type AlunoRow = { id: string; email: string; envio: Envio | null };
+type AlunoRow = { id: string; email: string; nome: string | null; envio: Envio | null };
 
 export default function AtividadeDetalhe() {
   const { atividadeId } = useParams<{ atividadeId: string }>();
@@ -56,11 +56,11 @@ export default function AtividadeDetalhe() {
     const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', a.turma_id).eq('curso_id', a.curso_id!);
     const userIds = (ut ?? []).map((r: any) => r.user_id);
     if (!userIds.length) { setAlunos([]); return; }
-    const { data: profiles } = await supabase.from('profiles').select('id,email,role').in('id', userIds);
+    const { data: profiles } = await supabase.from('profiles').select('id,email,nome,role').in('id', userIds);
     const students = (profiles ?? []).filter((p: any) => p.role === 'student');
     const { data: envios } = await supabase.from('atividade_envios').select('*').eq('atividade_id', a.id).in('aluno_id', students.map((s: any) => s.id));
     const envioMap = new Map((envios ?? []).map((e: any) => [e.aluno_id, e]));
-    const rows: AlunoRow[] = students.map((s: any) => ({ id: s.id, email: s.email, envio: envioMap.get(s.id) ?? null }));
+    const rows: AlunoRow[] = students.map((s: any) => ({ id: s.id, email: s.email, nome: s.nome, envio: envioMap.get(s.id) ?? null }));
     setAlunos(rows);
     const d: Record<string, { nota: string; comentario: string }> = {};
     rows.forEach((r) => { d[r.id] = { nota: r.envio?.nota != null ? String(r.envio.nota) : '', comentario: r.envio?.comentario_professor ?? '' }; });
@@ -248,7 +248,10 @@ export default function AtividadeDetalhe() {
                 return (
                   <Card key={row.id} className="p-5">
                     <div className="flex items-start justify-between gap-4 mb-3">
-                      <p className="text-white text-sm font-medium">{row.email}</p>
+                      <div>
+                        <p className="text-white text-sm font-medium">{row.nome || row.email}</p>
+                        {row.nome && <p className="meta text-xs">{row.email}</p>}
+                      </div>
                       {row.envio?.arquivo_url ? (
                         <FileLink bucket="atividades" path={row.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
                           <Paperclip className="w-4 h-4 inline mr-1" /> {row.envio.arquivo_nome ?? 'Arquivo'}

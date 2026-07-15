@@ -7,7 +7,7 @@ import { Card, Badge, Empty } from '../../components/ui';
 
 type Row = {
   id: string; titulo: string; status: 'aberta' | 'resolvida'; created_at: string;
-  aluno_email?: string; curso_titulo?: string; turma_nome?: string;
+  aluno_email?: string; aluno_nome?: string | null; curso_titulo?: string; turma_nome?: string;
 };
 
 export default function DuvidasIndex() {
@@ -33,14 +33,15 @@ export default function DuvidasIndex() {
         const [{ data: cursos }, { data: turmas }, { data: alunos }] = await Promise.all([
           supabase.from('cursos').select('id,titulo').in('id', cursoIds),
           supabase.from('turmas').select('id,nome').in('id', turmaIds),
-          supabase.from('profiles').select('id,email').in('id', alunoIds),
+          supabase.from('profiles').select('id,email,nome').in('id', alunoIds),
         ]);
         const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c.titulo]));
         const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t.nome]));
-        const alunoMap = new Map((alunos ?? []).map((a) => [a.id, a.email]));
+        const alunoMap = new Map((alunos ?? []).map((a: any) => [a.id, a]));
         setRows(list.map((d) => ({
           id: d.id, titulo: d.titulo, status: d.status, created_at: d.created_at,
-          curso_titulo: cursoMap.get(d.curso_id), turma_nome: turmaMap.get(d.turma_id), aluno_email: alunoMap.get(d.aluno_id),
+          curso_titulo: cursoMap.get(d.curso_id), turma_nome: turmaMap.get(d.turma_id),
+          aluno_email: alunoMap.get(d.aluno_id)?.email, aluno_nome: alunoMap.get(d.aluno_id)?.nome,
         })));
       } else if (list.length) {
         const cursoIds = [...new Set(list.map((d) => d.curso_id))];
@@ -94,7 +95,7 @@ function Section({ title, rows, isStaff, nav }: { title: string; rows: Row[]; is
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-medium truncate">{r.titulo}</p>
                 <p className="meta truncate">
-                  {isStaff ? `${r.aluno_email ?? ''} · ${r.turma_nome ?? ''} ${r.curso_titulo ?? ''}` : r.curso_titulo}
+                  {isStaff ? `${r.aluno_nome || r.aluno_email || ''} · ${r.turma_nome ?? ''} ${r.curso_titulo ?? ''}` : r.curso_titulo}
                 </p>
               </div>
               <Badge tone={r.status === 'resolvida' ? 'success' : 'warn'}>{r.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>
