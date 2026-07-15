@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Check } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Check, HelpCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, ProgressBar } from '../../components/ui';
+import { Button, ProgressBar, Toast } from '../../components/ui';
 import LessonVideoPlayer from '../../components/LessonVideoPlayer';
+import DuvidaModal from './DuvidaModal';
 
 type Aula = { id: string; titulo: string; descricao: string | null; ordem: number };
 type Curso = { id: string; titulo: string; descricao: string | null };
@@ -19,6 +20,8 @@ export default function StudentCourse() {
   const [done, setDone] = useState<Set<string>>(new Set());
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [duvidaOpen, setDuvidaOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -160,13 +163,22 @@ export default function StudentCourse() {
                   <p className="meta mb-1">Aula {current.ordem}</p>
                   <h2>{current.titulo}</h2>
                 </div>
-                <Button
-                  variant={isDone ? 'primary' : 'secondary'}
-                  onClick={toggleDone}
-                  icon={<Check className="w-4 h-4" />}
-                >
-                  {isDone ? 'Concluída' : 'Marcar como concluída'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setDuvidaOpen(true)}
+                    icon={<HelpCircle className="w-4 h-4" />}
+                  >
+                    Tirar dúvida
+                  </Button>
+                  <Button
+                    variant={isDone ? 'primary' : 'secondary'}
+                    onClick={toggleDone}
+                    icon={<Check className="w-4 h-4" />}
+                  >
+                    {isDone ? 'Concluída' : 'Marcar como concluída'}
+                  </Button>
+                </div>
               </div>
 
               {current.descricao && <p className="text-[#d6deed] leading-relaxed mb-8 whitespace-pre-line">{current.descricao}</p>}
@@ -193,6 +205,21 @@ export default function StudentCourse() {
           )}
         </section>
       </div>
+
+      {current && (
+        <DuvidaModal
+          open={duvidaOpen}
+          aulaId={current.id}
+          cursoId={curso.id}
+          onClose={() => setDuvidaOpen(false)}
+          onDone={() => {
+            setDuvidaOpen(false);
+            setToast('Dúvida enviada! Acompanhe em "Dúvidas" no menu.');
+            setTimeout(() => setToast(null), 3500);
+          }}
+        />
+      )}
+      <Toast message={toast} tone="success" />
     </div>
   );
 }

@@ -16,6 +16,10 @@ export async function uploadComunidadeFile(file: File, folder: string) {
   return uploadToBucket('comunidade', file, folder);
 }
 
+export async function uploadDuvidaFile(file: File, folder: string) {
+  return uploadToBucket('duvidas', file, folder);
+}
+
 export async function getSignedUrl(bucket: string, path: string, expiresIn = 3600) {
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
   if (error) throw error;
