@@ -492,6 +492,7 @@ export type Database = {
           id: string
           invite_expires_at: string | null
           invite_token: string | null
+          nome: string | null
           reset_expires_at: string | null
           reset_token: string | null
           role: string
@@ -504,6 +505,7 @@ export type Database = {
           id: string
           invite_expires_at?: string | null
           invite_token?: string | null
+          nome?: string | null
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
@@ -516,6 +518,7 @@ export type Database = {
           id?: string
           invite_expires_at?: string | null
           invite_token?: string | null
+          nome?: string | null
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
