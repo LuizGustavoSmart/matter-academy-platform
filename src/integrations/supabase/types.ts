@@ -390,6 +390,100 @@ export type Database = {
         }
         Relationships: []
       }
+      duvidas: {
+        Row: {
+          aluno_id: string
+          anexo_nome: string | null
+          anexo_url: string | null
+          aula_id: string
+          created_at: string
+          curso_id: string
+          descricao: string | null
+          id: string
+          professor_id: string | null
+          resolved_at: string | null
+          resposta: string | null
+          status: string
+          titulo: string
+          turma_id: string
+        }
+        Insert: {
+          aluno_id: string
+          anexo_nome?: string | null
+          anexo_url?: string | null
+          aula_id: string
+          created_at?: string
+          curso_id: string
+          descricao?: string | null
+          id?: string
+          professor_id?: string | null
+          resolved_at?: string | null
+          resposta?: string | null
+          status?: string
+          titulo: string
+          turma_id: string
+        }
+        Update: {
+          aluno_id?: string
+          anexo_nome?: string | null
+          anexo_url?: string | null
+          aula_id?: string
+          created_at?: string
+          curso_id?: string
+          descricao?: string | null
+          id?: string
+          professor_id?: string | null
+          resolved_at?: string | null
+          resposta?: string | null
+          status?: string
+          titulo?: string
+          turma_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "duvidas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duvidas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duvidas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "lessons_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duvidas_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duvidas_professor_id_fkey"
+            columns: ["professor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duvidas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           activated_at: string | null
