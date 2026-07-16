@@ -4,7 +4,7 @@ import { ChevronRight, Paperclip, PlayCircle, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadAtividadeFile } from '../../lib/storage';
-import { Button, Card, Badge, Toast } from '../../components/ui';
+import { Button, Card, Badge, Toast, Modal } from '../../components/ui';
 import { FileLink } from '../../components/FileLink';
 
 type Atividade = {
@@ -38,6 +38,7 @@ export default function AtividadeDetalhe() {
   const [alunos, setAlunos] = useState<AlunoRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, { nota: string; comentario: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [selectedAluno, setSelectedAluno] = useState<AlunoRow | null>(null);
 
   const loadAtividade = async () => {
     const { data } = await supabase.from('atividades').select('*').eq('id', atividadeId!).maybeSingle();
@@ -65,6 +66,7 @@ export default function AtividadeDetalhe() {
     const d: Record<string, { nota: string; comentario: string }> = {};
     rows.forEach((r) => { d[r.id] = { nota: r.envio?.nota != null ? String(r.envio.nota) : '', comentario: r.envio?.comentario_professor ?? '' }; });
     setDrafts(d);
+    setSelectedAluno((prev) => (prev ? rows.find((r) => r.id === prev.id) ?? null : null));
   };
 
   useEffect(() => {
@@ -242,55 +244,109 @@ export default function AtividadeDetalhe() {
           {alunos.length === 0 ? (
             <p className="meta">Nenhum aluno nesta turma/curso</p>
           ) : (
-            <div className="space-y-4">
-              {alunos.map((row) => {
-                const draft = drafts[row.id] ?? { nota: '', comentario: '' };
-                return (
-                  <Card key={row.id} className="p-5">
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <div>
-                        <p className="text-white text-sm font-medium">{row.nome || row.email}</p>
-                        {row.nome && <p className="meta text-xs">{row.email}</p>}
+            <Card>
+              <ul>
+                {alunos.map((row) => {
+                  const respStatus = row.envio?.corrigido_em
+                    ? { label: 'Corrigida', tone: 'success' as const }
+                    : row.envio?.enviado_em
+                      ? { label: 'Enviada', tone: 'warn' as const }
+                      : { label: 'Não enviada', tone: 'default' as const };
+                  return (
+                    <li
+                      key={row.id}
+                      className="flex items-center gap-4 px-4 py-3 border-b border-[#1c1f26] last:border-0 hover:bg-[#111] cursor-pointer"
+                      onClick={() => setSelectedAluno(row)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{row.nome || row.email}</p>
+                        <p className="meta text-xs truncate">
+                          {[row.nome ? row.email : null, row.envio?.enviado_em ? `Enviado em ${new Date(row.envio.enviado_em).toLocaleString('pt-BR')}` : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
                       </div>
-                      {row.envio?.arquivo_url ? (
-                        <FileLink bucket="atividades" path={row.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline flex-shrink-0">
-                          <Paperclip className="w-4 h-4 inline mr-1" /> {row.envio.arquivo_nome ?? 'Arquivo'}
-                        </FileLink>
-                      ) : (
-                        <span className="meta flex-shrink-0">Não enviado</span>
+                      {row.envio?.corrigido_em && (
+                        <span className="text-sm font-medium text-[#cbfb00] flex-shrink-0">{row.envio.nota}/{atividade.nota_maxima}</span>
                       )}
-                    </div>
-                    {row.envio?.texto && (
-                      <p className="text-[#d6deed] text-sm whitespace-pre-line mb-3 bg-[#111] rounded-md p-3">{row.envio.texto}</p>
-                    )}
-                    <div className="grid sm:grid-cols-[120px_1fr_auto] gap-3 items-start">
-                      <div>
-                        <label className="text-xs">Nota (máx. {atividade.nota_maxima})</label>
-                        <input
-                          type="number"
-                          value={draft.nota}
-                          onChange={(e) => setDrafts((d) => ({ ...d, [row.id]: { ...d[row.id], nota: e.target.value } }))}
-                          max={atividade.nota_maxima}
-                          min={0}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs">Comentário (opcional)</label>
-                        <input
-                          value={draft.comentario}
-                          onChange={(e) => setDrafts((d) => ({ ...d, [row.id]: { ...d[row.id], comentario: e.target.value } }))}
-                        />
-                      </div>
-                      <div className="flex items-end h-full">
-                        <Button variant="primary" loading={saving === row.id} onClick={() => salvarNota(row.id)}>Salvar</Button>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                      <Badge tone={respStatus.tone}>{respStatus.label}</Badge>
+                      <ChevronRight className="w-4 h-4 text-[#434d5e] flex-shrink-0" />
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
         </div>
+      )}
+
+      {/* ── MODAL: resposta completa + correção ── */}
+      {selectedAluno && (
+        <Modal
+          open={!!selectedAluno}
+          onClose={() => setSelectedAluno(null)}
+          title={selectedAluno.nome || selectedAluno.email}
+        >
+          <div className="space-y-4">
+            {selectedAluno.nome && <p className="meta -mt-2">{selectedAluno.email}</p>}
+
+            <div>
+              <p className="meta mb-1">Atividade</p>
+              <p className="text-white text-sm font-medium">{atividade.titulo}</p>
+            </div>
+
+            <p className="meta">
+              {selectedAluno.envio?.enviado_em
+                ? `Enviado em ${new Date(selectedAluno.envio.enviado_em).toLocaleString('pt-BR')}`
+                : 'Ainda não enviado'}
+            </p>
+
+            {selectedAluno.envio?.texto ? (
+              <div>
+                <p className="meta mb-1">Resposta em texto</p>
+                <p className="text-[#d6deed] text-sm whitespace-pre-line bg-[#111] rounded-md p-3">{selectedAluno.envio.texto}</p>
+              </div>
+            ) : (
+              <p className="meta">Nenhuma resposta em texto enviada.</p>
+            )}
+
+            {selectedAluno.envio?.arquivo_url ? (
+              <div>
+                <p className="meta mb-1">Arquivo anexado</p>
+                <FileLink bucket="atividades" path={selectedAluno.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {selectedAluno.envio.arquivo_nome ?? 'Arquivo enviado'}
+                </FileLink>
+              </div>
+            ) : (
+              <p className="meta">Nenhum arquivo anexado.</p>
+            )}
+
+            <div className="border-t border-[#1c1f26] pt-4 space-y-3">
+              <div>
+                <label>Nota (máx. {atividade.nota_maxima})</label>
+                <input
+                  type="number"
+                  value={drafts[selectedAluno.id]?.nota ?? ''}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], nota: e.target.value } }))}
+                  max={atividade.nota_maxima}
+                  min={0}
+                />
+              </div>
+              <div>
+                <label>Comentário (opcional)</label>
+                <textarea
+                  rows={4}
+                  value={drafts[selectedAluno.id]?.comentario ?? ''}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], comentario: e.target.value } }))}
+                  placeholder="Escreva um comentário para o aluno..."
+                />
+              </div>
+              <Button variant="primary" loading={saving === selectedAluno.id} onClick={() => salvarNota(selectedAluno.id)} className="w-full">
+                Salvar correção
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <Toast message={toast} />
