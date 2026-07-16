@@ -65,7 +65,7 @@ export default function TurmaDetalhe() {
   const loadDashboard = async () => {
     setDashLoading(true);
     const { data: t } = await supabase.from('turmas').select('*').eq('id', turmaId!).maybeSingle();
-    setTurma(t);
+    setTurma(t as Turma | null);
 
     // Usuários da turma por role
     const { data: utData } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!);
