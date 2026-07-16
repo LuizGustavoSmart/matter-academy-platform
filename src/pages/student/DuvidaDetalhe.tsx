@@ -29,7 +29,7 @@ export default function DuvidaDetalhe() {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('duvidas').select('*').eq('id', duvidaId!).maybeSingle();
-    setDuvida(data);
+    setDuvida(data as Duvida | null);
     setResposta(data?.resposta ?? '');
     if (data?.aula_id) {
       const { data: aula } = await supabase.from('aulas').select('titulo').eq('id', data.aula_id).maybeSingle();
