@@ -260,7 +260,11 @@ export default function AtividadeDetalhe() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-sm font-medium truncate">{row.nome || row.email}</p>
-                        {row.nome && <p className="meta text-xs truncate">{row.email}</p>}
+                        <p className="meta text-xs truncate">
+                          {[row.nome ? row.email : null, row.envio?.enviado_em ? `Enviado em ${new Date(row.envio.enviado_em).toLocaleString('pt-BR')}` : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
                       </div>
                       {row.envio?.corrigido_em && (
                         <span className="text-sm font-medium text-[#cbfb00] flex-shrink-0">{row.envio.nota}/{atividade.nota_maxima}</span>
@@ -286,6 +290,17 @@ export default function AtividadeDetalhe() {
           <div className="space-y-4">
             {selectedAluno.nome && <p className="meta -mt-2">{selectedAluno.email}</p>}
 
+            <div>
+              <p className="meta mb-1">Atividade</p>
+              <p className="text-white text-sm font-medium">{atividade.titulo}</p>
+            </div>
+
+            <p className="meta">
+              {selectedAluno.envio?.enviado_em
+                ? `Enviado em ${new Date(selectedAluno.envio.enviado_em).toLocaleString('pt-BR')}`
+                : 'Ainda não enviado'}
+            </p>
+
             {selectedAluno.envio?.texto ? (
               <div>
                 <p className="meta mb-1">Resposta em texto</p>
@@ -296,9 +311,12 @@ export default function AtividadeDetalhe() {
             )}
 
             {selectedAluno.envio?.arquivo_url ? (
-              <FileLink bucket="atividades" path={selectedAluno.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
-                <Paperclip className="w-4 h-4 inline mr-1" /> {selectedAluno.envio.arquivo_nome ?? 'Arquivo enviado'}
-              </FileLink>
+              <div>
+                <p className="meta mb-1">Arquivo anexado</p>
+                <FileLink bucket="atividades" path={selectedAluno.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-[#cbfb00] hover:underline">
+                  <Paperclip className="w-4 h-4 inline mr-1" /> {selectedAluno.envio.arquivo_nome ?? 'Arquivo enviado'}
+                </FileLink>
+              </div>
             ) : (
               <p className="meta">Nenhum arquivo anexado.</p>
             )}
