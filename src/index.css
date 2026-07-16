@@ -41,6 +41,11 @@
   input::placeholder, textarea::placeholder {
     color: #434d5e;
   }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
   label {
     display: block;
     font-size: 12px;
