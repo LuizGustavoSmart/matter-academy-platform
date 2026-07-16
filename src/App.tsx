@@ -14,6 +14,7 @@ import TurmaDetalhe from './pages/admin/TurmaDetalhe';
 import CursoDetalhe from './pages/admin/CursoDetalhe';
 import AdminCursos from './pages/admin/Cursos';
 import AdminAulas from './pages/admin/Aulas';
+import MapaProfessores from './pages/admin/MapaProfessores';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCourse from './pages/student/Course';
 import Cronograma from './pages/student/Cronograma';
@@ -24,6 +25,8 @@ import AtividadesLista from './pages/student/AtividadesLista';
 import AtividadeDetalhe from './pages/student/AtividadeDetalhe';
 import DuvidasIndex from './pages/student/DuvidasIndex';
 import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
+import MinhasTurmas from './pages/student/MinhasTurmas';
+import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -86,6 +89,7 @@ export default function App() {
               <Route path="/admin/turmas/:turmaId/cursos/:cursoId" element={<CursoDetalhe />} />
               <Route path="/admin/cursos" element={<AdminCursos />} />
               <Route path="/admin/aulas" element={<AdminAulas />} />
+              <Route path="/admin/mapa-professores" element={<MapaProfessores />} />
             </Route>
           </Route>
 
@@ -101,6 +105,8 @@ export default function App() {
               <Route path="/atividade/:atividadeId" element={<AtividadeDetalhe />} />
               <Route path="/duvidas" element={<DuvidasIndex />} />
               <Route path="/duvidas/:duvidaId" element={<DuvidaDetalhe />} />
+              <Route path="/turmas" element={<MinhasTurmas />} />
+              <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
             </Route>
           </Route>
 
