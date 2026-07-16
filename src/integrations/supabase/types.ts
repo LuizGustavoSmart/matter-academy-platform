@@ -579,6 +579,8 @@ export type Database = {
           descricao: string | null
           id: string
           nome: string
+          tipo_cobranca: string | null
+          valor: number | null
         }
         Insert: {
           created_at?: string | null
@@ -586,6 +588,8 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome: string
+          tipo_cobranca?: string | null
+          valor?: number | null
         }
         Update: {
           created_at?: string | null
@@ -593,6 +597,8 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          tipo_cobranca?: string | null
+          valor?: number | null
         }
         Relationships: []
       }
