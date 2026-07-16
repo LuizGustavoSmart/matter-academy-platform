@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Check, HelpCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Check, HelpCircle, CalendarDays } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Toast } from '../../components/ui';
@@ -104,9 +104,14 @@ export default function StudentCourse() {
   return (
     <div className="max-w-7xl mx-auto">
       <div className="px-6 py-6 border-b border-[#1c1f26]">
-        <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-[#d6deed] hover:text-[#cbfb00] mb-3 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Voltar
-        </Link>
+        <div className="flex items-center justify-between mb-3">
+          <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-[#d6deed] hover:text-[#cbfb00] transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </Link>
+          <Link to={`/curso/${id}/cronograma`} className="inline-flex items-center gap-1.5 text-sm text-[#d6deed] hover:text-[#cbfb00] transition-colors">
+            <CalendarDays className="w-4 h-4" /> Cronograma
+          </Link>
+        </div>
         <h1 className="mb-2">{curso.titulo}</h1>
         <div className="flex items-center gap-4 max-w-md">
           <div className="flex-1"><ProgressBar value={pct} /></div>
