@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, GraduationCap, Calendar, Building2, DollarSign } from 'lucide-react';
+import { ChevronRight, Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, GraduationCap, Calendar, Building2, DollarSign, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast, Badge } from '../../components/ui';
 
 type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null };
-type Tab = 'dashboard' | 'cursos';
+type Tab = 'dashboard' | 'cursos' | 'participantes';
+type ParticipanteRole = 'student' | 'professor' | 'monitor' | 'admin';
+type Participante = {
+  id: string;
+  email: string;
+  nome: string | null;
+  role: ParticipanteRole;
+  status: string;
+  cursoTitulo: string | null;
+};
+
+const ROLE_LABEL: Record<ParticipanteRole, string> = {
+  student: 'Aluno', professor: 'Professor', monitor: 'Monitor', admin: 'Admin',
+};
+const ROLE_TONE: Record<ParticipanteRole, 'default' | 'warn' | 'success'> = {
+  student: 'default', professor: 'warn', monitor: 'success', admin: 'default',
+};
 
 function dateOnlyBR(iso: string | null): string {
   if (!iso) return '—';
@@ -35,6 +51,12 @@ export default function TurmaDetalhe() {
   const [aulaCounts, setAulaCounts] = useState<Record<string, number>>({});
   const [createCursoOpen, setCreateCursoOpen] = useState(false);
   const [editCurso, setEditCurso] = useState<Curso | null>(null);
+
+  // Participantes tab
+  const [participantesLoading, setParticipantesLoading] = useState(false);
+  const [participantes, setParticipantes] = useState<Participante[]>([]);
+  const [search, setSearch] = useState('');
+  const [filterRole, setFilterRole] = useState<'' | ParticipanteRole>('');
 
   const loadDashboard = async () => {
     setDashLoading(true);
@@ -93,8 +115,40 @@ export default function TurmaDetalhe() {
     setCursosLoading(false);
   };
 
+  const loadParticipantes = async () => {
+    setParticipantesLoading(true);
+    const { data: uts } = await supabase.from('user_turmas').select('user_id,curso_id').eq('turma_id', turmaId!);
+    const userIds = [...new Set((uts ?? []).map((r) => r.user_id))];
+    if (!userIds.length) { setParticipantes([]); setParticipantesLoading(false); return; }
+
+    const cursoIds = [...new Set((uts ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string))];
+    const [{ data: profiles }, { data: cs }] = await Promise.all([
+      supabase.from('profiles').select('id,email,nome,role,status').in('id', userIds),
+      cursoIds.length ? supabase.from('cursos').select('id,titulo').in('id', cursoIds) : Promise.resolve({ data: [] }),
+    ]);
+
+    const cursoMap = new Map((cs ?? []).map((c) => [c.id, c.titulo]));
+    const cursoPorUser = new Map<string, string | null>();
+    (uts ?? []).forEach((r) => {
+      if (r.curso_id && !cursoPorUser.has(r.user_id)) cursoPorUser.set(r.user_id, cursoMap.get(r.curso_id) ?? null);
+    });
+
+    const rows: Participante[] = (profiles ?? []).map((p: any) => ({
+      id: p.id,
+      email: p.email,
+      nome: p.nome,
+      role: p.role,
+      status: p.status,
+      cursoTitulo: cursoPorUser.get(p.id) ?? null,
+    })).sort((a, b) => (a.nome ?? a.email).localeCompare(b.nome ?? b.email));
+
+    setParticipantes(rows);
+    setParticipantesLoading(false);
+  };
+
   useEffect(() => { loadDashboard(); }, [turmaId]);
   useEffect(() => { if (tab === 'cursos') loadCursos(); }, [tab, turmaId]);
+  useEffect(() => { if (tab === 'participantes') loadParticipantes(); }, [tab, turmaId]);
 
   const delCurso = async (e: React.MouseEvent, c: Curso) => {
     e.stopPropagation();
@@ -112,6 +166,14 @@ export default function TurmaDetalhe() {
   };
 
   const totalAulas = aulasPerCurso.reduce((s, c) => s + c.count, 0);
+
+  const filteredParticipantes = participantes.filter((p) => {
+    if (search && !p.email.toLowerCase().includes(search.toLowerCase()) && !(p.nome ?? '').toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterRole && p.role !== filterRole) return false;
+    return true;
+  });
+  const hasFilters = !!(search || filterRole);
+  const clearFilters = () => { setSearch(''); setFilterRole(''); };
 
   return (
     <div>
@@ -139,6 +201,7 @@ export default function TurmaDetalhe() {
         {([
           { key: 'dashboard', label: 'Dashboard' },
           { key: 'cursos', label: 'Cursos' },
+          { key: 'participantes', label: 'Participantes' },
         ] as { key: Tab; label: string }[]).map(({ key, label }) => (
           <button
             key={key}
@@ -238,6 +301,83 @@ export default function TurmaDetalhe() {
                 ))}
               </div>
             )}
+        </div>
+      )}
+
+      {/* ── PARTICIPANTES ── */}
+      {tab === 'participantes' && (
+        <div>
+          <Card className="p-4 mb-4">
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar nome ou email..."
+                  className="!pl-9"
+                />
+              </div>
+              <select value={filterRole} onChange={(e) => setFilterRole(e.target.value as '' | ParticipanteRole)} className="max-w-[180px]">
+                <option value="">Todos os papéis</option>
+                <option value="student">Aluno</option>
+                <option value="professor">Professor</option>
+                <option value="monitor">Monitor</option>
+                <option value="admin">Admin</option>
+              </select>
+              {hasFilters && (
+                <button onClick={clearFilters} className="flex items-center gap-1.5 text-xs text-[#8b929e] hover:text-[#d6deed] transition-colors whitespace-nowrap">
+                  <X className="w-3.5 h-3.5" /> Limpar filtros
+                </button>
+              )}
+            </div>
+            {hasFilters && !participantesLoading && (
+              <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
+                Mostrando <span className="text-white font-medium">{filteredParticipantes.length}</span> de{' '}
+                <span className="text-white font-medium">{participantes.length}</span> participantes
+              </p>
+            )}
+          </Card>
+
+          {participantesLoading ? (
+            <Card className="p-10 text-center"><p className="meta">Carregando...</p></Card>
+          ) : filteredParticipantes.length === 0 ? (
+            hasFilters ? (
+              <Empty icon={<Search className="w-8 h-8" />} title="Nenhum resultado para este filtro" description="Tente ajustar a busca ou clique em 'Limpar filtros'" />
+            ) : (
+              <Empty icon={<Users className="w-8 h-8" />} title="Nenhum participante nesta turma" description="Vincule alunos, professores ou monitores em Usuários" />
+            )
+          ) : (
+            <Card>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#1c1f26] text-left">
+                    <th className="px-4 py-3 font-medium text-[#d6deed]">Nome</th>
+                    <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
+                    <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
+                    <th className="px-4 py-3 font-medium text-[#d6deed]">Curso vinculado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredParticipantes.map((p) => (
+                    <tr key={p.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="text-white block truncate max-w-[220px]">{p.nome || p.email}</span>
+                        {p.nome && <span className="text-[#8b929e] text-xs">{p.email}</span>}
+                      </td>
+                      <td className="px-4 py-3"><Badge tone={ROLE_TONE[p.role]}>{ROLE_LABEL[p.role]}</Badge></td>
+                      <td className="px-4 py-3">
+                        {p.status === 'active'  && <Badge tone="success">Ativo</Badge>}
+                        {p.status === 'pending' && <Badge tone="warn">Pendente</Badge>}
+                        {p.status === 'blocked' && <Badge tone="danger">Bloqueado</Badge>}
+                      </td>
+                      <td className="px-4 py-3 text-[#d6deed]">{p.cursoTitulo ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
         </div>
       )}
 
