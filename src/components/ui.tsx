@@ -47,12 +47,12 @@ export function Modal({ open, onClose, title, children, footer }: {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg bg-[#0d0d0d] border border-[#1c1f26] rounded-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-[#1c1f26]">
+      <div className="w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0d0d0d] border border-[#1c1f26] rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-[#1c1f26] flex-shrink-0">
           <h3 className="!text-white !text-lg !font-medium">{title}</h3>
         </div>
-        <div className="px-6 py-5">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-[#1c1f26] flex justify-end gap-2">{footer}</div>}
+        <div className="px-6 py-5 overflow-y-auto scrollbar-thin">{children}</div>
+        {footer && <div className="px-6 py-4 border-t border-[#1c1f26] flex justify-end gap-2 flex-shrink-0">{footer}</div>}
       </div>
     </div>
   );
