@@ -1,0 +1,1 @@
+CREATE POLICY "Professors insert envios for grading" ON public.atividade_envios FOR INSERT TO authenticated WITH CHECK (is_admin() OR (EXISTS (SELECT 1 FROM atividades a WHERE a.id = atividade_envios.atividade_id AND is_professor_of_turma(a.turma_id))));
