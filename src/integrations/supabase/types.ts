@@ -575,18 +575,21 @@ export type Database = {
       turmas: {
         Row: {
           created_at: string | null
+          data_inicio: string | null
           descricao: string | null
           id: string
           nome: string
         }
         Insert: {
           created_at?: string | null
+          data_inicio?: string | null
           descricao?: string | null
           id?: string
           nome: string
         }
         Update: {
           created_at?: string | null
+          data_inicio?: string | null
           descricao?: string | null
           id?: string
           nome?: string
