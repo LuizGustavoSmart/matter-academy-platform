@@ -3,8 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, GraduationCap, Calendar, Building2, DollarSign, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast, Badge } from '../../components/ui';
+import { TipoCobranca, TIPO_COBRANCA_LABEL, describeCobranca } from '../../lib/financeiro';
 
-type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
+type Turma = {
+  id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null;
+  tipo_cobranca: TipoCobranca | null; valor: number | null;
+};
 type Curso = { id: string; titulo: string; descricao: string | null };
 type Tab = 'dashboard' | 'cursos' | 'participantes';
 type ParticipanteRole = 'student' | 'professor' | 'monitor' | 'admin';
@@ -230,12 +234,24 @@ export default function TurmaDetalhe() {
             </div>
 
             {/* Info cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <InfoCard icon={<Calendar className="w-4 h-4" />} label="Início da turma" value={dateOnlyBR(turma?.data_inicio ?? null)} />
-              <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de criação" value={turma?.created_at ? new Date(turma.created_at).toLocaleDateString('pt-BR') : '—'} />
-              <InfoCard icon={<Building2 className="w-4 h-4" />} label="Empresa associada" value="—" placeholder />
-              <InfoCard icon={<DollarSign className="w-4 h-4" />} label="Custos / Faturamento" value="—" placeholder />
-            </div>
+            {(() => {
+              const cobranca = describeCobranca(turma?.tipo_cobranca, turma?.valor, alunosCount);
+              return (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <InfoCard icon={<Calendar className="w-4 h-4" />} label="Início da turma" value={dateOnlyBR(turma?.data_inicio ?? null)} />
+                  <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de criação" value={turma?.created_at ? new Date(turma.created_at).toLocaleDateString('pt-BR') : '—'} />
+                  <InfoCard icon={<Building2 className="w-4 h-4" />} label="Empresa associada" value="—" placeholder />
+                  <InfoCard
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Cobrança"
+                    value={cobranca.total}
+                    sub={cobranca.detalhe ?? undefined}
+                    placeholder={!turma?.tipo_cobranca}
+                    placeholderText="Não configurada"
+                  />
+                </div>
+              );
+            })()}
 
             {/* Aulas por curso */}
             {aulasPerCurso.length > 0 && (
@@ -423,13 +439,16 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function InfoCard({ icon, label, value, placeholder }: { icon: React.ReactNode; label: string; value: string; placeholder?: boolean }) {
+function InfoCard({ icon, label, value, sub, placeholder, placeholderText = 'Em breve' }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; placeholder?: boolean; placeholderText?: string;
+}) {
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-2 text-[#434d5e]">{icon}<span className="text-xs uppercase tracking-wider">{label}</span></div>
       <p className={`text-sm font-medium ${placeholder ? 'text-[#434d5e] italic' : 'text-white'}`}>
-        {placeholder ? 'Em breve' : value}
+        {placeholder ? placeholderText : value}
       </p>
+      {!placeholder && sub && <p className="text-xs text-[#8b929e] mt-0.5">{sub}</p>}
     </Card>
   );
 }
@@ -438,6 +457,8 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
+  const [tipoCobranca, setTipoCobranca] = useState<'' | TipoCobranca>('');
+  const [valor, setValor] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -445,17 +466,29 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
     setNome(turma?.nome ?? '');
     setDescricao(turma?.descricao ?? '');
     setDataInicio(turma?.data_inicio ?? '');
+    setTipoCobranca(turma?.tipo_cobranca ?? '');
+    setValor(turma?.valor != null ? String(turma.valor) : '');
     setErr(null);
   }, [turma, open]);
+
+  const valorLabel =
+    tipoCobranca === 'por_aluno' ? 'Valor por aluno (R$)'
+    : tipoCobranca === 'recorrente_mensal' ? 'Valor mensal (R$)'
+    : 'Valor (R$)';
 
   const submit = async () => {
     setErr(null);
     if (!nome.trim()) { setErr('Nome obrigatório'); return; }
+    if (tipoCobranca && (valor === '' || isNaN(parseFloat(valor)))) {
+      setErr('Informe um valor válido para a cobrança'); return;
+    }
     setLoading(true);
     const { error } = await supabase.from('turmas').update({
       nome: nome.trim(),
       descricao: descricao.trim(),
       data_inicio: dataInicio || null,
+      tipo_cobranca: tipoCobranca || null,
+      valor: tipoCobranca ? parseFloat(valor) : null,
     }).eq('id', turma!.id);
     setLoading(false);
     if (error) setErr(error.message);
@@ -474,6 +507,21 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
         <div><label>Nome</label><input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
         <div><label>Descrição</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></div>
         <div><label>Data de início</label><input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
+        <div className="border-t border-[#1c1f26] pt-4">
+          <label>Tipo de cobrança</label>
+          <select value={tipoCobranca} onChange={(e) => setTipoCobranca(e.target.value as '' | TipoCobranca)}>
+            <option value="">Não configurada</option>
+            <option value="fixo">{TIPO_COBRANCA_LABEL.fixo}</option>
+            <option value="por_aluno">{TIPO_COBRANCA_LABEL.por_aluno}</option>
+            <option value="recorrente_mensal">{TIPO_COBRANCA_LABEL.recorrente_mensal}</option>
+          </select>
+        </div>
+        {tipoCobranca && (
+          <div>
+            <label>{valorLabel}</label>
+            <input type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+          </div>
+        )}
         {err && <p className="text-red-400 text-sm">{err}</p>}
       </div>
     </Modal>
