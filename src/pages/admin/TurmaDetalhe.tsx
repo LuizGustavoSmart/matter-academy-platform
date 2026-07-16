@@ -4,9 +4,15 @@ import { ChevronRight, Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, Gradua
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast, Badge } from '../../components/ui';
 
-type Turma = { id: string; nome: string; descricao: string | null; created_at: string | null };
+type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null };
 type Tab = 'dashboard' | 'cursos';
+
+function dateOnlyBR(iso: string | null): string {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+}
 
 export default function TurmaDetalhe() {
   const { turmaId } = useParams<{ turmaId: string }>();
@@ -161,7 +167,8 @@ export default function TurmaDetalhe() {
             </div>
 
             {/* Info cards */}
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <InfoCard icon={<Calendar className="w-4 h-4" />} label="Início da turma" value={dateOnlyBR(turma?.data_inicio ?? null)} />
               <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de criação" value={turma?.created_at ? new Date(turma.created_at).toLocaleDateString('pt-BR') : '—'} />
               <InfoCard icon={<Building2 className="w-4 h-4" />} label="Empresa associada" value="—" placeholder />
               <InfoCard icon={<DollarSign className="w-4 h-4" />} label="Custos / Faturamento" value="—" placeholder />
@@ -290,12 +297,14 @@ function InfoCard({ icon, label, value, placeholder }: { icon: React.ReactNode; 
 function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setNome(turma?.nome ?? '');
     setDescricao(turma?.descricao ?? '');
+    setDataInicio(turma?.data_inicio ?? '');
     setErr(null);
   }, [turma, open]);
 
@@ -303,7 +312,11 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
     setErr(null);
     if (!nome.trim()) { setErr('Nome obrigatório'); return; }
     setLoading(true);
-    const { error } = await supabase.from('turmas').update({ nome: nome.trim(), descricao: descricao.trim() }).eq('id', turma!.id);
+    const { error } = await supabase.from('turmas').update({
+      nome: nome.trim(),
+      descricao: descricao.trim(),
+      data_inicio: dataInicio || null,
+    }).eq('id', turma!.id);
     setLoading(false);
     if (error) setErr(error.message);
     else onDone();
@@ -320,6 +333,7 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
       <div className="space-y-4">
         <div><label>Nome</label><input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
         <div><label>Descrição</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></div>
+        <div><label>Data de início</label><input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
         {err && <p className="text-red-400 text-sm">{err}</p>}
       </div>
     </Modal>

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
 
-type Turma = { id: string; nome: string; descricao: string | null; created_at: string | null };
+type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
 
 export default function AdminTurmas() {
   const nav = useNavigate();
@@ -104,12 +104,14 @@ export default function AdminTurmas() {
 function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setNome(turma?.nome ?? '');
     setDescricao(turma?.descricao ?? '');
+    setDataInicio(turma?.data_inicio ?? '');
     setErr(null);
   }, [turma, open]);
 
@@ -117,7 +119,7 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
     setErr(null);
     if (!nome.trim()) { setErr('Nome obrigatório'); return; }
     setLoading(true);
-    const payload = { nome: nome.trim(), descricao: descricao.trim() };
+    const payload = { nome: nome.trim(), descricao: descricao.trim(), data_inicio: dataInicio || null };
     const { error } = turma
       ? await supabase.from('turmas').update(payload).eq('id', turma.id)
       : await supabase.from('turmas').insert(payload);
@@ -142,6 +144,10 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
         <div>
           <label>Descrição</label>
           <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} />
+        </div>
+        <div>
+          <label>Data de início</label>
+          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
         </div>
         {err && <p className="text-red-400 text-sm">{err}</p>}
       </div>
