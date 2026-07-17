@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) return json({ error: error.message }, 400);
       if (updated?.email) {
-        fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
+        await fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
       }
       return json({ invite_token });
     }
