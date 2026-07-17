@@ -330,7 +330,8 @@ export default function AdminUsers() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         turmas={turmas}
-        onDone={(token) => { setCreateOpen(false); showLink(token); load(); }}
+        onDone={(token) => { setCreateOpen(false); if (token) showLink(token); load(); }}
+        onBulkDone={(msg) => { setCreateOpen(false); showToast(msg, 'success'); load(); }}
       />
       <EditUserModal
         user={editOpen}
