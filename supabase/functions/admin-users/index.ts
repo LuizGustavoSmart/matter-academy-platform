@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
+      await fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
 
       return json({ user_id: created.user.id, invite_token });
     }
