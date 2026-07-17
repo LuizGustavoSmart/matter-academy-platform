@@ -470,50 +470,107 @@ function TurmaCoursePicker({
 /*  Modal: Criar usuário                                           */
 /* ─────────────────────────────────────────────────────────────── */
 function CreateUserModal({
-  open, onClose, turmas, onDone,
+  open, onClose, turmas, onDone, onBulkDone,
 }: {
   open: boolean;
   onClose: () => void;
   turmas: Turma[];
   onDone: (token: string) => void;
+  onBulkDone: (msg: string) => void;
 }) {
+  const [bulkMode, setBulkMode] = useState(false);
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');
+  const [bulkText, setBulkText] = useState('');
   const [role, setRole] = useState<Role>('student');
   const [selection, setSelection] = useState<TurmaSelection[]>([]);
   const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     if (open) {
-      setEmail(''); setNome(''); setRole('student'); setSelection([]); setErr(null);
+      setBulkMode(false);
+      setEmail(''); setNome(''); setBulkText(''); setRole('student'); setSelection([]); setErr(null);
+      setProgress(null);
       loadCoursesByTurma().then(setCoursesByTurma);
     }
   }, [open]);
 
   const isStudent = role === 'student';
 
+  const parseBulk = (): { email: string; nome: string }[] => {
+    const lines = bulkText.split(/[\n;]+/).map((l) => l.trim()).filter(Boolean);
+    const out: { email: string; nome: string }[] = [];
+    for (const line of lines) {
+      // Formatos aceitos: "email", "Nome, email", "Nome <email>", "email, Nome"
+      const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
+      if (angle) { out.push({ nome: angle[1].trim(), email: angle[2].trim() }); continue; }
+      const parts = line.split(/[,\t]/).map((p) => p.trim()).filter(Boolean);
+      if (parts.length === 1) { out.push({ nome: '', email: parts[0] }); continue; }
+      const emailIdx = parts.findIndex((p) => p.includes('@'));
+      if (emailIdx === -1) { out.push({ nome: parts.slice(1).join(' '), email: parts[0] }); continue; }
+      const em = parts[emailIdx];
+      const nm = parts.filter((_, i) => i !== emailIdx).join(' ');
+      out.push({ nome: nm, email: em });
+    }
+    return out;
+  };
+
+  const buildPayloadBase = () => (isStudent
+    ? { role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
+    : { role, turma_ids: selection.map((s) => s.turma_id) });
+
   const submit = async () => {
     setErr(null);
-    if (!email.trim()) { setErr('Email obrigatório'); return; }
     if (isStudent) {
       if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
       if (selection.some((s) => s.curso_ids.length === 0)) {
         setErr('Selecione ao menos um curso para cada turma escolhida'); return;
       }
     }
+
+    if (!bulkMode) {
+      if (!email.trim()) { setErr('Email obrigatório'); return; }
+      setLoading(true);
+      try {
+        const r = await callFn('admin-users', 'create', { email: email.trim(), nome: nome.trim(), ...buildPayloadBase() });
+        onDone(r.invite_token);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally { setLoading(false); }
+      return;
+    }
+
+    // Bulk
+    const entries = parseBulk();
+    if (entries.length === 0) { setErr('Adicione ao menos um email'); return; }
+    const invalid = entries.filter((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email));
+    if (invalid.length) { setErr(`Emails inválidos: ${invalid.map((i) => i.email).join(', ')}`); return; }
+
     setLoading(true);
-    try {
-      const payload = isStudent
-        ? { email: email.trim(), nome: nome.trim(), role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
-        : { email: email.trim(), nome: nome.trim(), role, turma_ids: selection.map((s) => s.turma_id) };
-      const r = await callFn('admin-users', 'create', payload);
-      onDone(r.invite_token);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
+    setProgress({ done: 0, total: entries.length });
+    const base = buildPayloadBase();
+    const failures: { email: string; error: string }[] = [];
+    let success = 0;
+    for (let i = 0; i < entries.length; i++) {
+      const { email: em, nome: nm } = entries[i];
+      try {
+        await callFn('admin-users', 'create', { email: em, nome: nm, ...base });
+        success++;
+      } catch (e) {
+        failures.push({ email: em, error: (e as Error).message });
+      }
+      setProgress({ done: i + 1, total: entries.length });
+    }
+    setLoading(false);
+    setProgress(null);
+    if (failures.length === 0) {
+      onBulkDone(`${success} usuário${success !== 1 ? 's' : ''} criado${success !== 1 ? 's' : ''} com sucesso`);
+    } else {
+      setErr(`Criados: ${success}. Falhas (${failures.length}):\n${failures.map((f) => `• ${f.email}: ${f.error}`).join('\n')}`);
+      if (success > 0) onBulkDone(`${success} criado(s), ${failures.length} com erro`);
     }
   };
 
@@ -525,19 +582,55 @@ function CreateUserModal({
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Criar e gerar link</Button>
+          <Button variant="primary" loading={loading} onClick={submit}>
+            {bulkMode
+              ? (progress ? `Criando ${progress.done}/${progress.total}...` : 'Criar em lote')
+              : 'Criar e gerar link'}
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label>Nome</label>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
+        <div className="flex gap-2 border-b border-[#1c1f26] pb-3">
+          <button
+            type="button"
+            onClick={() => setBulkMode(false)}
+            className={`px-3 py-1.5 rounded text-sm ${!bulkMode ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/40' : 'text-[#8b929e] hover:text-white'}`}
+          >Individual</button>
+          <button
+            type="button"
+            onClick={() => setBulkMode(true)}
+            className={`px-3 py-1.5 rounded text-sm ${bulkMode ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/40' : 'text-[#8b929e] hover:text-white'}`}
+          >Em lote</button>
         </div>
-        <div>
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
+
+        {!bulkMode ? (
+          <>
+            <div>
+              <label>Nome</label>
+              <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
+            </div>
+            <div>
+              <label>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label>Usuários (um por linha)</label>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              rows={8}
+              placeholder={`aluno1@exemplo.com\nJoão Silva, joao@exemplo.com\nMaria <maria@exemplo.com>`}
+              className="w-full font-mono text-xs"
+            />
+            <p className="text-[#434d5e] text-xs mt-1.5">
+              Formatos aceitos por linha: <code>email</code>, <code>Nome, email</code> ou <code>Nome &lt;email&gt;</code>. Todos receberão o mesmo papel e turmas/cursos selecionados abaixo.
+            </p>
+          </div>
+        )}
+
         <div>
           <label>Papel</label>
           <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
@@ -560,7 +653,7 @@ function CreateUserModal({
             <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
           )}
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-red-400 text-sm whitespace-pre-wrap">{err}</p>}
       </div>
     </Modal>
   );
