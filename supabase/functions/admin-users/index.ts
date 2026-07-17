@@ -62,13 +62,10 @@ async function sendInviteWebhook(payload: {
   }
 }
 
-function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
-  try {
-    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
-    EdgeRuntime.waitUntil(sendInviteWebhook(payload));
-  } catch {
-    sendInviteWebhook(payload);
-  }
+async function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
+  // Await inline to guarantee delivery in bulk invocations where the
+  // function terminates before waitUntil() flushes the request.
+  await sendInviteWebhook(payload);
 }
 
 function json(body: unknown, status = 200) {
