@@ -142,6 +142,7 @@ export default function AtividadeDetalhe() {
       );
       if (error) throw error;
       setToast('Correção salva');
+      setSelectedAluno(null);
       await loadProfessor(atividade);
     } catch (e) {
       setToast((e as Error).message);
