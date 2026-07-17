@@ -62,13 +62,10 @@ async function sendInviteWebhook(payload: {
   }
 }
 
-function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
-  try {
-    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
-    EdgeRuntime.waitUntil(sendInviteWebhook(payload));
-  } catch {
-    sendInviteWebhook(payload);
-  }
+async function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
+  // Await inline to guarantee delivery in bulk invocations where the
+  // function terminates before waitUntil() flushes the request.
+  await sendInviteWebhook(payload);
 }
 
 function json(body: unknown, status = 200) {
@@ -172,7 +169,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
+      await fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
 
       return json({ user_id: created.user.id, invite_token });
     }
@@ -188,7 +185,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) return json({ error: error.message }, 400);
       if (updated?.email) {
-        fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
+        await fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
       }
       return json({ invite_token });
     }
