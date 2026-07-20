@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle2 } from 'lucide-react';
 import { callFn, supabase } from '../lib/supabase';
-import { Button } from '../components/ui';
-import { Logo } from '../components/Logo';
+import { PublicAuthLayout } from '../public/components/PublicAuthLayout';
+import { PublicAction } from '../public/components/PublicAction';
+import { FormAlert, LoadingView, SuccessView, ErrorView } from '../public/components/PublicStates';
+import type { PublicAuthVisualState } from '../public/types';
 
 export default function Activate() {
   const [params] = useSearchParams();
@@ -43,46 +44,65 @@ export default function Activate() {
     }
   };
 
+  const state: PublicAuthVisualState = done ? 'success' : err && !email ? 'error' : email ? 'form' : 'loading';
+
   return (
-    <div className="min-h-screen grid place-items-center px-4">
-      <div className="w-full max-w-md">
-        <Link to="/" className="inline-block mb-10"><Logo height={110} /></Link>
+    <PublicAuthLayout state={state}>
+      {state === 'success' && <SuccessView title="Conta ativada!" note="Redirecionando..." />}
 
-        {done ? (
-          <div className="text-center py-10">
-            <CheckCircle2 className="w-12 h-12 text-[#cbfb00] mx-auto mb-4" />
-            <h1 className="mb-2">Conta ativada!</h1>
-            <p>Redirecionando...</p>
-          </div>
-        ) : (
-          <>
-            <h1 className="mb-2">Ative sua conta</h1>
-            {email && <p className="text-[#d6deed] mb-8">Defina sua senha para acessar <span className="text-white">{email}</span>.</p>}
+      {state === 'error' && (
+        <>
+          <h1 className="mb-2">Ative sua conta</h1>
+          <ErrorView
+            message={err ?? ''}
+            action={
+              <Link to="/login" className="text-sm text-[color:var(--pub-lime)] hover:underline">
+                Voltar ao login
+              </Link>
+            }
+          />
+        </>
+      )}
 
-            {err && !email ? (
-              <div className="text-center py-10">
-                <p className="text-red-400 mb-4">{err}</p>
-                <Link to="/login" className="text-[#cbfb00] hover:underline text-sm">Voltar ao login</Link>
-              </div>
-            ) : email ? (
-              <form onSubmit={submit} className="space-y-4">
-                <div>
-                  <label>Nova senha</label>
-                  <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-                </div>
-                <div>
-                  <label>Confirmar senha</label>
-                  <input type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-                </div>
-                {err && <p className="text-red-400 text-sm">{err}</p>}
-                <Button type="submit" variant="primary" loading={loading} className="w-full">Ativar conta</Button>
-              </form>
-            ) : (
-              <p className="meta">Carregando...</p>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      {state === 'form' && (
+        <>
+          <h1 className="mb-2">Ative sua conta</h1>
+          <p className="mb-8 text-[color:var(--pub-fg-soft)]">
+            Defina sua senha para acessar <span className="text-[color:var(--pub-fg)]">{email}</span>.
+          </p>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label htmlFor="activate-password">Nova senha</label>
+              <input
+                id="activate-password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div>
+              <label htmlFor="activate-confirm">Confirmar senha</label>
+              <input
+                id="activate-confirm"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            </div>
+            <FormAlert error={err} />
+            <PublicAction type="submit" loading={loading} glow className="w-full">
+              Ativar conta
+            </PublicAction>
+          </form>
+        </>
+      )}
+
+      {state === 'loading' && <LoadingView />}
+    </PublicAuthLayout>
   );
 }

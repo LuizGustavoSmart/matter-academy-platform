@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "Dev Server",
-      "runtimeExecutable": "bun",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
       "name": "Preview Server",
-      "runtimeExecutable": "bun",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview"],
       "port": 4173
     }
