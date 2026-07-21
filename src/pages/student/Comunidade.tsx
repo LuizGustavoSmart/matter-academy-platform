@@ -84,7 +84,8 @@ export default function Comunidade() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_messages', filter: `curso_id=eq.${selected.cursoId}` }, (payload) => {
         const row = payload.new as Message;
         if (row.turma_id !== selected.turmaId) return;
-        setMessages((prev) => [...prev, row]);
+        // Evita duplicar mensagem já inserida de forma otimista pelo próprio remetente.
+        setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
         requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -97,8 +98,14 @@ export default function Comunidade() {
       let arquivo_url: string | null = null;
       let arquivo_nome: string | null = null;
       if (file) { const up = await uploadComunidadeFile(file, `${selected.turmaId}/${selected.cursoId}`); arquivo_url = up.path; arquivo_nome = up.nome; }
-      const { error } = await supabase.from('community_messages').insert({ turma_id: selected.turmaId, curso_id: selected.cursoId, user_id: profile.id, content: text.trim() || null, arquivo_url, arquivo_nome });
+      const { data, error } = await supabase.from('community_messages')
+        .insert({ turma_id: selected.turmaId, curso_id: selected.cursoId, user_id: profile.id, content: text.trim() || null, arquivo_url, arquivo_nome })
+        .select('*, profiles(email,nome)')
+        .single();
       if (error) throw error;
+      // Mostra a mensagem na hora, sem esperar o round-trip do realtime.
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
       setText(''); setFile(null);
     } catch (e) { toast.error((e as Error).message); } finally { setSending(false); }
   };
