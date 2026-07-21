@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, ArrowRight, ArrowLeft, UserPlus, CheckCircle2 } from 'lucide-react';
 import { supabase, callFn } from '../../../lib/supabase';
 import {
@@ -149,7 +149,7 @@ export function UserFormDrawer({
     ? (phase === 'review' ? 'Revisar novo usuário' : phase === 'result' ? 'Usuário criado' : 'Novo usuário')
     : 'Editar usuário';
 
-  const footer = useMemo(() => {
+  const footer = (() => {
     if (phase === 'result') {
       return (
         <>
@@ -179,8 +179,7 @@ export function UserFormDrawer({
           : <Button variant="primary" loading={loading} onClick={submitEdit}>Salvar alterações</Button>}
       </>
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, mode, loading, sendInvite, activationLink]);
+  })();
 
   const summaryTurmas = selection.map((s) => {
     const t = turmas.find((x) => x.id === s.turma_id);
