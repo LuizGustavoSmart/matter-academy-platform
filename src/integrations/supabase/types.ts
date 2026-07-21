@@ -489,6 +489,7 @@ export type Database = {
           activated_at: string | null
           created_at: string | null
           email: string
+          empresa: string | null
           id: string
           invite_expires_at: string | null
           invite_token: string | null
@@ -496,12 +497,15 @@ export type Database = {
           reset_expires_at: string | null
           reset_token: string | null
           role: string
+          sobrenome: string | null
           status: string
+          telefone: string | null
         }
         Insert: {
           activated_at?: string | null
           created_at?: string | null
           email: string
+          empresa?: string | null
           id: string
           invite_expires_at?: string | null
           invite_token?: string | null
@@ -509,12 +513,15 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sobrenome?: string | null
           status?: string
+          telefone?: string | null
         }
         Update: {
           activated_at?: string | null
           created_at?: string | null
           email?: string
+          empresa?: string | null
           id?: string
           invite_expires_at?: string | null
           invite_token?: string | null
@@ -522,7 +529,9 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sobrenome?: string | null
           status?: string
+          telefone?: string | null
         }
         Relationships: []
       }
