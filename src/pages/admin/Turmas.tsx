@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen, Layers, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { supabase } from '../../lib/supabase';
-import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
+import {
+  Button, IconButton, Card, Modal, EmptyState, Skeleton, Field, Input, Textarea, Alert,
+  DropdownMenu, useToast, useConfirm,
+} from '../../components/ui';
+import { staggerContainer, staggerItem } from '../../components/ui/motion';
+import { PageHeader } from '../../layouts/AppShell';
 
 type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
 
 export default function AdminTurmas() {
   const nav = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [counts, setCounts] = useState<Record<string, { alunos: number; cursos: number }>>({});
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState<Turma | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -30,78 +37,61 @@ export default function AdminTurmas() {
     setCounts(c);
     setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
 
-  const del = async (e: React.MouseEvent, t: Turma) => {
-    e.stopPropagation();
-    if (!confirm(`Excluir turma "${t.nome}"? Os vínculos com alunos e cursos serão removidos.`)) return;
+  const del = async (t: Turma) => {
+    const ok = await confirm({ title: 'Excluir turma', tone: 'danger', confirmLabel: 'Excluir', message: <>Excluir <strong className="text-fg">{t.nome}</strong>? Os vínculos com alunos e cursos serão removidos.</> });
+    if (!ok) return;
     const { error } = await supabase.from('turmas').delete().eq('id', t.id);
-    if (error) setToast(error.message);
-    else { setToast('Turma excluída'); load(); }
+    if (error) toast.error(error.message); else { toast.success('Turma excluída.'); load(); }
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1>Turmas</h1>
-          <p className="meta mt-1">Organize alunos e cursos em grupos de acesso</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Nova turma</Button>
-      </div>
+      <PageHeader title="Turmas" subtitle="Organize alunos e cursos em grupos de acesso."
+        actions={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Nova turma</Button>} />
 
-      {loading ? <p className="meta">Carregando...</p> :
-        turmas.length === 0 ? <Empty title="Nenhuma turma criada" description="Crie sua primeira turma para começar" /> : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {turmas.map((t) => (
-              <Card
-                key={t.id}
-                className="p-5 cursor-pointer hover:border-[#434d5e] transition-colors relative"
-                onClick={() => nav(`/admin/turmas/${t.id}`)}
-              >
-                {/* Ícones de ação no canto superior direito */}
-                <div className="absolute top-4 right-4 flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditOpen(t); }}
-                    className="p-1.5 rounded text-[#d6deed] hover:bg-[#434d5e]/30 transition-colors"
-                    title="Editar"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => del(e, t)}
-                    className="p-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors"
-                    title="Excluir"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
+      ) : turmas.length === 0 ? (
+        <EmptyState icon={<Layers className="w-8 h-8" />} title="Nenhuma turma criada" description="Crie sua primeira turma para organizar alunos e cursos."
+          action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Nova turma</Button>} />
+      ) : (
+        <motion.div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" variants={staggerContainer} initial="hidden" animate="visible">
+          {turmas.map((t) => (
+            <motion.div key={t.id} variants={staggerItem}>
+              <Card hoverable className="p-5 cursor-pointer hover:border-line-strong transition-colors relative group" onClick={() => nav(`/admin/turmas/${t.id}`)}>
+                <div className="absolute top-3.5 right-3.5" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu
+                    items={[
+                      { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditOpen(t) },
+                      { type: 'separator' },
+                      { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger', onClick: () => del(t) },
+                    ]}
+                    trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da turma" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
+                  />
                 </div>
-
-                <h3 className="mb-1 pr-16">{t.nome}</h3>
-                <p className="text-sm mb-4 line-clamp-2 min-h-[40px]">{t.descricao || '—'}</p>
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1 text-sm text-[#d6deed]">
-                    <UsersIcon className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.alunos ?? 0} alunos
-                  </span>
-                  <span className="flex items-center gap-1 text-sm text-[#d6deed]">
-                    <BookOpen className="w-4 h-4 text-[#434d5e]" /> {counts[t.id]?.cursos ?? 0} cursos
-                  </span>
+                <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><Layers className="w-5 h-5 text-brand" /></span>
+                <h3 className="mb-1 pr-10 line-clamp-1">{t.nome}</h3>
+                <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{t.descricao || 'Sem descrição'}</p>
+                <div className="flex items-center gap-4 text-sm text-fg-2">
+                  <span className="flex items-center gap-1.5"><UsersIcon className="w-4 h-4 text-fg-3" /> {counts[t.id]?.alunos ?? 0} alunos</span>
+                  <span className="flex items-center gap-1.5"><BookOpen className="w-4 h-4 text-fg-3" /> {counts[t.id]?.cursos ?? 0} cursos</span>
                 </div>
               </Card>
-            ))}
-          </div>
-        )}
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
 
       <TurmaModal open={createOpen} turma={null} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); load(); }} />
       <TurmaModal open={!!editOpen} turma={editOpen} onClose={() => setEditOpen(null)} onDone={() => { setEditOpen(null); load(); }} />
-
-      <Toast message={toast} tone="default" />
     </div>
   );
 }
 
 function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -109,47 +99,27 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setNome(turma?.nome ?? '');
-    setDescricao(turma?.descricao ?? '');
-    setDataInicio(turma?.data_inicio ?? '');
-    setErr(null);
+    setNome(turma?.nome ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? ''); setErr(null);
   }, [turma, open]);
 
   const submit = async () => {
     setErr(null);
-    if (!nome.trim()) { setErr('Nome obrigatório'); return; }
+    if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
     setLoading(true);
     const payload = { nome: nome.trim(), descricao: descricao.trim(), data_inicio: dataInicio || null };
-    const { error } = turma
-      ? await supabase.from('turmas').update(payload).eq('id', turma.id)
-      : await supabase.from('turmas').insert(payload);
+    const { error } = turma ? await supabase.from('turmas').update(payload).eq('id', turma.id) : await supabase.from('turmas').insert(payload);
     setLoading(false);
-    if (error) setErr(error.message);
-    else onDone();
+    if (error) setErr(error.message); else { toast.success(turma ? 'Turma atualizada.' : 'Turma criada.'); onDone(); }
   };
 
   return (
     <Modal open={open} onClose={onClose} title={turma ? 'Editar turma' : 'Nova turma'}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Salvar</Button>
-        </>
-      }>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Salvar</Button></>}>
       <div className="space-y-4">
-        <div>
-          <label>Nome</label>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} />
-        </div>
-        <div>
-          <label>Descrição</label>
-          <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} />
-        </div>
-        <div>
-          <label>Data de início</label>
-          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-        </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <Alert tone="danger">{err}</Alert>}
+        <Field label="Nome" required htmlFor="turma-nome"><Input id="turma-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Turma 2026.1" data-autofocus /></Field>
+        <Field label="Descrição" htmlFor="turma-desc"><Textarea id="turma-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Objetivo ou observações da turma" /></Field>
+        <Field label="Data de início" htmlFor="turma-data"><Input id="turma-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
       </div>
     </Modal>
   );

@@ -1,0 +1,48 @@
+{
+  "asset": "Matter Academy logo",
+  "source": {
+    "path": "C:\\Users\\User\\Downloads\\LOGO MATTER.png",
+    "sha256": "FEE724BB072D90F90D1A2537185A6176DB9A3674BD65CE669BA087F99226C56F",
+    "canvas": [
+      1920,
+      1080
+    ],
+    "background": "transparent",
+    "opaque_colors": [
+      "#CCFC00",
+      "#D7DFEF"
+    ]
+  },
+  "exports": [
+    {
+      "file": "matter-academy-vector.svg",
+      "kind": "pure-vector-paths",
+      "fonts": false,
+      "raster_payload": false,
+      "path_elements": 2,
+      "compound_subpaths": 19,
+      "exterior_components": 13,
+      "counters": 6,
+      "sha256": "CB854C0FB8405565B2506B8A292C54C389522765A6C2B18D965EA5C6089C4465"
+    },
+    {
+      "file": "matter-academy-pixel-exact.svg",
+      "kind": "lossless-svg-wrapper",
+      "fonts": false,
+      "embedded_original_png": true,
+      "chrome_native_size_rgba_equal_pixels": 2073600,
+      "chrome_native_size_rgba_total_pixels": 2073600,
+      "sha256": "0D8EC9E54C1641102FD477B3FC78FC15D43930958215FA96745998EC6433C8FF"
+    },
+    {
+      "file": "matter-academy-vector-preview.png",
+      "kind": "vector-render-preview",
+      "canvas": [
+        1920,
+        1080
+      ],
+      "sha256": "0E557499230E8F36FCBBAD80331F3DB1C3D72D58103183258A3615B564232C7F"
+    }
+  ],
+  "validation": "validation-metrics.json"
+}

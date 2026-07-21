@@ -1,56 +1,37 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
-  Users, Layers, BookOpen, PlayCircle,
-  UserCheck, UserX, Clock, HelpCircle,
-  ArrowRight, TrendingUp, GraduationCap,
+  Users, Layers, BookOpen, PlayCircle, UserCheck, UserX, Clock, HelpCircle,
+  ArrowRight, TrendingUp, GraduationCap, ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Card } from '../../components/ui';
+import { Card, StatTile, Badge, Avatar, Skeleton, SkeletonText, EmptyState, cn } from '../../components/ui';
+import { staggerContainer, staggerItem } from '../../components/ui/motion';
+import { PageHeader } from '../../layouts/AppShell';
+import { ROLE_LABEL, statusLabel, fullName } from '../../lib/users';
 
-/* ── Tipos ─────────────────────────────────────────────────────── */
 type RoleCount = { admin: number; student: number; professor: number; monitor: number };
 type StatusCount = { active: number; pending: number; blocked: number };
-type RecentUser = { id: string; email: string; role: string; status: string; created_at: string };
-type TurmaRow  = { id: string; nome: string; alunos: number; cursos: number };
+type RecentUser = { id: string; email: string; nome: string | null; sobrenome: string | null; role: string; status: string; created_at: string };
+type TurmaRow = { id: string; nome: string; alunos: number; cursos: number };
+type Stats = { roles: RoleCount; status: StatusCount; turmas: number; cursos: number; aulas: number; duvidasAbertas: number };
 
-type Stats = {
-  roles: RoleCount;
-  status: StatusCount;
-  turmas: number;
-  cursos: number;
-  aulas: number;
-  duvidasAbertas: number;
-};
+const dateBR = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
-/* ── Helpers ────────────────────────────────────────────────────── */
-const ROLE_LABEL: Record<string, string> = {
-  student: 'Aluno', professor: 'Professor', monitor: 'Monitor', admin: 'Admin',
-};
-
-function dateBR(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR');
-}
-
-/* ══════════════════════════════════════════════════════════════════ */
 export default function AdminDashboard() {
-  const [stats,       setStats]       = useState<Stats | null>(null);
-  const [turmas,      setTurmas]      = useState<TurmaRow[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [turmas, setTurmas] = useState<TurmaRow[]>([]);
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
-  const [loading,     setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       const [
-        { data: profiles },
-        { data: turmasList },
-        { data: cursosList },
-        { data: aulasList },
-        { data: uts },
-        { data: cts },
-        { data: duvidas },
+        { data: profiles }, { data: turmasList }, { data: cursosList }, { data: aulasList },
+        { data: uts }, { data: cts }, { data: duvidas },
       ] = await Promise.all([
-        supabase.from('profiles').select('id,email,role,status,created_at').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id,email,nome,sobrenome,role,status,created_at').order('created_at', { ascending: false }),
         supabase.from('turmas').select('id,nome'),
         supabase.from('cursos').select('id'),
         supabase.from('aulas').select('id'),
@@ -58,40 +39,23 @@ export default function AdminDashboard() {
         supabase.from('curso_turmas').select('turma_id'),
         supabase.from('community_posts').select('id').eq('tipo', 'duvida').eq('status', 'aberta'),
       ]);
-
       const ps = profiles ?? [];
-
-      /* Contagem por papel */
       const roles: RoleCount = { admin: 0, student: 0, professor: 0, monitor: 0 };
       const status: StatusCount = { active: 0, pending: 0, blocked: 0 };
-      ps.forEach((p: any) => {
-        if (p.role in roles) (roles as any)[p.role]++;
-        if (p.status in status) (status as any)[p.status]++;
+      ps.forEach((p) => {
+        if (p.role in roles) roles[p.role as keyof RoleCount]++;
+        if (p.status in status) status[p.status as keyof StatusCount]++;
       });
-
       setStats({
-        roles,
-        status,
-        turmas:         (turmasList ?? []).length,
-        cursos:         (cursosList  ?? []).length,
-        aulas:          (aulasList   ?? []).length,
-        duvidasAbertas: (duvidas     ?? []).length,
+        roles, status,
+        turmas: (turmasList ?? []).length, cursos: (cursosList ?? []).length,
+        aulas: (aulasList ?? []).length, duvidasAbertas: (duvidas ?? []).length,
       });
-
-      /* Turmas com contagem de membros e cursos */
       const alunosPerTurma: Record<string, number> = {};
       const cursosPerTurma: Record<string, number> = {};
-      (uts ?? []).forEach((r: any) => { alunosPerTurma[r.turma_id] = (alunosPerTurma[r.turma_id] ?? 0) + 1; });
-      (cts ?? []).forEach((r: any) => { cursosPerTurma[r.turma_id] = (cursosPerTurma[r.turma_id] ?? 0) + 1; });
-      setTurmas(
-        (turmasList ?? []).map((t: any) => ({
-          id: t.id, nome: t.nome,
-          alunos: alunosPerTurma[t.id] ?? 0,
-          cursos: cursosPerTurma[t.id] ?? 0,
-        })).slice(0, 5),
-      );
-
-      /* Últimos 6 usuários */
+      (uts ?? []).forEach((r) => { alunosPerTurma[r.turma_id] = (alunosPerTurma[r.turma_id] ?? 0) + 1; });
+      (cts ?? []).forEach((r) => { cursosPerTurma[r.turma_id] = (cursosPerTurma[r.turma_id] ?? 0) + 1; });
+      setTurmas((turmasList ?? []).map((t) => ({ id: t.id, nome: t.nome, alunos: alunosPerTurma[t.id] ?? 0, cursos: cursosPerTurma[t.id] ?? 0 })).slice(0, 6));
       setRecentUsers(ps.slice(0, 6) as RecentUser[]);
       setLoading(false);
     };
@@ -101,270 +65,162 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div>
-        <h1 className="mb-6">Gestão Operacional</h1>
-        <p className="meta">Carregando...</p>
+        <PageHeader title="Gestão operacional" subtitle="Visão geral da plataforma" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+        <div className="grid md:grid-cols-2 gap-4">{[0, 1].map((i) => <Card key={i} className="p-5"><SkeletonText lines={4} /></Card>)}</div>
       </div>
     );
   }
 
   const s = stats!;
   const totalUsers = s.roles.student + s.roles.professor + s.roles.monitor + s.roles.admin;
+  const hasPendencias = s.status.pending > 0 || s.status.blocked > 0 || s.duvidasAbertas > 0;
 
   return (
-    <div className="space-y-8">
+    <div>
+      <PageHeader title="Gestão operacional" subtitle="Visão geral da plataforma e pendências." />
 
-      {/* ── Header ── */}
-      <div>
-        <h1 className="mb-1">Gestão Operacional</h1>
-        <p className="meta">Visão geral da plataforma</p>
-      </div>
-
-      {/* ── Métricas principais ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-
-        {/* Usuários */}
-        <Link to="/admin/usuarios">
-          <div className="bg-[#0d0d0d] border border-[#1c1f26] hover:border-[#434d5e] rounded-lg p-4 transition-colors group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center">
-                <Users className="w-4 h-4 text-[#cbfb00]" />
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-[#434d5e] group-hover:text-[#cbfb00] transition-colors" />
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{totalUsers}</p>
-            <p className="text-xs text-[#8b929e] uppercase tracking-wider">Usuários</p>
-            <div className="mt-2 flex gap-2 flex-wrap">
-              <span className="text-[10px] text-[#d6deed]">{s.roles.student} alunos</span>
-              <span className="text-[10px] text-[#8b929e]">·</span>
-              <span className="text-[10px] text-[#d6deed]">{s.roles.professor + s.roles.monitor} staff</span>
-            </div>
-          </div>
-        </Link>
-
-        {/* Turmas */}
-        <Link to="/admin/turmas">
-          <div className="bg-[#0d0d0d] border border-[#1c1f26] hover:border-[#434d5e] rounded-lg p-4 transition-colors group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center">
-                <Layers className="w-4 h-4 text-[#cbfb00]" />
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-[#434d5e] group-hover:text-[#cbfb00] transition-colors" />
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{s.turmas}</p>
-            <p className="text-xs text-[#8b929e] uppercase tracking-wider">Turmas</p>
-          </div>
-        </Link>
-
-        {/* Cursos */}
-        <Link to="/admin/cursos">
-          <div className="bg-[#0d0d0d] border border-[#1c1f26] hover:border-[#434d5e] rounded-lg p-4 transition-colors group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center">
-                <BookOpen className="w-4 h-4 text-[#cbfb00]" />
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-[#434d5e] group-hover:text-[#cbfb00] transition-colors" />
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{s.cursos}</p>
-            <p className="text-xs text-[#8b929e] uppercase tracking-wider">Cursos</p>
-            <p className="mt-2 text-[10px] text-[#d6deed]">{s.aulas} aulas no total</p>
-          </div>
-        </Link>
-
-        {/* Dúvidas abertas */}
-        <div className={`border rounded-lg p-4 transition-colors ${
-          s.duvidasAbertas > 0
-            ? 'bg-amber-500/5 border-amber-500/30'
-            : 'bg-[#0d0d0d] border-[#1c1f26]'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-8 h-8 rounded-md grid place-items-center ${
-              s.duvidasAbertas > 0
-                ? 'bg-amber-500/10 border border-amber-500/20'
-                : 'bg-[#cbfb00]/10 border border-[#cbfb00]/20'
-            }`}>
-              <HelpCircle className={`w-4 h-4 ${s.duvidasAbertas > 0 ? 'text-amber-400' : 'text-[#cbfb00]'}`} />
-            </div>
-          </div>
-          <p className={`text-2xl font-bold mb-0.5 ${s.duvidasAbertas > 0 ? 'text-amber-400' : 'text-white'}`}>
-            {s.duvidasAbertas}
-          </p>
-          <p className={`text-xs uppercase tracking-wider ${s.duvidasAbertas > 0 ? 'text-amber-400/70' : 'text-[#8b929e]'}`}>
-            Dúvidas abertas
-          </p>
+      {/* Pendências */}
+      {hasPendencias && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          {s.status.pending > 0 && (
+            <Link to="/admin/usuarios" className="inline-flex items-center gap-2 rounded-lg border border-warn/30 bg-warn/[0.06] px-3 py-2 text-sm text-warn hover:bg-warn/10 transition-colors">
+              <Clock className="w-4 h-4" /> <span className="text-fg font-medium tabular-nums">{s.status.pending}</span> usuário(s) pendente(s) de ativação <ChevronRight className="w-3.5 h-3.5 opacity-70" />
+            </Link>
+          )}
+          {s.duvidasAbertas > 0 && (
+            <span className="inline-flex items-center gap-2 rounded-lg border border-info/30 bg-info/[0.06] px-3 py-2 text-sm text-info">
+              <HelpCircle className="w-4 h-4" /> <span className="text-fg font-medium tabular-nums">{s.duvidasAbertas}</span> dúvida(s) aberta(s)
+            </span>
+          )}
+          {s.status.blocked > 0 && (
+            <Link to="/admin/usuarios" className="inline-flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors">
+              <UserX className="w-4 h-4" /> <span className="text-fg font-medium tabular-nums">{s.status.blocked}</span> bloqueado(s) <ChevronRight className="w-3.5 h-3.5 opacity-70" />
+            </Link>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* ── Status dos usuários + Staff ── */}
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Métricas */}
+      <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
+        <motion.div variants={staggerItem}><Link to="/admin/usuarios"><StatTile label="Usuários" value={totalUsers} icon={<Users className="w-4 h-4" />} hint={`${s.roles.student} alunos · ${s.roles.professor + s.roles.monitor} staff`} /></Link></motion.div>
+        <motion.div variants={staggerItem}><Link to="/admin/turmas"><StatTile label="Turmas" value={s.turmas} icon={<Layers className="w-4 h-4" />} /></Link></motion.div>
+        <motion.div variants={staggerItem}><Link to="/admin/cursos"><StatTile label="Cursos" value={s.cursos} icon={<BookOpen className="w-4 h-4" />} hint={`${s.aulas} aulas no total`} /></Link></motion.div>
+        <motion.div variants={staggerItem}><StatTile label="Dúvidas abertas" value={s.duvidasAbertas} tone={s.duvidasAbertas > 0 ? 'warn' : 'default'} icon={<HelpCircle className="w-4 h-4" />} /></motion.div>
+      </motion.div>
 
-        {/* Status */}
+      {/* Status + composição */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
         <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-4 h-4 text-[#cbfb00]" />
-            <h3 className="!mb-0 text-base">Status dos usuários</h3>
-          </div>
-          <div className="space-y-3">
-            {[
-              { label: 'Ativos',     value: s.status.active,  color: '#cbfb00', icon: UserCheck },
-              { label: 'Pendentes',  value: s.status.pending, color: '#f59e0b', icon: Clock },
-              { label: 'Bloqueados', value: s.status.blocked, color: '#f87171', icon: UserX },
-            ].map(({ label, value, color, icon: Icon }) => {
+          <div className="flex items-center gap-2 mb-4"><TrendingUp className="w-4 h-4 text-brand" /><h2 className="text-base">Status dos usuários</h2></div>
+          <div className="space-y-3.5">
+            {([
+              { label: 'Ativos', value: s.status.active, tone: 'ok' as const, Icon: UserCheck },
+              { label: 'Pendentes', value: s.status.pending, tone: 'warn' as const, Icon: Clock },
+              { label: 'Bloqueados', value: s.status.blocked, tone: 'danger' as const, Icon: UserX },
+            ]).map(({ label, value, tone, Icon }) => {
               const pct = totalUsers ? Math.round((value / totalUsers) * 100) : 0;
+              const color = tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : 'text-danger';
+              const bar = tone === 'ok' ? 'bg-ok' : tone === 'warn' ? 'bg-warn' : 'bg-danger';
               return (
                 <div key={label}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="w-3.5 h-3.5" style={{ color }} />
-                      <span className="text-sm text-[#d6deed]">{label}</span>
-                    </div>
-                    <span className="text-sm font-medium text-white">{value}</span>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={cn('flex items-center gap-1.5 text-sm', 'text-fg-2')}><Icon className={cn('w-3.5 h-3.5', color)} />{label}</span>
+                    <span className="text-sm font-medium text-fg tabular-nums">{value}</span>
                   </div>
-                  <div className="h-1.5 bg-[#1c1f26] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: color }}
-                    />
-                  </div>
+                  <div className="h-1.5 bg-panel-3 rounded-full overflow-hidden"><div className={cn('h-full rounded-full transition-all', bar)} style={{ width: `${pct}%` }} /></div>
                 </div>
               );
             })}
           </div>
         </Card>
 
-        {/* Staff breakdown */}
         <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <GraduationCap className="w-4 h-4 text-[#cbfb00]" />
-            <h3 className="!mb-0 text-base">Composição por papel</h3>
-          </div>
+          <div className="flex items-center gap-2 mb-4"><GraduationCap className="w-4 h-4 text-brand" /><h2 className="text-base">Composição por papel</h2></div>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Alunos',      value: s.roles.student,   color: 'text-white',        bg: 'bg-[#1c1f26]' },
-              { label: 'Professores', value: s.roles.professor, color: 'text-yellow-400',   bg: 'bg-yellow-400/10' },
-              { label: 'Monitores',   value: s.roles.monitor,   color: 'text-purple-400',   bg: 'bg-purple-400/10' },
-              { label: 'Admins',      value: s.roles.admin,     color: 'text-[#cbfb00]',    bg: 'bg-[#cbfb00]/10' },
-            ].map(({ label, value, color, bg }) => (
-              <div key={label} className={`${bg} rounded-lg p-3`}>
-                <p className={`text-xl font-bold ${color}`}>{value}</p>
-                <p className="text-xs text-[#8b929e] mt-0.5">{label}</p>
+            {([
+              { label: 'Alunos', value: s.roles.student, cls: 'text-fg' },
+              { label: 'Professores', value: s.roles.professor, cls: 'text-warn' },
+              { label: 'Monitores', value: s.roles.monitor, cls: 'text-info' },
+              { label: 'Admins', value: s.roles.admin, cls: 'text-brand' },
+            ]).map(({ label, value, cls }) => (
+              <div key={label} className="rounded-lg border border-line bg-panel-2/40 p-3">
+                <p className={cn('text-xl font-display font-semibold tabular-nums', cls)}>{value}</p>
+                <p className="text-fg-3 text-xs mt-0.5">{label}</p>
               </div>
             ))}
           </div>
         </Card>
       </div>
 
-      {/* ── Turmas + Usuários recentes ── */}
-      <div className="grid lg:grid-cols-2 gap-4">
-
-        {/* Turmas */}
+      {/* Turmas + recentes */}
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <Card className="p-5">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#cbfb00]" />
-              <h3 className="!mb-0 text-base">Turmas</h3>
-            </div>
-            <Link to="/admin/turmas" className="text-xs text-[#cbfb00] hover:underline inline-flex items-center gap-1">
-              Ver todas <ArrowRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-2"><Layers className="w-4 h-4 text-brand" /><h2 className="text-base">Situação das turmas</h2></div>
+            <Link to="/admin/turmas" className="text-xs text-brand hover:underline inline-flex items-center gap-1">Ver todas <ArrowRight className="w-3 h-3" /></Link>
           </div>
-          {turmas.length === 0 ? (
-            <p className="meta text-sm">Nenhuma turma criada</p>
-          ) : (
-            <div className="space-y-2">
+          {turmas.length === 0 ? <EmptyState title="Nenhuma turma criada" className="py-8" /> : (
+            <div className="space-y-0.5">
               {turmas.map((t) => (
-                <Link
-                  key={t.id}
-                  to={`/admin/turmas/${t.id}`}
-                  className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-[#111] transition-colors group"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2 h-2 rounded-full bg-[#cbfb00]/40 flex-shrink-0" />
-                    <span className="text-sm text-[#d6deed] group-hover:text-white transition-colors truncate">
-                      {t.nome}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0 ml-2">
-                    <span className="text-xs text-[#434d5e]">
-                      <span className="text-[#8b929e]">{t.alunos}</span> membros
-                    </span>
-                    <span className="text-xs text-[#434d5e]">
-                      <span className="text-[#8b929e]">{t.cursos}</span> cursos
-                    </span>
-                  </div>
+                <Link key={t.id} to={`/admin/turmas/${t.id}`} className="flex items-center justify-between py-2 px-2.5 rounded-lg hover:bg-panel-2/50 transition-colors group">
+                  <span className="flex items-center gap-2.5 min-w-0"><span className="w-1.5 h-1.5 rounded-full bg-brand/50 flex-shrink-0" /><span className="text-sm text-fg-2 group-hover:text-fg truncate">{t.nome}</span></span>
+                  <span className="flex items-center gap-3 flex-shrink-0 ml-2 text-xs text-fg-3"><span><span className="text-fg-2">{t.alunos}</span> membros</span><span><span className="text-fg-2">{t.cursos}</span> cursos</span></span>
                 </Link>
               ))}
             </div>
           )}
         </Card>
 
-        {/* Usuários recentes */}
         <Card className="p-5">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#cbfb00]" />
-              <h3 className="!mb-0 text-base">Usuários recentes</h3>
-            </div>
-            <Link to="/admin/usuarios" className="text-xs text-[#cbfb00] hover:underline inline-flex items-center gap-1">
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-2"><Users className="w-4 h-4 text-brand" /><h2 className="text-base">Usuários recentes</h2></div>
+            <Link to="/admin/usuarios" className="text-xs text-brand hover:underline inline-flex items-center gap-1">Ver todos <ArrowRight className="w-3 h-3" /></Link>
           </div>
-          {recentUsers.length === 0 ? (
-            <p className="meta text-sm">Nenhum usuário cadastrado</p>
-          ) : (
-            <div className="space-y-1">
-              {recentUsers.map((u) => (
-                <div key={u.id} className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-[#111] transition-colors">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-[#1c1f26] grid place-items-center flex-shrink-0">
-                      <span className="text-[10px] text-[#d6deed] font-bold">
-                        {u.email.slice(0, 2).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-white truncate max-w-[160px]">{u.email}</p>
-                      <p className="text-[10px] text-[#434d5e]">{ROLE_LABEL[u.role] ?? u.role}</p>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 ml-2 text-right">
-                    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      u.status === 'active'  ? 'bg-[#cbfb00]/10 text-[#cbfb00]' :
-                      u.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' :
-                                               'bg-red-500/10 text-red-400'
-                    }`}>
-                      {u.status === 'active' ? 'Ativo' : u.status === 'pending' ? 'Pendente' : 'Bloqueado'}
+          {recentUsers.length === 0 ? <EmptyState title="Nenhum usuário cadastrado" className="py-8" /> : (
+            <div className="space-y-0.5">
+              {recentUsers.map((u) => {
+                const name = fullName(u.nome, u.sobrenome) || u.email.split('@')[0];
+                return (
+                  <div key={u.id} className="flex items-center justify-between py-2 px-2.5 rounded-lg hover:bg-panel-2/50 transition-colors">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={fullName(u.nome, u.sobrenome)} email={u.email} size={30} />
+                      <span className="min-w-0"><span className="block text-sm text-fg truncate max-w-[170px]">{name}</span><span className="block text-fg-3 text-[11px]">{ROLE_LABEL[u.role as keyof typeof ROLE_LABEL] ?? u.role}</span></span>
                     </span>
-                    <p className="text-[10px] text-[#434d5e] mt-0.5">{dateBR(u.created_at)}</p>
+                    <span className="flex-shrink-0 ml-2 text-right">
+                      <Badge tone={u.status === 'active' ? 'success' : u.status === 'pending' ? 'warn' : 'danger'} dot>{statusLabel(u.status)}</Badge>
+                      <p className="text-fg-3 text-[10px] mt-1">{dateBR(u.created_at)}</p>
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
       </div>
 
-      {/* ── Atalhos rápidos ── */}
-      <div>
-        <h3 className="mb-3">Atalhos rápidos</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Atalhos */}
+      <section>
+        <h2 className="text-base mb-3">Atalhos rápidos</h2>
+        <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" variants={staggerContainer} initial="hidden" animate="visible">
           {[
-            { to: '/admin/usuarios', label: 'Gerenciar Usuários',  icon: Users,      desc: 'Convidar e editar' },
-            { to: '/admin/turmas',   label: 'Gerenciar Turmas',    icon: Layers,     desc: 'Criar e organizar' },
-            { to: '/admin/cursos',   label: 'Gerenciar Cursos',    icon: BookOpen,   desc: 'Conteúdo e cursos' },
-            { to: '/admin/aulas',    label: 'Gerenciar Aulas',     icon: PlayCircle, desc: 'Vídeos e materiais' },
+            { to: '/admin/usuarios', label: 'Usuários', icon: Users, desc: 'Convidar e editar' },
+            { to: '/admin/turmas', label: 'Turmas', icon: Layers, desc: 'Criar e organizar' },
+            { to: '/admin/cursos', label: 'Cursos', icon: BookOpen, desc: 'Conteúdo e cursos' },
+            { to: '/admin/aulas', label: 'Aulas', icon: PlayCircle, desc: 'Vídeos e materiais' },
           ].map(({ to, label, icon: Icon, desc }) => (
-            <Link key={to} to={to}>
-              <div className="bg-[#0d0d0d] border border-[#1c1f26] hover:border-[#cbfb00]/30 rounded-lg p-4 transition-colors group">
-                <div className="w-8 h-8 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center mb-3">
-                  <Icon className="w-4 h-4 text-[#cbfb00]" />
-                </div>
-                <p className="text-sm font-medium text-white group-hover:text-[#cbfb00] transition-colors">{label}</p>
-                <p className="text-xs text-[#434d5e] mt-0.5">{desc}</p>
-              </div>
-            </Link>
+            <motion.div key={to} variants={staggerItem}>
+              <Link to={to} className="group">
+                <Card hoverable className="p-4 hover:border-brand/30 transition-colors h-full">
+                  <span className="w-9 h-9 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><Icon className="w-4 h-4 text-brand" /></span>
+                  <p className="text-sm font-medium text-fg group-hover:text-brand transition-colors">{label}</p>
+                  <p className="text-fg-3 text-xs mt-0.5">{desc}</p>
+                </Card>
+              </Link>
+            </motion.div>
           ))}
-        </div>
-      </div>
-
+        </motion.div>
+      </section>
     </div>
   );
 }

@@ -1,73 +1,52 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle } from 'lucide-react';
+import { motion } from 'motion/react';
+import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, Empty, ProgressBar } from '../../components/ui';
+import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, Avatar, cn } from '../../components/ui';
+import { staggerContainer, staggerItem } from '../../components/ui/motion';
 
-type CourseCard = {
-  id: string;
-  titulo: string;
-  descricao: string | null;
-  total: number;
-  done: number;
-};
-
+type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number };
 type Turma = { id: string; nome: string; descricao: string | null };
+type Upcoming = { id: string; titulo: string; prazo: string; turmaId: string; turmaNome: string; cursoId: string | null };
 
-/* ══════════════════════════════════════════════════════════════════════════ */
 export default function StudentDashboard() {
   const { profile } = useAuth();
   const isMonitor = profile?.role === 'monitor';
+  const firstName = (profile?.nome || profile?.email?.split('@')[0] || '').split(' ')[0];
 
-  const [courses,        setCourses]        = useState<CourseCard[]>([]);
-  const [turmas,         setTurmas]         = useState<Turma[]>([]);
+  const [courses, setCourses] = useState<CourseCard[]>([]);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [duvidasAbertas, setDuvidasAbertas] = useState<Record<string, number>>({});
-  const [loading,        setLoading]        = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       if (!profile) return;
+      const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
+      const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
+      const cursoIds = [...new Set((ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string))];
 
-      // Carrega as turmas/cursos liberados para este usuário
-      const { data: ut } = await supabase
-        .from('user_turmas')
-        .select('turma_id,curso_id')
-        .eq('user_id', profile.id);
+      const { data: ts } = turmaIds.length
+        ? await supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
+        : { data: [] };
+      const turmaMap = new Map((ts ?? []).map((t) => [t.id, t]));
 
-      const turmaIds = [...new Set((ut ?? []).map((r: any) => r.turma_id))];
-      const cursoIds = [...new Set((ut ?? []).filter((r: any) => r.curso_id).map((r: any) => r.curso_id as string))];
-
-      const [{ data: ts }] = await Promise.all([
-        turmaIds.length
-          ? supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      /* Contagem de dúvidas abertas por turma (apenas para monitores) */
       if (isMonitor && turmaIds.length > 0) {
-        const { data: duvs } = await supabase
-          .from('community_posts')
-          .select('turma_id')
-          .eq('tipo', 'duvida')
-          .eq('status', 'aberta')
-          .in('turma_id', turmaIds);
-
+        const { data: duvs } = await supabase.from('community_posts').select('turma_id').eq('tipo', 'duvida').eq('status', 'aberta').in('turma_id', turmaIds);
         const counts: Record<string, number> = {};
-        (duvs ?? []).forEach((d) => {
-          counts[d.turma_id] = (counts[d.turma_id] ?? 0) + 1;
-        });
+        (duvs ?? []).forEach((d) => { counts[d.turma_id] = (counts[d.turma_id] ?? 0) + 1; });
         setDuvidasAbertas(counts);
       }
 
-      /* Progresso de cursos via lessons_public (apenas para alunos/professores) */
       if (!isMonitor) {
-        const { data: cs } = cursoIds.length
-          ? await supabase.from('cursos').select('id,titulo,descricao').in('id', cursoIds)
-          : { data: [] };
-
+        const { data: cs } = cursoIds.length ? await supabase.from('cursos').select('id,titulo,descricao').in('id', cursoIds) : { data: [] };
         if ((cs ?? []).length > 0) {
           const ids = (cs ?? []).map((c) => c.id);
+          // lessons_public é uma view não tipada no schema gerado
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', ids);
           const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
           const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
@@ -77,10 +56,19 @@ export default function StudentDashboard() {
             counts[a.curso_id].total++;
             if (doneSet.has(a.id)) counts[a.curso_id].done++;
           });
-          setCourses((cs ?? []).map((c) => ({
-            ...c,
-            total: counts[c.id]?.total ?? 0,
-            done:  counts[c.id]?.done  ?? 0,
+          setCourses((cs ?? []).map((c) => ({ ...c, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 })));
+        }
+
+        // Próximas atividades (com prazo futuro) nas turmas do aluno
+        if (turmaIds.length) {
+          const nowIso = new Date().toISOString();
+          const { data: ats } = await supabase
+            .from('atividades').select('id,titulo,prazo,turma_id,curso_id')
+            .in('turma_id', turmaIds).not('prazo', 'is', null).gte('prazo', nowIso)
+            .order('prazo', { ascending: true }).limit(5);
+          setUpcoming((ats ?? []).map((a) => ({
+            id: a.id, titulo: a.titulo, prazo: a.prazo as string,
+            turmaId: a.turma_id, turmaNome: turmaMap.get(a.turma_id)?.nome ?? 'Turma', cursoId: a.curso_id,
           })));
         }
       }
@@ -89,153 +77,187 @@ export default function StudentDashboard() {
       setLoading(false);
     };
     load();
-  }, [profile]);
+  }, [profile, isMonitor]);
 
-  /* ══════════════════════════════════
-     VIEW: MONITOR
-  ══════════════════════════════════ */
+  /* ══════════════════ MONITOR ══════════════════ */
   if (isMonitor) {
     const totalDuvidas = Object.values(duvidasAbertas).reduce((a, b) => a + b, 0);
-
     return (
-      <div className="max-w-6xl mx-auto px-6 py-12">
-
-        {/* Header */}
-        <div className="mb-10">
-          <h1 className="mb-2">Painel do Monitor</h1>
-          <p className="text-[#d6deed]">Acompanhe as dúvidas abertas nas turmas que você monitora.</p>
-        </div>
-
-        {/* Cards de resumo */}
-        {!loading && (
-          <div className="grid grid-cols-2 gap-3 mb-10 max-w-sm">
-            <div className="bg-[#0d0d0d] border border-[#1c1f26] rounded-lg p-4">
-              <p className="text-2xl font-bold text-white">{turmas.length}</p>
-              <p className="meta text-xs mt-1">Turmas</p>
-            </div>
-            <div className={`border rounded-lg p-4 transition-colors ${
-              totalDuvidas > 0
-                ? 'bg-amber-500/5 border-amber-500/30'
-                : 'bg-[#0d0d0d] border-[#1c1f26]'
-            }`}>
-              <p className={`text-2xl font-bold ${totalDuvidas > 0 ? 'text-amber-400' : 'text-white'}`}>
-                {totalDuvidas}
-              </p>
-              <p className={`text-xs mt-1 ${totalDuvidas > 0 ? 'text-amber-400/70' : 'meta'}`}>
-                Dúvidas abertas
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Turmas */}
-        {loading ? (
-          <p className="meta">Carregando...</p>
-        ) : turmas.length === 0 ? (
-          <Empty
-            icon={<Users className="w-10 h-10" />}
-            title="Nenhuma turma atribuída"
-            description="O administrador precisa te atribuir a uma turma"
-          />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {turmas.map((t) => {
-              const count = duvidasAbertas[t.id] ?? 0;
-              return (
-                <Card key={t.id} className="p-5 flex flex-col gap-4">
-                  {/* Cabeçalho do card */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center flex-shrink-0">
-                        <Users className="w-5 h-5 text-[#cbfb00]" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-white font-medium truncate">{t.nome}</p>
-                        {t.descricao && (
-                          <p className="meta text-xs mt-0.5 line-clamp-1">{t.descricao}</p>
-                        )}
-                      </div>
-                    </div>
-                    {count > 0 && (
-                      <div className="flex-shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1 text-center min-w-[44px]">
-                        <p className="text-amber-400 font-bold text-sm leading-none">{count}</p>
-                        <p className="text-amber-400/70 text-[9px] leading-none mt-0.5">
-                          dúvida{count > 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Ações */}
-                  <div className="flex flex-col gap-2">
-                    {count > 0 && (
-                      <Link
-                        to={`/turma/${t.id}/comunidade?filtro=duvidas`}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                      >
-                        <HelpCircle className="w-4 h-4" />
-                        Ver dúvidas abertas ({count})
-                      </Link>
-                    )}
-                    <Link
-                      to={`/turma/${t.id}/comunidade`}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors border border-[#434d5e] text-[#d6deed] hover:bg-[#434d5e]/20"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Ver comunidade
-                    </Link>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        <header className="mb-7">
+          <h1 className="mb-1">Painel do monitor</h1>
+          <p className="text-fg-3">Acompanhe as dúvidas abertas nas turmas que você monitora.</p>
+        </header>
+        {loading ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Card key={i} className="p-5"><SkeletonText lines={3} /></Card>)}</div>
+          : turmas.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhuma turma atribuída" description="O administrador precisa te atribuir a uma turma." />
+          : (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-7 max-w-sm">
+                <Card className="p-4"><p className="text-2xl font-display font-semibold text-fg tabular-nums">{turmas.length}</p><p className="text-fg-3 text-xs mt-1">Turmas</p></Card>
+                <Card className={cn('p-4', totalDuvidas > 0 && 'border-warn/30 bg-warn/[0.04]')}><p className={cn('text-2xl font-display font-semibold tabular-nums', totalDuvidas > 0 ? 'text-warn' : 'text-fg')}>{totalDuvidas}</p><p className="text-fg-3 text-xs mt-1">Dúvidas abertas</p></Card>
+              </div>
+              <motion.div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" variants={staggerContainer} initial="hidden" animate="visible">
+                {turmas.map((t) => {
+                  const count = duvidasAbertas[t.id] ?? 0;
+                  return (
+                    <motion.div key={t.id} variants={staggerItem}>
+                      <Card hoverable className="p-5 flex flex-col gap-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><Users className="w-5 h-5 text-brand" /></span>
+                            <div className="min-w-0"><p className="text-fg font-medium truncate">{t.nome}</p>{t.descricao && <p className="text-fg-3 text-xs mt-0.5 line-clamp-1">{t.descricao}</p>}</div>
+                          </div>
+                          {count > 0 && <Badge tone="warn">{count} dúvida{count > 1 ? 's' : ''}</Badge>}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {count > 0 && <Link to={`/turma/${t.id}/comunidade?filtro=duvidas`} className="inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-warn/10 border border-warn/30 text-warn hover:bg-warn/20 transition-colors"><HelpCircle className="w-4 h-4" />Ver dúvidas ({count})</Link>}
+                          <Link to={`/turma/${t.id}/comunidade`} className="inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-panel-2 border border-line text-fg-2 hover:bg-panel-3 transition-colors"><MessageSquare className="w-4 h-4" />Comunidade</Link>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </>
+          )}
       </div>
     );
   }
 
-  /* ══════════════════════════════════
-     VIEW: ALUNO / PROFESSOR
-  ══════════════════════════════════ */
+  /* ══════════════════ ALUNO / PROFESSOR ══════════════════ */
+  const inProgress = [...courses].filter((c) => c.total > 0 && c.done < c.total).sort((a, b) => (b.done / b.total) - (a.done / a.total));
+  const featured = inProgress[0] ?? courses[0] ?? null;
+  const featuredPct = featured && featured.total ? Math.round((featured.done / featured.total) * 100) : 0;
+
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <header className="mb-7 flex items-center gap-3">
+        <Avatar name={profile?.nome} email={profile?.email} size={44} />
+        <div>
+          <h1 className="mb-0.5">{firstName ? `Olá, ${firstName}` : 'Meus cursos'}</h1>
+          <p className="text-fg-3 text-sm">Continue de onde parou e acompanhe seu progresso.</p>
+        </div>
+      </header>
 
-      {/* ── Meus cursos ── */}
-      <div className="mb-10">
-        <h1 className="mb-2">Meus cursos</h1>
-        <p className="text-[#d6deed]">Continue de onde parou e acompanhe seu progresso.</p>
-      </div>
+      {loading ? (
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6"><Skeleton className="h-40 w-full rounded-xl" /><div className="grid sm:grid-cols-2 gap-4">{[0, 1].map((i) => <Card key={i} className="p-5"><SkeletonText lines={3} /></Card>)}</div></div>
+          <Card className="p-5"><SkeletonText lines={5} /></Card>
+        </div>
+      ) : courses.length === 0 && turmas.length === 0 ? (
+        <EmptyState icon={<BookOpen className="w-8 h-8" />} title="Nenhum curso disponível" description="Aguarde o administrador liberar conteúdo para suas turmas." />
+      ) : (
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Coluna principal */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Continuar estudando */}
+            {featured && (
+              <Card className="p-5 sm:p-6 relative overflow-hidden">
+                <span className="absolute -right-16 -top-16 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(closest-side, rgba(203,251,0,0.10), transparent 70%)' }} />
+                <p className="text-brand text-[11px] font-semibold uppercase tracking-wider mb-3">Continuar estudando</p>
+                <div className="flex items-start gap-4">
+                  <span className="w-12 h-12 rounded-xl bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><PlayCircle className="w-6 h-6 text-brand" /></span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="mb-1 truncate">{featured.titulo}</h2>
+                    <p className="text-fg-3 text-sm line-clamp-2">{featured.descricao || 'Retome sua próxima aula.'}</p>
+                    <div className="mt-4 space-y-2 max-w-md">
+                      <div className="flex justify-between text-xs"><span className="text-fg-2">{featured.done} de {featured.total || '—'} aulas</span><span className="text-brand font-medium">{featuredPct}%</span></div>
+                      <ProgressBar value={featuredPct} />
+                    </div>
+                    <Link to={`/curso/${featured.id}`} className="mt-4 inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">
+                      {featured.done === 0 ? 'Começar curso' : 'Continuar'}<ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            )}
 
-      {loading ? <p className="meta">Carregando...</p> :
-        courses.length === 0 ? <Empty icon={<BookOpen className="w-10 h-10" />} title="Nenhum curso disponível" description="Aguarde o administrador liberar conteúdo para suas turmas" /> : (
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((c) => {
-              const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
-              return (
-                <Link key={c.id} to={`/curso/${c.id}`} className="group">
-                  <Card className="p-6 h-full flex flex-col transition-colors hover:border-[#cbfb00]/40">
-                    <div className="w-11 h-11 rounded-md bg-[#cbfb00]/10 border border-[#cbfb00]/20 grid place-items-center mb-4">
-                      <BookOpen className="w-5 h-5 text-[#cbfb00]" />
-                    </div>
-                    <h3 className="mb-2 group-hover:text-white transition-colors">{c.titulo}</h3>
-                    <p className="text-sm mb-6 line-clamp-2 flex-1">{c.descricao || 'Sem descrição'}</p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-[#d6deed]">{c.done}/{c.total} aulas</span>
-                        <span className="text-[#cbfb00] font-medium">{pct}%</span>
-                      </div>
-                      <ProgressBar value={pct} />
-                    </div>
-                    <div className="mt-5 inline-flex items-center gap-1 text-sm text-[#cbfb00] font-medium">
-                      {c.done === 0 ? 'Começar' : pct === 100 ? 'Revisar' : 'Continuar'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
+            {/* Meus cursos */}
+            <section>
+              <div className="flex items-center justify-between mb-3"><h2 className="text-base">Meus cursos</h2><span className="text-fg-3 text-xs">{courses.length} curso(s)</span></div>
+              {courses.length === 0 ? (
+                <EmptyState icon={<BookOpen className="w-7 h-7" />} title="Nenhum curso liberado" description="Suas turmas ainda não têm cursos vinculados." />
+              ) : (
+                <motion.div className="grid sm:grid-cols-2 gap-4" variants={staggerContainer} initial="hidden" animate="visible">
+                  {courses.map((c) => {
+                    const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
+                    return (
+                      <motion.div key={c.id} variants={staggerItem}>
+                        <Link to={`/curso/${c.id}`} className="group">
+                          <Card hoverable className="p-5 h-full flex flex-col hover:border-brand/40 transition-colors">
+                            <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                            <h3 className="mb-1.5 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
+                            <p className="text-fg-3 text-sm mb-4 line-clamp-2 flex-1">{c.descricao || 'Sem descrição'}</p>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-xs"><span className="text-fg-2">{c.done}/{c.total} aulas</span><span className="text-brand font-medium">{pct}%</span></div>
+                              <ProgressBar value={pct} />
+                            </div>
+                          </Card>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </section>
           </div>
-        )}
 
+          {/* Coluna lateral */}
+          <div className="space-y-6">
+            {/* Próximas atividades */}
+            <Card className="p-5">
+              <div className="flex items-center gap-2 mb-4"><CalendarClock className="w-4 h-4 text-fg-2" /><h2 className="text-base">Próximas atividades</h2></div>
+              {upcoming.length === 0 ? (
+                <p className="text-fg-3 text-sm py-2">Nenhuma atividade com prazo próximo.</p>
+              ) : (
+                <div className="space-y-2">
+                  {upcoming.map((a) => {
+                    const d = new Date(a.prazo);
+                    const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+                    return (
+                      <Link key={a.id} to={a.cursoId ? `/atividades/${a.turmaId}/${a.cursoId}` : '/atividades'} className="block rounded-lg border border-line p-3 hover:border-line-strong hover:bg-panel-2/40 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{a.titulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{a.turmaNome}</p></div>
+                          <Badge tone={days <= 2 ? 'danger' : days <= 5 ? 'warn' : 'default'}>{days <= 0 ? 'hoje' : `${days}d`}</Badge>
+                        </div>
+                        <p className="text-fg-3 text-[11px] mt-1.5">Prazo: {d.toLocaleDateString('pt-BR')}</p>
+                      </Link>
+                    );
+                  })}
+                  <Link to="/atividades" className="inline-flex items-center gap-1 text-brand text-sm font-medium mt-1 hover:gap-2 transition-all">Ver todas<ArrowRight className="w-3.5 h-3.5" /></Link>
+                </div>
+              )}
+            </Card>
+
+            {/* Minhas turmas */}
+            <Card className="p-5">
+              <div className="flex items-center gap-2 mb-4"><Users className="w-4 h-4 text-fg-2" /><h2 className="text-base">Minhas turmas</h2></div>
+              {turmas.length === 0 ? (
+                <p className="text-fg-3 text-sm py-2">Você ainda não está em nenhuma turma.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {turmas.map((t) => (
+                    <Link key={t.id} to={`/turma/${t.id}/comunidade`} className="flex items-center gap-3 rounded-lg p-2 hover:bg-panel-2/50 transition-colors">
+                      <span className="w-8 h-8 rounded-md bg-panel-3 grid place-items-center flex-shrink-0"><MessageSquare className="w-4 h-4 text-fg-3" /></span>
+                      <span className="min-w-0"><span className="block text-fg text-sm font-medium truncate">{t.nome}</span>{t.descricao && <span className="block text-fg-3 text-xs truncate">{t.descricao}</span>}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Atalhos */}
+            <Card className="p-5">
+              <h2 className="text-base mb-3">Atalhos</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <Link to="/atividades" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2"><ClipboardList className="w-4 h-4 text-fg-3" />Atividades</Link>
+                <Link to="/duvidas" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2"><HelpCircle className="w-4 h-4 text-fg-3" />Dúvidas</Link>
+                <Link to="/comunidade" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2 col-span-2"><MessageSquare className="w-4 h-4 text-fg-3" />Comunidade</Link>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

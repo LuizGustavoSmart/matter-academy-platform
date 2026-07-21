@@ -1,39 +1,25 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, MessageSquare, ClipboardList, HelpCircle, Layers } from 'lucide-react';
+import { BookOpen, Layers, ClipboardList, HelpCircle, MessageSquare } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { AppSidebar } from './AppSidebar';
+import AppShell, { type NavGroup } from './AppShell';
 
 export default function StudentLayout() {
-  const { signOut, profile } = useAuth();
-  const nav = useNavigate();
-  const location = useLocation();
-  const logout = async () => { await signOut(); nav('/login'); };
+  const { profile } = useAuth();
+  const isStaff = profile?.role === 'professor' || profile?.role === 'monitor';
+  const area = profile?.role === 'professor' ? 'Área do professor'
+    : profile?.role === 'monitor' ? 'Área do monitor'
+    : 'Área do aluno';
 
-  const isStaff       = profile?.role === 'professor' || profile?.role === 'monitor';
-  const isAulas       = location.pathname === '/dashboard' || location.pathname.startsWith('/curso/');
-  const isComunidade  = location.pathname === '/comunidade' || location.pathname.startsWith('/turma/');
-  const isAtividades  = location.pathname.startsWith('/atividades') || location.pathname.startsWith('/atividade/');
-  const isDuvidas     = location.pathname.startsWith('/duvidas');
-  const isTurmas      = location.pathname.startsWith('/turmas');
-
-  const items = [
-    { label: 'Aulas',      icon: BookOpen,      onClick: () => nav('/dashboard'),   isActive: isAulas      },
-    ...(isStaff ? [{ label: 'Turmas', icon: Layers, onClick: () => nav('/turmas'), isActive: isTurmas }] : []),
-    { label: 'Atividades', icon: ClipboardList, onClick: () => nav('/atividades'),  isActive: isAtividades },
-    { label: 'Dúvidas',    icon: HelpCircle,     onClick: () => nav('/duvidas'),     isActive: isDuvidas    },
-    { label: 'Comunidade', icon: MessageSquare, onClick: () => nav('/comunidade'),  isActive: isComunidade },
+  const nav: NavGroup[] = [
+    {
+      items: [
+        { to: '/dashboard', label: 'Aulas', icon: BookOpen, match: (p) => p === '/dashboard' || p.startsWith('/curso/') },
+        ...(isStaff ? [{ to: '/turmas', label: 'Turmas', icon: Layers, match: (p: string) => p.startsWith('/turmas') }] : []),
+        { to: '/atividades', label: 'Atividades', icon: ClipboardList, match: (p) => p.startsWith('/atividades') || p.startsWith('/atividade/') },
+        { to: '/duvidas', label: 'Dúvidas', icon: HelpCircle, match: (p) => p.startsWith('/duvidas') },
+        { to: '/comunidade', label: 'Comunidade', icon: MessageSquare, match: (p) => p === '/comunidade' || p.startsWith('/turma/') },
+      ],
+    },
   ];
 
-  return (
-    <div className="min-h-screen flex">
-      <AppSidebar
-        items={items}
-        profile={profile}
-        onLogout={logout}
-      />
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <Outlet />
-      </main>
-    </div>
-  );
+  return <AppShell nav={nav} area={area} contentPadded={false} />;
 }

@@ -1,32 +1,37 @@
-import { Outlet, useNavigate } from 'react-router-dom';
-import { Users, Layers, LayoutDashboard, GraduationCap, DollarSign } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { AppSidebar } from './AppSidebar';
+import {
+  LayoutDashboard, Users, GraduationCap, Layers, BookOpen, PlayCircle, DollarSign,
+} from 'lucide-react';
+import AppShell, { type NavGroup } from './AppShell';
 
-const items = [
-  { to: '/admin',                  label: 'Visão Geral',      icon: LayoutDashboard, end: true  },
-  { to: '/admin/usuarios',         label: 'Usuários',        icon: Users,            end: true  },
-  { to: '/admin/turmas',           label: 'Turmas',          icon: Layers,           end: false },
-  { to: '/admin/mapa-professores', label: 'Mapa de Professores', icon: GraduationCap, end: true  },
-  { to: '/admin/financeiro',       label: 'Financeiro',      icon: DollarSign,       end: true  },
+const nav: NavGroup[] = [
+  {
+    items: [
+      { to: '/admin', label: 'Visão geral', icon: LayoutDashboard, match: (p) => p === '/admin' },
+    ],
+  },
+  {
+    title: 'Gestão',
+    items: [
+      { to: '/admin/usuarios', label: 'Usuários', icon: Users },
+      { to: '/admin/turmas', label: 'Turmas', icon: Layers },
+      { to: '/admin/cursos', label: 'Cursos', icon: BookOpen },
+      { to: '/admin/aulas', label: 'Aulas', icon: PlayCircle },
+    ],
+  },
+  {
+    title: 'Acompanhamento',
+    items: [
+      { to: '/admin/mapa-professores', label: 'Mapa de professores', icon: GraduationCap },
+    ],
+  },
+  {
+    title: 'Operação',
+    items: [
+      { to: '/admin/financeiro', label: 'Financeiro', icon: DollarSign },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
-  const { signOut, profile } = useAuth();
-  const nav = useNavigate();
-  const logout = async () => { await signOut(); nav('/login'); };
-
-  return (
-    <div className="min-h-screen flex">
-      <AppSidebar
-        items={items}
-        profile={profile}
-        onLogout={logout}
-        subtitle="Painel admin"
-      />
-      <main className="flex-1 overflow-y-auto p-8 scrollbar-thin">
-        <Outlet />
-      </main>
-    </div>
-  );
+  return <AppShell nav={nav} area="Administração" contentPadded />;
 }

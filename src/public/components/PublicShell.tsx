@@ -11,11 +11,11 @@ import { fade, viewportOnce } from '../motion/variants';
 /* Splash da intro em chunk próprio; enquanto carrega, cobre com ink puro. */
 const LazyLogoIntro = lazy(() => import('../intro/LogoIntro').then((mod) => ({ default: mod.LogoIntro })));
 
-/** Modo da intro do logo (teste): ?intro=splash | hero | off — default splash. */
+/** Modo da intro (teste): ?intro=splash | hero | off — default hero 3D. */
 function useIntroMode(): 'splash' | 'hero' | 'off' {
   return useMemo(() => {
     const v = new URLSearchParams(window.location.search).get('intro');
-    return v === 'hero' || v === 'off' ? v : 'splash';
+    return v === 'splash' || v === 'off' ? v : 'hero';
   }, []);
 }
 
