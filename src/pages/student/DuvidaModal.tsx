@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { callFn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadDuvidaFile } from '../../lib/storage';
 import { Button, Modal, Field, Input, Textarea, Alert } from '../../components/ui';
@@ -43,11 +43,12 @@ export default function DuvidaModal({
         const up = await uploadDuvidaFile(file, `${turmaId}/${cursoId}/${profile.id}`);
         anexo_url = up.path; anexo_nome = up.nome;
       }
-      const { error } = await supabase.from('duvidas').insert({
+      const { data: created, error } = await supabase.from('duvidas').insert({
         aula_id: aulaId, curso_id: cursoId, turma_id: turmaId, aluno_id: profile.id,
         titulo: titulo.trim(), descricao: descricao.trim(), anexo_url, anexo_nome,
-      });
+      }).select('id').single();
       if (error) throw error;
+      if (created) void callFn('notifications', 'doubt-created', { doubt_id: created.id }).catch(() => undefined);
       onDone();
     } catch (e) {
       setErr((e as Error).message);

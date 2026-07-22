@@ -17,6 +17,11 @@ export const popIn: Variants = { hidden: { opacity: 0, y: -4, scale: 0.98 }, vis
 export const slideFromRight: Variants = { hidden: { x: '100%' }, visible: { x: 0, transition: maSpringPanel }, exit: { x: '100%', transition: maSpringPanel } };
 export const slideFromLeft: Variants = { hidden: { x: '-100%' }, visible: { x: 0, transition: maSpringPanel }, exit: { x: '-100%', transition: maSpringPanel } };
 export const toastIn: Variants = { hidden: { opacity: 0, y: 10, scale: 0.98 }, visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 500, damping: 32 } }, exit: { opacity: 0, scale: 0.96, transition: maTransitionFast } };
+export const pageIn: Variants = {
+  hidden: { opacity: 0, y: 4 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: MA_EASE } },
+  exit: { opacity: 0, y: -2, transition: { duration: 0.1, ease: MA_EASE } },
+};
 
 // Reservado para a Fase 2 (stagger em grids/listas de páginas específicas)
 export const staggerContainer: Variants = { hidden: {}, visible: { transition: { staggerChildren: MA_STAGGER, delayChildren: 0.02 } } };

@@ -266,7 +266,7 @@ export default function AdminUsers() {
       {/* Barra de ações em massa */}
       {selected.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(720px,calc(100vw-2rem))] ma-anim-toast">
-          <div className="flex items-center gap-2 ma-glass ma-glass-strong rounded-xl px-3 py-2.5">
+          <div className="ma-popover flex items-center gap-2 rounded-xl px-3 py-2.5">
             <span className="text-sm text-fg font-medium px-1">{selected.size} selecionado(s)</span>
             <span className="text-fg-3 text-xs hidden sm:inline">{selectedCount !== selected.size && `(${selectedCount} elegíveis)`}</span>
             <div className="flex-1" />

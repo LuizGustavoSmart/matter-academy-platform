@@ -132,7 +132,7 @@ export default function StudentDashboard() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <header className="mb-7 flex items-center gap-3">
-        <Avatar name={profile?.nome} email={profile?.email} size={44} />
+        <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_signed_url} size={44} />
         <div>
           <h1 className="mb-0.5">{firstName ? `Olá, ${firstName}` : 'Meus cursos'}</h1>
           <p className="text-fg-3 text-sm">Continue de onde parou e acompanhe seu progresso.</p>

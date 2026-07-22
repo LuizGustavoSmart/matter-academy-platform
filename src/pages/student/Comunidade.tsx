@@ -10,8 +10,22 @@ type Pair = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: 
 type Message = {
   id: string; turma_id: string; curso_id: string; user_id: string;
   content: string | null; arquivo_url: string | null; arquivo_nome: string | null;
-  created_at: string; profiles: { email: string; nome: string | null } | null;
+  created_at: string; profiles: { nome: string | null; avatar_signed_url?: string | null } | null;
 };
+
+async function messageProfiles(userIds: string[]) {
+  if (!userIds.length) return new Map<string, Message['profiles']>();
+  const { data } = await supabase.from('profile_directory').select('id,nome,avatar_url').in('id', [...new Set(userIds)]);
+  const rows = await Promise.all((data ?? []).map(async (item) => {
+    let signedUrl: string | null = null;
+    if (item.avatar_url) {
+      const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(item.avatar_url, 3600);
+      signedUrl = signed?.signedUrl ?? null;
+    }
+    return [item.id!, { nome: item.nome, avatar_signed_url: signedUrl }] as const;
+  }));
+  return new Map(rows);
+}
 
 export default function Comunidade() {
   const { profile } = useAuth();
@@ -71,8 +85,9 @@ export default function Comunidade() {
 
   const loadMessages = async (p: Pair) => {
     setMsgLoading(true);
-    const { data } = await supabase.from('community_messages').select('*, profiles(email,nome)').eq('turma_id', p.turmaId).eq('curso_id', p.cursoId).order('created_at', { ascending: true });
-    setMessages((data ?? []) as Message[]);
+    const { data } = await supabase.from('community_messages').select('*').eq('turma_id', p.turmaId).eq('curso_id', p.cursoId).order('created_at', { ascending: true });
+    const profiles = await messageProfiles((data ?? []).map((message) => message.user_id));
+    setMessages((data ?? []).map((message) => ({ ...message, profiles: profiles.get(message.user_id) ?? null })) as Message[]);
     setMsgLoading(false);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
   };
@@ -81,9 +96,11 @@ export default function Comunidade() {
     if (!selected) return;
     loadMessages(selected);
     const channel = supabase.channel(`community:${selected.turmaId}:${selected.cursoId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_messages', filter: `curso_id=eq.${selected.cursoId}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_messages', filter: `curso_id=eq.${selected.cursoId}` }, async (payload) => {
         const row = payload.new as Message;
         if (row.turma_id !== selected.turmaId) return;
+        const profiles = await messageProfiles([row.user_id]);
+        row.profiles = profiles.get(row.user_id) ?? null;
         // Evita duplicar mensagem já inserida de forma otimista pelo próprio remetente.
         setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
         requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
@@ -100,11 +117,12 @@ export default function Comunidade() {
       if (file) { const up = await uploadComunidadeFile(file, `${selected.turmaId}/${selected.cursoId}`); arquivo_url = up.path; arquivo_nome = up.nome; }
       const { data, error } = await supabase.from('community_messages')
         .insert({ turma_id: selected.turmaId, curso_id: selected.cursoId, user_id: profile.id, content: text.trim() || null, arquivo_url, arquivo_nome })
-        .select('*, profiles(email,nome)')
+        .select('*')
         .single();
       if (error) throw error;
       // Mostra a mensagem na hora, sem esperar o round-trip do realtime.
-      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+      const optimistic = { ...data, profiles: { nome: profile.nome, avatar_signed_url: profile.avatar_signed_url } } as Message;
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, optimistic]));
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
       setText(''); setFile(null);
     } catch (e) { toast.error((e as Error).message); } finally { setSending(false); }
@@ -171,9 +189,9 @@ export default function Comunidade() {
                   const mine = m.user_id === profile?.id;
                   return (
                     <div key={m.id} className={cn('flex gap-3', mine && 'flex-row-reverse')}>
-                      <Avatar name={m.profiles?.nome} email={m.profiles?.email} size={32} />
+                      <Avatar name={m.profiles?.nome} src={m.profiles?.avatar_signed_url} size={32} />
                       <div className={cn('max-w-[75%] rounded-xl px-3 py-2', mine ? 'bg-brand text-brand-ink' : 'bg-panel border border-line text-fg-2')}>
-                        {!mine && <p className="text-xs font-medium opacity-80 mb-0.5">{m.profiles?.nome || m.profiles?.email || 'Usuário'}</p>}
+                        {!mine && <p className="text-xs font-medium opacity-80 mb-0.5">{m.profiles?.nome || 'Participante'}</p>}
                         {m.content && <p className="text-sm whitespace-pre-line">{m.content}</p>}
                         {m.arquivo_url && <FileLink bucket="comunidade" path={m.arquivo_url} className={cn('inline-flex items-center gap-1 text-xs underline mt-1', mine ? 'text-brand-ink/80' : 'text-brand')}><Paperclip className="w-3 h-3" /> {m.arquivo_nome ?? 'Anexo'}</FileLink>}
                         <p className={cn('text-[10px] mt-1', mine ? 'text-brand-ink/60' : 'text-fg-3')}>{new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>

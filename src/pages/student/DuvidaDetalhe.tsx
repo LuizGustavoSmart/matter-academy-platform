@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Paperclip, PlayCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { callFn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, Card, Badge, Skeleton, EmptyState, Field, Textarea, useToast } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
@@ -44,6 +44,7 @@ export default function DuvidaDetalhe() {
     try {
       const { error } = await supabase.from('duvidas').update({ resposta: resposta.trim(), status: 'resolvida', professor_id: profile.id, resolved_at: new Date().toISOString() }).eq('id', duvida.id);
       if (error) throw error;
+      void callFn('notifications', 'doubt-answered', { doubt_id: duvida.id }).catch(() => undefined);
       toast.success('Resposta enviada.'); await load();
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   };

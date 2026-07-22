@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -11,31 +11,57 @@
    ============================================================ */
 
 :root {
+  color-scheme: dark;
   /* Superfícies (dark, em camadas para hierarquia) */
-  --ma-canvas: #0b0c0e;      /* fundo da aplicação */
-  --ma-panel: #121317;       /* cards / superfícies base */
-  --ma-panel-2: #171a1f;     /* superfície elevada / hover */
-  --ma-panel-3: #1e2229;     /* inputs / seleção sutil */
-  --ma-line: #262a32;        /* borda padrão */
-  --ma-line-strong: #363c46; /* borda de destaque / divisórias fortes */
+  --ma-canvas-rgb: 11 12 14;
+  --ma-panel-rgb: 18 19 23;
+  --ma-panel-2-rgb: 23 26 31;
+  --ma-panel-3-rgb: 30 34 41;
+  --ma-line-rgb: 38 42 50;
+  --ma-line-strong-rgb: 54 60 70;
+  --ma-canvas: rgb(var(--ma-canvas-rgb));
+  --ma-panel: rgb(var(--ma-panel-rgb));
+  --ma-panel-2: rgb(var(--ma-panel-2-rgb));
+  --ma-panel-3: rgb(var(--ma-panel-3-rgb));
+  --ma-line: rgb(var(--ma-line-rgb));
+  --ma-line-strong: rgb(var(--ma-line-strong-rgb));
 
   /* Texto (contraste corrigido sobre canvas) */
-  --ma-fg: #f3f5f7;          /* primário   (~17:1) */
-  --ma-fg-2: #b4bcc8;        /* secundário (~9:1)  */
-  --ma-fg-3: #868f9c;        /* terciário  (~5:1)  */
-  --ma-fg-disabled: #5b626d;
+  --ma-fg-rgb: 243 245 247;
+  --ma-fg-2-rgb: 180 188 200;
+  --ma-fg-3-rgb: 134 143 156;
+  --ma-fg-disabled-rgb: 91 98 109;
+  --ma-fg: rgb(var(--ma-fg-rgb));
+  --ma-fg-2: rgb(var(--ma-fg-2-rgb));
+  --ma-fg-3: rgb(var(--ma-fg-3-rgb));
+  --ma-fg-disabled: rgb(var(--ma-fg-disabled-rgb));
 
   /* Marca */
-  --ma-brand: #cbfb00;
-  --ma-brand-hover: #d6ff2b;
-  --ma-brand-press: #b0dc00;
-  --ma-brand-ink: #0b0c0e;   /* texto sobre lime */
+  --ma-brand-rgb: 203 251 0;
+  --ma-brand-hover-rgb: 214 255 43;
+  --ma-brand-press-rgb: 176 220 0;
+  --ma-brand-ink-rgb: 11 12 14;
+  --ma-brand: rgb(var(--ma-brand-rgb));
+  --ma-brand-hover: rgb(var(--ma-brand-hover-rgb));
+  --ma-brand-press: rgb(var(--ma-brand-press-rgb));
+  --ma-brand-ink: rgb(var(--ma-brand-ink-rgb));
 
-  /* Semânticas */
-  --ma-ok: #6ebf4d;
-  --ma-warn: #f2b441;
-  --ma-danger: #e0523c;
-  --ma-info: #4e7dc4;
+  /* Semânticas (contraste AA como texto sobre canvas/panel/panel-2) */
+  --ma-ok-rgb: 77 154 69;
+  --ma-warn-rgb: 205 137 33;
+  --ma-danger-rgb: 233 90 78;
+  --ma-info-rgb: 90 150 222;
+  --ma-ok: rgb(var(--ma-ok-rgb));
+  --ma-warn: rgb(var(--ma-warn-rgb));
+  --ma-danger: rgb(var(--ma-danger-rgb));
+  --ma-info: rgb(var(--ma-info-rgb));
+
+  /* Avatar (círculo colorido por hash do nome) — theme-aware: escuro c/ texto claro. */
+  --ma-avatar-sat: 42%;
+  --ma-avatar-bg-l: 24%;
+  --ma-avatar-bd-l: 34%;
+  --ma-avatar-fg-sat: 48%;
+  --ma-avatar-fg-l: 84%;
 
   /* Raios */
   --ma-r-sm: 6px;
@@ -54,32 +80,310 @@
   --ma-dur-fast: 120ms;
   --ma-dur: 200ms;
 
-  /* Glassmorphism */
-  --ma-glass-fill: rgba(23, 26, 31, 0.66);
-  --ma-glass-fill-strong: rgba(23, 26, 31, 0.80);
-  --ma-glass-fill-elevated: rgba(18, 19, 23, 0.82);
-  --ma-glass-blur: 18px;
-  --ma-glass-blur-elevated: 26px;
-  --ma-glass-saturate: 150%;
-  --ma-glass-brightness: 0.96;
-  --ma-glass-contrast: 1.06;
-  --ma-glass-stroke: rgba(255, 255, 255, 0.08);
-  --ma-glass-highlight: rgba(255, 255, 255, 0.06);
-  --ma-glass-shadow: 0 20px 48px rgba(0,0,0,0.46), 0 4px 14px rgba(0,0,0,0.32);
+  /* Vidro fosco: exclusivo de componentes que flutuam sobre o conteúdo.
+     Fills mais claros que os cards (panel) para o overlay "flutuar" acima,
+     blur alto + saturação/brilho para um fosco nítido e legível. */
+  --ma-overlay-fill: rgba(30, 34, 42, 0.76);
+  --ma-popover-fill: rgba(33, 38, 47, 0.70);
+  --ma-tooltip-fill: rgba(40, 45, 55, 0.84);
+  --ma-overlay-blur: 28px;
+  --ma-popover-blur: 22px;
+  --ma-tooltip-blur: 16px;
+  --ma-glass-fill: var(--ma-popover-fill);
+  --ma-glass-fill-strong: var(--ma-overlay-fill);
+  --ma-glass-fill-elevated: var(--ma-overlay-fill);
+  --ma-glass-blur: var(--ma-popover-blur);
+  --ma-glass-blur-elevated: var(--ma-overlay-blur);
+  --ma-glass-saturate: 160%;
+  --ma-glass-brightness: 1.08;
+  --ma-glass-contrast: 1.0;
+  --ma-glass-stroke: rgba(255, 255, 255, 0.14);
+  --ma-glass-highlight: rgba(255, 255, 255, 0.10);
+  --ma-glass-shadow: 0 24px 60px rgba(0, 0, 0, 0.54), 0 6px 16px rgba(0, 0, 0, 0.36);
+  --ma-topbar-fill: rgba(16, 17, 21, 0.72);
+  --ma-sidebar-fill: rgba(20, 22, 27, 0.80);
+  --ma-scrim: rgba(0, 0, 0, 0.56);
+  --ma-popover-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.64), 0 6px 16px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme='light'],
+:root[data-theme='hybrid'] {
+  color-scheme: light;
+  --ma-canvas-rgb: 247 247 245;
+  --ma-panel-rgb: 255 255 255;
+  --ma-panel-2-rgb: 243 244 241;
+  --ma-panel-3-rgb: 237 239 235;
+  --ma-line-rgb: 221 224 218;
+  --ma-line-strong-rgb: 194 200 191;
+  --ma-fg-rgb: 26 29 27;
+  --ma-fg-2-rgb: 76 83 78;
+  --ma-fg-3-rgb: 96 105 98;
+  --ma-fg-disabled-rgb: 153 160 154;
+  /* As cores de marca e estados mantêm a tonalidade original em todos os temas. */
+  --ma-brand-rgb: 203 251 0;
+  --ma-brand-hover-rgb: 214 255 43;
+  --ma-brand-press-rgb: 176 220 0;
+  --ma-brand-ink-rgb: 11 12 14;
+  --ma-ok-rgb: 77 154 69;
+  --ma-warn-rgb: 205 137 33;
+  --ma-danger-rgb: 233 90 78;
+  --ma-info-rgb: 90 150 222;
+  /* Avatar claro preserva o matiz real, usando fundo suave para legibilidade. */
+  --ma-avatar-sat: 58%;
+  --ma-avatar-bg-l: 90%;
+  --ma-avatar-bd-l: 80%;
+  --ma-avatar-fg-sat: 52%;
+  --ma-avatar-fg-l: 33%;
+  --ma-shadow-1: 0 1px 2px rgba(30, 36, 31, 0.08);
+  --ma-shadow-2: 0 8px 24px rgba(30, 36, 31, 0.08), 0 1px 2px rgba(30, 36, 31, 0.06);
+  --ma-shadow-3: 0 18px 50px rgba(30, 36, 31, 0.16), 0 2px 8px rgba(30, 36, 31, 0.08);
+  --ma-ring: 0 0 0 3px rgba(203, 251, 0, 0.32);
+  --ma-overlay-fill: rgba(255, 255, 255, 0.72);
+  --ma-popover-fill: rgba(255, 255, 255, 0.66);
+  --ma-tooltip-fill: rgba(255, 255, 255, 0.80);
+  --ma-glass-fill: var(--ma-popover-fill);
+  --ma-glass-fill-strong: var(--ma-overlay-fill);
+  --ma-glass-fill-elevated: var(--ma-overlay-fill);
+  --ma-glass-brightness: 1.02;
+  --ma-glass-contrast: 1.0;
+  --ma-glass-stroke: rgba(26, 29, 27, 0.14);
+  --ma-glass-highlight: rgba(255, 255, 255, 0.72);
+  --ma-glass-shadow: 0 22px 52px rgba(30, 36, 31, 0.16), 0 4px 12px rgba(30, 36, 31, 0.08);
+  --ma-topbar-fill: rgba(250, 250, 248, 0.80);
+  --ma-sidebar-fill: rgba(244, 245, 242, 0.86);
+  --ma-scrim: rgba(23, 28, 24, 0.28);
+  --ma-popover-shadow: 0 20px 44px -12px rgba(35, 41, 36, 0.26), 0 4px 12px rgba(35, 41, 36, 0.10);
+}
+
+:root[data-theme='hybrid'] .app-sidebar,
+:root[data-theme='hybrid'] .app-mobile-header,
+:root[data-theme='hybrid'] .app-mobile-drawer,
+:root[data-theme='hybrid'] .app-topbar {
+  color-scheme: dark;
+  --ma-canvas-rgb: 11 12 14;
+  --ma-panel-rgb: 18 19 23;
+  --ma-panel-2-rgb: 23 26 31;
+  --ma-panel-3-rgb: 30 34 41;
+  --ma-line-rgb: 38 42 50;
+  --ma-line-strong-rgb: 54 60 70;
+  --ma-fg-rgb: 243 245 247;
+  --ma-fg-2-rgb: 180 188 200;
+  --ma-fg-3-rgb: 134 143 156;
+  --ma-fg-disabled-rgb: 91 98 109;
+  --ma-brand-rgb: 203 251 0;
+  --ma-brand-hover-rgb: 214 255 43;
+  --ma-brand-press-rgb: 176 220 0;
+  --ma-brand-ink-rgb: 11 12 14;
+  --ma-avatar-sat: 42%;
+  --ma-avatar-bg-l: 24%;
+  --ma-avatar-bd-l: 34%;
+  --ma-avatar-fg-sat: 48%;
+  --ma-avatar-fg-l: 84%;
+  --ma-topbar-fill: rgba(11, 12, 14, 0.96);
+  --ma-sidebar-fill: rgba(11, 12, 14, 0.98);
+  --ma-overlay-fill: rgba(18, 19, 23, 0.94);
+  --ma-popover-fill: rgba(23, 26, 31, 0.94);
+  --ma-tooltip-fill: rgba(30, 34, 41, 0.96);
+  --ma-glass-fill: var(--ma-popover-fill);
+  --ma-glass-fill-strong: var(--ma-overlay-fill);
+  --ma-glass-fill-elevated: var(--ma-overlay-fill);
+  --ma-glass-brightness: 1;
+  --ma-glass-stroke: rgba(255, 255, 255, 0.14);
+  --ma-glass-highlight: rgba(255, 255, 255, 0.10);
+}
+
+:root[data-theme='light'] .app-logo-dark,
+body[data-theme='light'] .app-logo-dark { display: none; }
+:root[data-theme='light'] .app-logo-light,
+body[data-theme='light'] .app-logo-light { display: block; }
+:root[data-theme='hybrid'] .app-logo { filter: none; }
+
+/* O verde vivo e mantido em fundos. Como texto/icone sobre superficies claras,
+   usa a mesma familia cromatica em tom escuro para atingir contraste legivel. */
+:root[data-theme='light'] .text-brand {
+  color: rgb(86 111 0 / var(--tw-text-opacity, 1));
+}
+:root[data-theme='light'] .hover\:text-brand:hover,
+:root[data-theme='light'] .group:hover .group-hover\:text-brand {
+  color: rgb(76 99 0 / var(--tw-text-opacity, 1));
+}
+
+.ma-theme-preview[data-theme-preview='light'],
+.ma-theme-preview[data-theme-preview='hybrid'] {
+  --ma-canvas-rgb: 247 247 245;
+  --ma-panel-rgb: 255 255 255;
+  --ma-panel-2-rgb: 243 244 241;
+  --ma-panel-3-rgb: 237 239 235;
+  --ma-line-rgb: 221 224 218;
+  --ma-fg-rgb: 26 29 27;
+  --ma-fg-2-rgb: 76 83 78;
+  --ma-fg-3-rgb: 105 114 107;
+  --ma-brand-rgb: 203 251 0;
+}
+
+.ma-video-player--ios-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  aspect-ratio: auto !important;
+  background: #000;
+}
+
+.ma-theme-preview[data-theme-preview='dark'],
+.ma-theme-preview[data-theme-preview='hybrid'] .ma-theme-preview-sidebar {
+  --ma-canvas-rgb: 11 12 14;
+  --ma-panel-rgb: 18 19 23;
+  --ma-panel-2-rgb: 23 26 31;
+  --ma-panel-3-rgb: 30 34 41;
+  --ma-line-rgb: 38 42 50;
+  --ma-fg-rgb: 243 245 247;
+  --ma-fg-2-rgb: 180 188 200;
+  --ma-fg-3-rgb: 134 143 156;
+  --ma-brand-rgb: 203 251 0;
+}
+
+.app-shell,
+.app-sidebar,
+.app-mobile-header,
+.app-mobile-drawer,
+main,
+.bg-panel,
+.bg-panel-2,
+.bg-panel-3 {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--ma-dur);
+  transition-timing-function: var(--ma-ease);
+}
+
+.app-topbar,
+.app-mobile-header {
+  background-color: var(--ma-topbar-fill);
+  backdrop-filter: blur(28px) saturate(155%) brightness(1.06);
+  -webkit-backdrop-filter: blur(28px) saturate(155%) brightness(1.06);
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight);
+}
+
+.app-sidebar {
+  background-color: var(--ma-sidebar-fill);
+  backdrop-filter: blur(30px) saturate(150%) brightness(1.05);
+  -webkit-backdrop-filter: blur(30px) saturate(150%) brightness(1.05);
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight);
+}
+
+.ma-overlay-surface,
+.ma-popover,
+.ma-context-menu,
+.ma-tooltip {
+  border: 1px solid var(--ma-glass-stroke);
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight), var(--ma-glass-shadow);
+  backdrop-filter: blur(var(--ma-overlay-blur)) saturate(var(--ma-glass-saturate)) brightness(var(--ma-glass-brightness));
+  -webkit-backdrop-filter: blur(var(--ma-overlay-blur)) saturate(var(--ma-glass-saturate)) brightness(var(--ma-glass-brightness));
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--ma-dur);
+  transition-timing-function: var(--ma-ease);
+}
+
+.ma-overlay-surface {
+  background-color: var(--ma-overlay-fill);
+}
+
+.ma-overlay-surface--elevated {
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight), var(--ma-popover-shadow);
+}
+
+.ma-popover,
+.ma-context-menu {
+  background-color: var(--ma-popover-fill);
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight), var(--ma-popover-shadow);
+  backdrop-filter: blur(var(--ma-popover-blur)) saturate(var(--ma-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--ma-popover-blur)) saturate(var(--ma-glass-saturate));
+}
+
+.ma-tooltip {
+  background-color: var(--ma-tooltip-fill);
+  backdrop-filter: blur(var(--ma-tooltip-blur)) saturate(110%);
+  -webkit-backdrop-filter: blur(var(--ma-tooltip-blur)) saturate(110%);
+  box-shadow: inset 0 1px 0 var(--ma-glass-highlight), var(--ma-shadow-2);
+}
+
+.ma-toast--danger {
+  background-color: color-mix(in srgb, var(--ma-popover-fill) 86%, var(--ma-danger) 14%);
+  border-color: rgb(var(--ma-danger-rgb) / 0.34);
+}
+
+.ma-toast--success {
+  background-color: color-mix(in srgb, var(--ma-popover-fill) 88%, var(--ma-ok) 12%);
+  border-color: rgb(var(--ma-ok-rgb) / 0.30);
+}
+
+.ma-scrim {
+  background-color: var(--ma-scrim);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+}
+
+/* Avatar theme-aware: fundo/borda/texto derivados do hue + tokens do tema atual. */
+.ma-avatar {
+  background-color: hsl(var(--ma-avatar-hue, 210) var(--ma-avatar-sat, 42%) var(--ma-avatar-bg-l, 24%));
+  border: 1px solid hsl(var(--ma-avatar-hue, 210) var(--ma-avatar-sat, 42%) var(--ma-avatar-bd-l, 34%));
+  color: hsl(var(--ma-avatar-hue, 210) var(--ma-avatar-fg-sat, 48%) var(--ma-avatar-fg-l, 84%));
+  transition: background-color var(--ma-dur) var(--ma-ease), border-color var(--ma-dur) var(--ma-ease), color var(--ma-dur) var(--ma-ease);
+}
+
+.ma-font-large { font-size: 17px; }
+.ma-high-contrast {
+  --ma-line-rgb: 104 112 101;
+  --ma-line-strong-rgb: 135 145 132;
+  --ma-fg-3-rgb: 90 99 92;
+  --ma-overlay-fill: rgb(var(--ma-panel-rgb) / 0.96);
+  --ma-popover-fill: rgb(var(--ma-panel-2-rgb) / 0.96);
+  --ma-tooltip-fill: rgb(var(--ma-panel-3-rgb) / 0.98);
+  --ma-glass-stroke: rgb(var(--ma-fg-rgb) / 0.50);
+}
+
+:root[data-theme='hybrid'].ma-high-contrast .app-sidebar,
+:root[data-theme='hybrid'].ma-high-contrast .app-mobile-header,
+:root[data-theme='hybrid'].ma-high-contrast .app-mobile-drawer,
+:root[data-theme='hybrid'].ma-high-contrast .app-topbar {
+  --ma-line-rgb: 78 85 96;
+  --ma-line-strong-rgb: 105 115 128;
+  --ma-fg-3-rgb: 174 183 195;
+  --ma-overlay-fill: rgb(var(--ma-panel-rgb) / 0.96);
+  --ma-popover-fill: rgb(var(--ma-panel-2-rgb) / 0.96);
+  --ma-tooltip-fill: rgb(var(--ma-panel-3-rgb) / 0.98);
+  --ma-glass-stroke: rgb(var(--ma-fg-rgb) / 0.50);
+}
+:root[data-theme='dark'].ma-high-contrast, :root:not([data-theme]).ma-high-contrast {
+  --ma-line-rgb: 78 85 96;
+  --ma-line-strong-rgb: 105 115 128;
+  --ma-fg-3-rgb: 174 183 195;
+}
+.ma-focus-emphasis :focus-visible { outline: 3px solid var(--ma-brand); outline-offset: 3px; box-shadow: none; }
+.ma-reduced-motion *, .ma-reduced-motion *::before, .ma-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 @layer base {
   html, body, #root {
     height: 100%;
   }
-  body {
+body {
     background-color: var(--ma-canvas);
     color: var(--ma-fg-2);
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'DM Sans', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    transition: background-color 180ms ease, color 180ms ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -121,7 +425,6 @@
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="datetime-local"]::-webkit-calendar-picker-indicator,
   input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.8);
     cursor: pointer;
   }
   input[type="checkbox"], input[type="radio"] {
@@ -146,6 +449,62 @@
   ::selection {
     background: rgba(203, 251, 0, 0.24);
     color: #fff;
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --ma-overlay-fill: rgb(var(--ma-panel-rgb));
+    --ma-popover-fill: rgb(var(--ma-panel-2-rgb));
+    --ma-tooltip-fill: rgb(var(--ma-panel-3-rgb));
+    --ma-topbar-fill: rgb(var(--ma-panel-rgb));
+    --ma-sidebar-fill: rgb(var(--ma-panel-2-rgb));
+  }
+
+  :root[data-theme='hybrid'] .app-sidebar,
+  :root[data-theme='hybrid'] .app-mobile-header,
+  :root[data-theme='hybrid'] .app-mobile-drawer,
+  :root[data-theme='hybrid'] .app-topbar {
+    --ma-overlay-fill: rgb(var(--ma-panel-rgb));
+    --ma-popover-fill: rgb(var(--ma-panel-2-rgb));
+    --ma-tooltip-fill: rgb(var(--ma-panel-3-rgb));
+    --ma-topbar-fill: rgb(var(--ma-panel-rgb));
+    --ma-sidebar-fill: rgb(var(--ma-panel-2-rgb));
+  }
+
+  :root[data-theme='hybrid'].ma-high-contrast .app-sidebar,
+  :root[data-theme='hybrid'].ma-high-contrast .app-mobile-header,
+  :root[data-theme='hybrid'].ma-high-contrast .app-mobile-drawer,
+  :root[data-theme='hybrid'].ma-high-contrast .app-topbar {
+    --ma-overlay-fill: rgb(var(--ma-panel-rgb));
+    --ma-popover-fill: rgb(var(--ma-panel-2-rgb));
+    --ma-tooltip-fill: rgb(var(--ma-panel-3-rgb));
+  }
+
+  .ma-overlay-surface,
+  .ma-popover,
+  .ma-context-menu,
+  .ma-tooltip,
+  .ma-scrim,
+  .app-topbar,
+  .app-mobile-header,
+  .app-mobile-drawer,
+  .app-sidebar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 
@@ -201,10 +560,6 @@
     box-shadow: inset 0 1px 0 var(--ma-glass-highlight), var(--ma-glass-shadow);
   }
 
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .ma-glass, .ma-glass-strong { background-color: var(--ma-panel-2); }
-    .ma-glass-elevated { background-color: var(--ma-panel); }
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -213,4 +568,12 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Fallback fora das layers: precisa vencer as superfícies translúcidas acima. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ma-glass, .ma-glass-strong { background-color: var(--ma-panel-2); }
+  .ma-glass-elevated, .ma-overlay-surface { background-color: var(--ma-panel); }
+  .ma-popover, .ma-context-menu { background-color: var(--ma-panel-2); }
+  .ma-tooltip { background-color: var(--ma-panel-3); }
 }

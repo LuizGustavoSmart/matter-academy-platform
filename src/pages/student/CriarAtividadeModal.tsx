@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { callFn, supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Modal, Field, Input, Textarea, Select, Alert } from '../../components/ui';
@@ -37,11 +37,12 @@ export default function CriarAtividadeModal({
       let anexo_url: string | null = null;
       let anexo_nome: string | null = null;
       if (file) { const up = await uploadAtividadeFile(file, `atividades/${turmaId}/${cursoId}`); anexo_url = up.path; anexo_nome = up.nome; }
-      const { error } = await supabase.from('atividades').insert({
+      const { data: created, error } = await supabase.from('atividades').insert({
         turma_id: turmaId, curso_id: cursoId, aula_id: aulaId || null, titulo: titulo.trim(), descricao: descricao.trim(),
         anexo_url, anexo_nome, nota_maxima: notaMaxima, prazo: prazo ? new Date(prazo).toISOString() : null, professor_id: profile.id,
-      });
+      }).select('id').single();
       if (error) throw error;
+      if (created) void callFn('notifications', 'activity-created', { activity_id: created.id }).catch(() => undefined);
       onDone();
     } catch (e) {
       setErr((e as Error).message);

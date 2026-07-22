@@ -1,6 +1,10 @@
-import { ReactNode, HTMLAttributes } from 'react';
+import {
+  ReactNode, HTMLAttributes, useId, useState, cloneElement, isValidElement,
+  type ReactElement,
+} from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, AlertTriangle, Info, CheckCircle2, XCircle, ChevronLeft } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ChevronRight, AlertTriangle, Info, CheckCircle2, XCircle, ChevronLeft, X } from 'lucide-react';
 import { cn } from './util';
 
 /* ─────────────────────────────── Card ──────────────────────────────── */
@@ -10,8 +14,8 @@ export function Card({
   return (
     <div
       className={cn(
-        'bg-panel border border-line rounded-xl',
-        hoverable && 'transition-transform duration-200 ease-ma hover:-translate-y-0.5 hover:shadow-ma-2',
+        'bg-panel border border-line rounded-xl shadow-ma-1',
+        hoverable && 'transition-[border-color,box-shadow,background-color,transform] duration-200 ease-ma hover:-translate-y-0.5 hover:border-line-strong hover:shadow-ma-2 active:translate-y-0',
         className,
       )}
       {...rest}
@@ -42,7 +46,7 @@ export function StatTile({
       onClick={onClick}
       aria-pressed={onClick ? !!active : undefined}
       className={cn(
-        'text-left bg-panel border rounded-xl p-4 w-full transition-all duration-200 ease-ma hover:-translate-y-0.5 hover:shadow-ma-2',
+        'text-left bg-panel border rounded-xl p-4 w-full transition-[border-color,box-shadow,background-color] duration-200 ease-ma hover:shadow-ma-1',
         onClick && 'cursor-pointer',
         active ? 'border-brand/50 bg-brand/[0.04]' : toneRing[tone],
       )}
@@ -134,8 +138,9 @@ export function Tabs<T extends string>({
 }: {
   tabs: { value: T; label: ReactNode; count?: number }[]; value: T; onChange: (v: T) => void; className?: string;
 }) {
+  const activeLayoutId = useId();
   return (
-    <div className={cn('flex gap-1 border-b border-line overflow-x-auto scrollbar-thin', className)} role="tablist">
+    <div className={cn('flex gap-1 overflow-x-auto rounded-xl border border-line bg-panel-2/55 p-1 scrollbar-thin', className)} role="tablist">
       {tabs.map((t) => {
         const active = t.value === value;
         return (
@@ -145,13 +150,14 @@ export function Tabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(t.value)}
             className={cn(
-              'relative px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px border-b-2',
-              active ? 'text-fg border-brand' : 'text-fg-3 border-transparent hover:text-fg-2',
+              'relative overflow-hidden rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+              active ? 'text-fg' : 'text-fg-3 hover:text-fg-2',
             )}
           >
-            {t.label}
+            {active && <motion.span layoutId={activeLayoutId} className="absolute inset-0 rounded-lg border border-line bg-panel shadow-ma-1" transition={{ type: 'spring', stiffness: 450, damping: 38 }} />}
+            <span className="relative z-[1]">{t.label}</span>
             {t.count !== undefined && (
-              <span className={cn('ml-1.5 text-xs rounded-full px-1.5 py-0.5', active ? 'bg-brand/15 text-brand' : 'bg-panel-3 text-fg-3')}>{t.count}</span>
+              <span className={cn('relative z-[1] ml-1.5 rounded-full px-1.5 py-0.5 text-xs', active ? 'bg-brand/15 text-brand' : 'bg-panel-3 text-fg-3')}>{t.count}</span>
             )}
           </button>
         );
@@ -201,21 +207,58 @@ export function Pagination({
 }
 
 /* ─────────────────────────────── Tooltip ───────────────────────────── */
-export function Tooltip({ label, children, side = 'top' }: { label: string; children: ReactNode; side?: 'top' | 'bottom' }) {
+export function Tooltip({
+  label, children, side = 'top', className = '',
+}: {
+  label: string;
+  children: ReactNode;
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  className?: string;
+}) {
+  const tooltipId = useId();
+  const [visible, setVisible] = useState(false);
+  const positions = {
+    top: 'bottom-full left-1/2 mb-2 -translate-x-1/2',
+    right: 'left-full top-1/2 ml-2 -translate-y-1/2',
+    bottom: 'left-1/2 top-full mt-2 -translate-x-1/2',
+    left: 'right-full top-1/2 mr-2 -translate-y-1/2',
+  };
+  const child = isValidElement(children)
+    ? (() => {
+      const element = children as ReactElement<{ 'aria-describedby'?: string }>;
+      const describedBy = [element.props['aria-describedby'], visible ? tooltipId : undefined].filter(Boolean).join(' ') || undefined;
+      return cloneElement(element, { 'aria-describedby': describedBy });
+    })()
+    : children;
+
   return (
-    <span className="relative inline-flex group/tt">
-      {children}
-      <span
-        role="tooltip"
-        className={cn(
-          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 whitespace-nowrap',
-          'px-2 py-1 rounded-md bg-panel-3 border border-line text-fg text-xs shadow-ma-2',
-          'opacity-0 group-hover/tt:opacity-100 transition-opacity',
-          side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+    <span
+      className={cn('relative inline-flex', className)}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={(event) => { if (!event.currentTarget.contains(document.activeElement)) setVisible(false); }}
+      onFocusCapture={() => setVisible(true)}
+      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setVisible(false); }}
+      onKeyDownCapture={(event) => { if (event.key === 'Escape') setVisible(false); }}
+    >
+      {child}
+      <AnimatePresence>
+        {visible && (
+          <motion.span
+            id={tooltipId}
+            role="tooltip"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className={cn(
+              'ma-tooltip pointer-events-none absolute z-[100] whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-fg',
+              positions[side],
+            )}
+          >
+            {label}
+          </motion.span>
         )}
-      >
-        {label}
-      </span>
+      </AnimatePresence>
     </span>
   );
 }
@@ -226,7 +269,7 @@ export function FilterChip({ label, onRemove }: { label: ReactNode; onRemove: ()
     <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-panel-3 border border-line text-xs text-fg-2">
       {label}
       <button onClick={onRemove} aria-label="Remover filtro" className="text-fg-3 hover:text-fg rounded-full">
-        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+        <X className="h-3 w-3" aria-hidden />
       </button>
     </span>
   );

@@ -64,16 +64,16 @@ export default function AdminCursoAulas() {
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-[#d6deed] mb-6 flex-wrap">
-        <button onClick={() => nav('/admin/turmas')} className="hover:text-white transition-colors">
+      <div className="flex items-center gap-2 text-sm text-fg-2 mb-6 flex-wrap">
+        <button onClick={() => nav('/admin/turmas')} className="hover:text-fg transition-colors">
           Turmas
         </button>
-        <ChevronRight className="w-4 h-4 text-[#434d5e]" />
-        <button onClick={() => nav(`/admin/turmas/${turmaId}/cursos`)} className="hover:text-white transition-colors">
+        <ChevronRight className="w-4 h-4 text-fg-3" />
+        <button onClick={() => nav(`/admin/turmas/${turmaId}/cursos`)} className="hover:text-fg transition-colors">
           {turma?.nome ?? '...'}
         </button>
-        <ChevronRight className="w-4 h-4 text-[#434d5e]" />
-        <span className="text-white">{curso?.titulo ?? '...'}</span>
+        <ChevronRight className="w-4 h-4 text-fg-3" />
+        <span className="text-fg">{curso?.titulo ?? '...'}</span>
       </div>
 
       <div className="flex items-center justify-between mb-6">
@@ -96,12 +96,12 @@ export default function AdminCursoAulas() {
             {aulas.map((a, i) => {
               const ytId = getYouTubeId(a.youtube_url);
               return (
-                <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-[#1c1f26] last:border-0 hover:bg-[#111]">
-                  <div className="w-20 h-11 rounded bg-black overflow-hidden flex-shrink-0 border border-[#1c1f26]">
+                <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2 transition-colors">
+                  <div className="w-20 h-11 rounded bg-black overflow-hidden flex-shrink-0 border border-line">
                     {ytId && <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{a.ordem}. {a.titulo}</p>
+                    <p className="text-fg text-sm font-medium truncate">{a.ordem}. {a.titulo}</p>
                     <p className="meta truncate">{a.descricao || '—'}</p>
                   </div>
                   <div className="flex gap-1">
@@ -112,7 +112,7 @@ export default function AdminCursoAulas() {
                         href={a.youtube_url}
                         target="_blank"
                         rel="noopener"
-                        className="inline-flex items-center justify-center px-3 py-2 rounded-md text-[#d6deed] hover:bg-[#434d5e]/20 transition-colors"
+                        className="inline-flex items-center justify-center px-3 py-2 rounded-md text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors"
                       >
                         <ExternalLink className="w-4 h-4" />
                       </a>
@@ -213,7 +213,7 @@ function AulaModal({
           <label>Descrição</label>
           <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} />
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-danger text-sm">{err}</p>}
       </div>
     </Modal>
   );

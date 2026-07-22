@@ -344,11 +344,11 @@ export function ImportWizard({
                           </td>
                         ))}
                         <td className="px-1 py-1">
-                          <select value={r.papel} onChange={(e) => updateCell(r._id, 'papel', e.target.value)}
+                          <Select value={r.papel} onChange={(e) => updateCell(r._id, 'papel', e.target.value)}
                             className="!py-1 !px-2 !text-[13px] !bg-transparent !border-transparent hover:!border-line">
                             <option value="">{ROLE_LABEL[defRole]} (padrão)</option>
                             {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                          </select>
+                          </Select>
                         </td>
                         <td className="px-2 py-1.5">
                           <div className="flex flex-wrap gap-1">

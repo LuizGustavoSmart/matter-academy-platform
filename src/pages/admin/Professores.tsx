@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Copy, Check, Trash2, RefreshCw, Pencil, Search, GraduationCap, X } from 'lucide-react';
 import { supabase, callFn } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
+import { Button, Card, Badge, Modal, Empty, Select, Toast } from '../../components/ui';
 
 type Turma = { id: string; nome: string };
 type StaffRole = 'professor' | 'monitor';
@@ -46,13 +46,21 @@ export default function AdminProfessores() {
       supabase.from('user_turmas').select('user_id,turma_id'),
     ]);
     const turmasMap = new Map((ts ?? []).map((t) => [t.id, t]));
-    const rows: StaffRow[] = (ps ?? []).map((p: any) => ({
-      ...p,
-      turmas: (uts ?? [])
-        .filter((r) => r.user_id === p.id)
-        .map((r) => turmasMap.get(r.turma_id))
-        .filter(Boolean) as Turma[],
-    }));
+    const rows: StaffRow[] = (ps ?? []).flatMap((p) => {
+      if (p.role !== 'professor' && p.role !== 'monitor') return [];
+      return [{
+        id: p.id,
+        email: p.email,
+        role: p.role,
+        status: p.status,
+        created_at: p.created_at ?? '',
+        invite_token: p.invite_token,
+        turmas: (uts ?? [])
+          .filter((r) => r.user_id === p.id)
+          .map((r) => turmasMap.get(r.turma_id))
+          .filter(Boolean) as Turma[],
+      }];
+    });
     setStaff(rows);
     setTurmas(ts ?? []);
     setLoading(false);
@@ -133,8 +141,8 @@ export default function AdminProfessores() {
       {!loading && (
         <div className="grid grid-cols-2 gap-3 mb-6">
           {([
-            { label: 'Professores', value: stats.professores, filterValue: 'professor' as StaffRole, valueClass: 'text-yellow-400' },
-            { label: 'Monitores',   value: stats.monitores,   filterValue: 'monitor'   as StaffRole, valueClass: 'text-[#d6deed]' },
+            { label: 'Professores', value: stats.professores, filterValue: 'professor' as StaffRole, valueClass: 'text-warn' },
+            { label: 'Monitores',   value: stats.monitores,   filterValue: 'monitor'   as StaffRole, valueClass: 'text-fg-2' },
           ] as const).map((card) => {
             const isSelected = filterRole === card.filterValue;
             return (
@@ -143,12 +151,12 @@ export default function AdminProfessores() {
                 onClick={() => setFilterRole(isSelected ? '' : card.filterValue)}
                 className={`p-4 rounded-lg border text-left transition-all ${
                   isSelected
-                    ? 'bg-[#cbfb00]/5 border-[#cbfb00]/40'
-                    : 'bg-[#0d0d0d] border-[#1c1f26] hover:border-[#434d5e]'
+                    ? 'bg-brand/[0.05] border-brand/40'
+                    : 'bg-panel border-line hover:border-line-strong'
                 }`}
               >
                 <p className={`text-2xl font-bold mb-1 ${card.valueClass}`}>{card.value}</p>
-                <p className="text-[#8b929e] text-xs font-medium uppercase tracking-wider">{card.label}</p>
+                <p className="text-fg-3 text-xs font-medium uppercase tracking-wider">{card.label}</p>
               </button>
             );
           })}
@@ -159,7 +167,7 @@ export default function AdminProfessores() {
       <Card className="p-4 mb-4">
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-fg-3" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -167,7 +175,7 @@ export default function AdminProfessores() {
               className="!pl-9"
             />
           </div>
-          <select
+          <Select
             value={filterRole}
             onChange={(e) => setFilterRole(e.target.value as '' | StaffRole)}
             className="max-w-[180px]"
@@ -175,30 +183,30 @@ export default function AdminProfessores() {
             <option value="">Todos os papéis</option>
             <option value="professor">Professor</option>
             <option value="monitor">Monitor</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={filterTurma}
             onChange={(e) => setFilterTurma(e.target.value)}
             className="max-w-[220px]"
           >
             <option value="">Todas as turmas</option>
             {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-          </select>
+          </Select>
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1.5 text-xs text-[#8b929e] hover:text-[#d6deed] transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 text-xs text-fg-3 hover:text-fg-2 transition-colors whitespace-nowrap"
             >
               <X className="w-3.5 h-3.5" /> Limpar filtros
             </button>
           )}
         </div>
         {hasFilters && !loading && (
-          <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
+          <p className="text-xs text-fg-3 mt-3 border-t border-line pt-3">
             Mostrando{' '}
-            <span className="text-white font-medium">{filtered.length}</span>
+            <span className="text-fg font-medium">{filtered.length}</span>
             {' '}de{' '}
-            <span className="text-white font-medium">{staff.length}</span>
+            <span className="text-fg font-medium">{staff.length}</span>
             {' '}membros
           </p>
         )}
@@ -225,12 +233,12 @@ export default function AdminProfessores() {
         <Card>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#1c1f26] text-left">
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Email</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Turmas</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed] hidden md:table-cell">Cadastro</th>
+              <tr className="border-b border-line text-left">
+                <th className="px-4 py-3 font-medium text-fg-2">Email</th>
+                <th className="px-4 py-3 font-medium text-fg-2">Papel</th>
+                <th className="px-4 py-3 font-medium text-fg-2">Status</th>
+                <th className="px-4 py-3 font-medium text-fg-2">Turmas</th>
+                <th className="px-4 py-3 font-medium text-fg-2 hidden md:table-cell">Cadastro</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -238,11 +246,11 @@ export default function AdminProfessores() {
               {filtered.map((s) => (
                 <tr
                   key={s.id}
-                  className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors"
+                  className="border-b border-line last:border-0 hover:bg-panel-2 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <span className="text-white block truncate max-w-[200px]">{s.email}</span>
-                    {s.id === current?.id && <span className="text-[#8b929e] text-xs">você</span>}
+                    <span className="text-fg block truncate max-w-[200px]">{s.email}</span>
+                    {s.id === current?.id && <span className="text-fg-3 text-xs">você</span>}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={ROLE_TONE[s.role]}>{ROLE_LABEL[s.role]}</Badge>
@@ -255,12 +263,12 @@ export default function AdminProfessores() {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {s.turmas.length === 0
-                        ? <span className="text-[#434d5e] text-xs">—</span>
+                        ? <span className="text-fg-3 text-xs">—</span>
                         : s.turmas.map((t) => <Badge key={t.id}>{t.nome}</Badge>)
                       }
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell text-[#8b929e] text-xs">
+                  <td className="px-4 py-3 hidden md:table-cell text-fg-3 text-xs">
                     {new Date(s.created_at).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -315,7 +323,7 @@ export default function AdminProfessores() {
         footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}
       >
         <p className="mb-3">Copie e envie este link ao membro. Válido por 7 dias.</p>
-        <div className="border border-[#1c1f26] bg-black rounded-md p-3 text-sm text-[#cbfb00] break-all">
+        <div className="border border-line bg-panel-3 rounded-md p-3 text-sm text-brand break-all">
           {linkModal}
         </div>
         <Button
@@ -384,17 +392,17 @@ function CreateStaffModal({
         </div>
         <div>
           <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+          <Select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
             <option value="professor">Professor</option>
             <option value="monitor">Monitor</option>
-          </select>
+          </Select>
         </div>
         <div>
           <label>Turmas</label>
           {turmas.length === 0 ? (
             <p className="meta">Nenhuma turma criada ainda</p>
           ) : (
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
+            <div className="space-y-2 max-h-48 overflow-y-auto border border-line rounded-md p-3">
               {turmas.map((t) => (
                 <label key={t.id} className="flex items-center gap-2 cursor-pointer !mb-0">
                   <input
@@ -403,13 +411,13 @@ function CreateStaffModal({
                     onChange={() => toggle(t.id)}
                     className="!w-4 !h-4"
                   />
-                  <span className="text-white text-sm">{t.nome}</span>
+                  <span className="text-fg text-sm">{t.nome}</span>
                 </label>
               ))}
             </div>
           )}
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-danger text-sm">{err}</p>}
       </div>
     </Modal>
   );
@@ -478,15 +486,15 @@ function EditStaffModal({
         </div>
         <div>
           <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)} disabled={isSelf}>
+          <Select value={role} onChange={(e) => setRole(e.target.value as StaffRole)} disabled={isSelf}>
             <option value="professor">Professor</option>
             <option value="monitor">Monitor</option>
-          </select>
+          </Select>
           {isSelf && <p className="meta mt-1">Você não pode alterar seu próprio papel</p>}
         </div>
         <div>
           <label>Turmas</label>
-          <div className="space-y-2 max-h-48 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
+          <div className="space-y-2 max-h-48 overflow-y-auto border border-line rounded-md p-3">
             {turmas.length === 0 ? (
               <p className="meta">Nenhuma turma</p>
             ) : turmas.map((t) => (
@@ -497,12 +505,12 @@ function EditStaffModal({
                   onChange={() => toggle(t.id)}
                   className="!w-4 !h-4"
                 />
-                <span className="text-white text-sm">{t.nome}</span>
+                <span className="text-fg text-sm">{t.nome}</span>
               </label>
             ))}
           </div>
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-danger text-sm">{err}</p>}
       </div>
     </Modal>
   );

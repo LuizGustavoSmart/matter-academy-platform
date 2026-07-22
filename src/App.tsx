@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PreferencesProvider } from './contexts/PreferencesContext';
 import { ToastProvider, ConfirmProvider } from './components/ui';
 import Login from './pages/Login';
 import Landing from './pages/Landing';
@@ -30,6 +31,8 @@ import DuvidasIndex from './pages/student/DuvidasIndex';
 import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
 import MinhasTurmas from './pages/student/MinhasTurmas';
 import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
+import Settings from './pages/Settings';
+import TeacherDashboard from './pages/teacher/TeacherDashboard';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -51,8 +54,8 @@ function Blocked() {
     <div className="min-h-screen grid place-items-center px-4">
       <div className="text-center max-w-md">
         <h1 className="mb-3">Conta bloqueada</h1>
-        <p className="text-[#d6deed] mb-6">Sua conta foi bloqueada. Entre em contato com o administrador.</p>
-        <button onClick={() => signOut()} className="text-[#cbfb00] hover:underline text-sm">Sair</button>
+        <p className="text-fg-2 mb-6">Sua conta foi bloqueada. Entre em contato com o administrador.</p>
+        <button onClick={() => signOut()} className="text-brand hover:text-brand-hover hover:underline text-sm transition-colors">Sair</button>
       </div>
     </div>
   );
@@ -76,10 +79,11 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <BrowserRouter>
-              <Routes>
+        <PreferencesProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <BrowserRouter>
+                <Routes>
                 <Route path="/" element={<RootRedirect />} />
                 <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
                 <Route path="/ativar" element={<Activate />} />
@@ -97,12 +101,13 @@ export default function App() {
                     <Route path="/admin/aulas" element={<AdminAulas />} />
                     <Route path="/admin/mapa-professores" element={<MapaProfessores />} />
                     <Route path="/admin/financeiro" element={<Financeiro />} />
+                    <Route path="/admin/configuracoes" element={<Settings />} />
                   </Route>
                 </Route>
 
                 <Route element={<RequireAuth roles={["student", "professor", "monitor"]} />}>
                   <Route element={<StudentLayout />}>
-                    <Route path="/dashboard" element={<StudentDashboard />} />
+                    <Route path="/dashboard" element={<RoleDashboard />} />
                     <Route path="/curso/:id" element={<StudentCourse />} />
                     <Route path="/curso/:id/cronograma" element={<Cronograma />} />
                     <Route path="/comunidade" element={<Comunidade />} />
@@ -114,15 +119,24 @@ export default function App() {
                     <Route path="/duvidas/:duvidaId" element={<DuvidaDetalhe />} />
                     <Route path="/turmas" element={<MinhasTurmas />} />
                     <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
+                    <Route path="/configuracoes" element={<Settings />} />
                   </Route>
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </ConfirmProvider>
-        </ToastProvider>
+                </Routes>
+              </BrowserRouter>
+            </ConfirmProvider>
+          </ToastProvider>
+        </PreferencesProvider>
       </AuthProvider>
     </MotionConfig>
   );
+}
+
+function RoleDashboard() {
+  const { profile } = useAuth();
+  return profile?.role === 'professor' || profile?.role === 'monitor'
+    ? <TeacherDashboard />
+    : <StudentDashboard />;
 }

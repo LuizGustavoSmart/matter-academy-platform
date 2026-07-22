@@ -1,4 +1,4 @@
-import { BookOpen, Layers, ClipboardList, HelpCircle, MessageSquare } from 'lucide-react';
+import { BookOpen, Layers, ClipboardList, HelpCircle, MessageSquare, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import AppShell, { type NavGroup } from './AppShell';
 
@@ -12,7 +12,7 @@ export default function StudentLayout() {
   const nav: NavGroup[] = [
     {
       items: [
-        { to: '/dashboard', label: 'Aulas', icon: BookOpen, match: (p) => p === '/dashboard' || p.startsWith('/curso/') },
+        { to: '/dashboard', label: isStaff ? 'Visão geral' : 'Aulas', icon: isStaff ? LayoutDashboard : BookOpen, match: (p) => p === '/dashboard' || (!isStaff && p.startsWith('/curso/')) },
         ...(isStaff ? [{ to: '/turmas', label: 'Turmas', icon: Layers, match: (p: string) => p.startsWith('/turmas') }] : []),
         { to: '/atividades', label: 'Atividades', icon: ClipboardList, match: (p) => p.startsWith('/atividades') || p.startsWith('/atividade/') },
         { to: '/duvidas', label: 'Dúvidas', icon: HelpCircle, match: (p) => p.startsWith('/duvidas') },

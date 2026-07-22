@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,10 +9,18 @@
     
     <meta property="og:title" content="Matter Academy">
   <meta name="twitter:title" content="Matter Academy">
-  <meta name="description" content="Matter Academy Platform is a web application for managing educational content and user access.">
-  <meta property="og:description" content="Matter Academy Platform is a web application for managing educational content and user access.">
-  <meta name="twitter:description" content="Matter Academy Platform is a web application for managing educational content and user access.">
+  <meta name="description" content="Matter Academy — aprendizagem, comunidade e gestão em um só lugar.">
+  <meta property="og:description" content="Matter Academy — aprendizagem, comunidade e gestão em um só lugar.">
+  <meta name="twitter:description" content="Matter Academy — aprendizagem, comunidade e gestão em um só lugar.">
   <meta property="og:type" content="website">
+  <script>
+    try {
+      const theme = localStorage.getItem('ma_theme');
+      if (theme === 'light' || theme === 'dark' || theme === 'hybrid') {
+        document.documentElement.dataset.theme = theme;
+      }
+    } catch (_) {}
+  </script>
 </head>
   <body>
     <div id="root"></div>

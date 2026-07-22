@@ -487,6 +487,8 @@ export type Database = {
       profiles: {
         Row: {
           activated_at: string | null
+          avatar_url: string | null
+          cargo: string | null
           created_at: string | null
           email: string
           empresa: string | null
@@ -503,6 +505,8 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          avatar_url?: string | null
+          cargo?: string | null
           created_at?: string | null
           email: string
           empresa?: string | null
@@ -519,6 +523,8 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          avatar_url?: string | null
+          cargo?: string | null
           created_at?: string | null
           email?: string
           empresa?: string | null
@@ -534,6 +540,91 @@ export type Database = {
           telefone?: string | null
         }
         Relationships: []
+      }
+      privacy_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          request_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          request_type: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          request_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "privacy_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          focus_emphasis: boolean
+          font_scale: string
+          high_contrast: boolean
+          language: string
+          notification_preferences: Json
+          privacy_preferences: Json
+          reduced_motion: boolean
+          theme: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          focus_emphasis?: boolean
+          font_scale?: string
+          high_contrast?: boolean
+          language?: string
+          notification_preferences?: Json
+          privacy_preferences?: Json
+          reduced_motion?: boolean
+          theme?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          focus_emphasis?: boolean
+          font_scale?: string
+          high_contrast?: boolean
+          language?: string
+          notification_preferences?: Json
+          privacy_preferences?: Json
+          reduced_motion?: boolean
+          theme?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       progresso: {
         Row: {
@@ -683,6 +774,18 @@ export type Database = {
       }
     }
     Views: {
+      profile_directory: {
+        Row: {
+          avatar_url: string | null
+          cargo: string | null
+          empresa: string | null
+          id: string | null
+          nome: string | null
+          role: string | null
+          sobrenome: string | null
+        }
+        Relationships: []
+      }
       lessons_public: {
         Row: {
           created_at: string | null

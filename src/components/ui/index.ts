@@ -8,11 +8,13 @@ export { cn, initials, stringHue } from './util';
 
 export {
   Spinner, Button, IconButton, Field,
-  Input, Textarea, Select, SearchInput,
+  Input, Textarea, SearchInput,
   Checkbox, Radio, Switch,
   Badge, Avatar, ProgressBar, Skeleton, SkeletonText,
 } from './primitives';
 export type { BtnProps, BtnVariant, BadgeTone } from './primitives';
+
+export { Select } from './select';
 
 export {
   Card, StatTile, EmptyState, Empty, Alert,
@@ -21,7 +23,7 @@ export {
 export type { Crumb } from './surfaces';
 
 export {
-  Modal, Drawer, DropdownMenu, ConfirmProvider, useConfirm,
+  Modal, Drawer, DropdownMenu, ContextMenu, ConfirmProvider, useConfirm,
   ToastProvider, useToast, Toast,
 } from './overlays';
 export type { MenuItem } from './overlays';

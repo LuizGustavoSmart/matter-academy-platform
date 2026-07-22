@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getSignedUrl } from '../lib/storage';
+import { useToast } from './ui';
 
 export function FileLink({
   bucket, path, className, children,
@@ -7,6 +8,7 @@ export function FileLink({
   bucket: string; path: string; className?: string; children: React.ReactNode;
 }) {
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   const open = async () => {
     setLoading(true);
@@ -14,7 +16,7 @@ export function FileLink({
       const url = await getSignedUrl(bucket, path);
       window.open(url, '_blank', 'noopener');
     } catch (e) {
-      alert((e as Error).message);
+      toast.error(e instanceof Error ? e.message : 'Não foi possível abrir o arquivo.');
     } finally {
       setLoading(false);
     }

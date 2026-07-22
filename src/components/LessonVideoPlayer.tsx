@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize2, RotateCcw, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 // watermark removed
 import { supabase } from '../lib/supabase';
+import { Select } from './ui';
 
 declare global {
   interface Window {
@@ -60,6 +61,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [iosFullscreen, setIosFullscreen] = useState(false);
 
   // Fetch videoId from edge function
   const fetchVideo = useCallback(async () => {
@@ -172,8 +174,13 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     const onKey = (e: KeyboardEvent) => {
       const p = playerRef.current;
       if (!p) return;
+      // Só captura teclado quando o player está engajado (foco dentro dele ou em tela
+      // cheia) — evita sequestrar Espaço/setas da rolagem da página do curso.
+      const container = containerRef.current;
+      if (!container || (!container.contains(document.activeElement) && document.fullscreenElement !== container)) return;
       const target = e.target as HTMLElement;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+      // Deixa controles nativos (botões/sliders/select) tratarem suas próprias teclas.
+      if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target?.tagName)) return;
       if (e.code === 'Space') {
         e.preventDefault();
         const s = p.getPlayerState?.();
@@ -234,11 +241,52 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     playerRef.current?.setPlaybackRate(r);
   };
 
-  const goFullscreen = () => {
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      if (document.fullscreenElement || (document as any).webkitFullscreenElement) setIosFullscreen(false);
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!iosFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [iosFullscreen]);
+
+  const goFullscreen = async () => {
     const el = containerRef.current as any;
     if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else (el.requestFullscreen?.() || el.webkitRequestFullscreen?.());
+    const doc = document as any;
+    if (iosFullscreen) { setIosFullscreen(false); return; }
+    if (document.fullscreenElement || doc.webkitFullscreenElement) {
+      await (document.exitFullscreen?.() || doc.webkitExitFullscreen?.());
+      return;
+    }
+
+    const iframe = playerRef.current?.getIframe?.() as any;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      setIosFullscreen(true);
+      return;
+    }
+    const target = el.requestFullscreen || el.webkitRequestFullscreen ? el : iframe;
+    const request = target?.requestFullscreen || target?.webkitRequestFullscreen;
+    try {
+      if (request) {
+        await request.call(target);
+        return;
+      }
+    } catch {
+      // Safari/iPhone can reject the Fullscreen API for embedded players.
+    }
   };
 
   const replay = () => {
@@ -280,7 +328,10 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   return (
     <div
       ref={containerRef}
-      className="relative aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black select-none"
+      tabIndex={0}
+      role="group"
+      aria-label="Player de vídeo da aula"
+      className={`relative aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black select-none ${iosFullscreen ? 'ma-video-player--ios-fullscreen' : ''}`}
       onContextMenu={(e) => e.preventDefault()}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setShowControls(false)}
@@ -298,6 +349,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
           onClick={() => {
             if (!isReady) return;
             const p = playerRef.current; if (!p) return;
+            containerRef.current?.focus();
             const s = p.getPlayerState?.();
             if (s === 1) p.pauseVideo(); else p.playVideo();
           }}
@@ -322,7 +374,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
       {showCenterPlay && (
         <div className={`absolute inset-0 z-20 grid place-items-center ${isPaused ? 'bg-black/40' : 'bg-black/20'} pointer-events-none`}>
           <button
-            onClick={() => playerRef.current?.playVideo()}
+            onClick={() => { containerRef.current?.focus(); playerRef.current?.playVideo(); }}
             className="pointer-events-auto w-20 h-20 rounded-full bg-white grid place-items-center hover:scale-105 transition-transform shadow-2xl"
             aria-label="Reproduzir"
           >
@@ -373,6 +425,8 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
           step={0.1}
           value={current}
           onChange={onSeek}
+          aria-label="Progresso do vídeo"
+          aria-valuetext={`${fmt(current)} de ${fmt(duration)}`}
           className="w-full h-1 accent-[#cbfb00] cursor-pointer"
           style={{ background: `linear-gradient(to right, #cbfb00 0%, #cbfb00 ${(current / (duration || 1)) * 100}%, rgba(255,255,255,0.2) ${(current / (duration || 1)) * 100}%, rgba(255,255,255,0.2) 100%)` }}
         />
@@ -395,20 +449,23 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
               max={100}
               value={muted ? 0 : volume}
               onChange={onVolume}
+              aria-label="Volume"
+              aria-valuetext={`${muted ? 0 : volume}%`}
               className="w-20 h-1 accent-[#cbfb00] cursor-pointer"
             />
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            <select
+            <Select
               value={rate}
               onChange={(e) => changeRate(parseFloat(e.target.value))}
+              aria-label="Velocidade de reprodução"
               className="bg-black/60 border border-white/20 text-white text-xs rounded px-2 py-1 outline-none"
             >
               {[0.5, 1, 1.25, 1.5, 2].map((r) => (
                 <option key={r} value={r}>{r}x</option>
               ))}
-            </select>
+            </Select>
             <button onClick={goFullscreen} className="p-1 hover:text-[#cbfb00]" aria-label="Tela cheia">
               <Maximize2 className="w-5 h-5" />
             </button>

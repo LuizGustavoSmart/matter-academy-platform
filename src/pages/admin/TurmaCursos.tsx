@@ -52,12 +52,12 @@ export default function AdminTurmaCursos() {
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-[#d6deed] mb-6">
-        <button onClick={() => nav('/admin/turmas')} className="hover:text-white transition-colors">
+      <div className="flex items-center gap-2 text-sm text-fg-2 mb-6">
+        <button onClick={() => nav('/admin/turmas')} className="hover:text-fg transition-colors">
           Turmas
         </button>
-        <ChevronRight className="w-4 h-4 text-[#434d5e]" />
-        <span className="text-white">{turma?.nome ?? '...'}</span>
+        <ChevronRight className="w-4 h-4 text-fg-3" />
+        <span className="text-fg">{turma?.nome ?? '...'}</span>
       </div>
 
       <div className="flex items-center justify-between mb-6">
@@ -80,13 +80,13 @@ export default function AdminTurmaCursos() {
             <Card key={c.id} className="p-5">
               <h3 className="mb-1">{c.titulo}</h3>
               <p className="text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || '—'}</p>
-              <div className="flex items-center gap-1 mb-4 text-sm text-[#d6deed]">
-                <PlayCircle className="w-4 h-4 text-[#434d5e]" /> {aulaCounts[c.id] ?? 0} aulas
+              <div className="flex items-center gap-1 mb-4 text-sm text-fg-2">
+                <PlayCircle className="w-4 h-4 text-fg-3" /> {aulaCounts[c.id] ?? 0} aulas
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Link
                   to={`/admin/turmas/${turmaId}/cursos/${c.id}/aulas`}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm border border-[#434d5e] text-[#d6deed] hover:bg-[#434d5e]/20 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm border border-line-strong text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors"
                 >
                   Ver Aulas
                 </Link>
@@ -177,7 +177,7 @@ function CursoModal({
           <label>Descrição</label>
           <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} />
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-danger text-sm">{err}</p>}
       </div>
     </Modal>
   );

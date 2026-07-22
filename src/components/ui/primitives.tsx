@@ -1,9 +1,10 @@
 import {
-  ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes,
-  ReactNode, forwardRef, useId,
+  ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes,
+  ReactNode, forwardRef, useId, type CSSProperties,
 } from 'react';
 import { Loader2, Search, Check, X } from 'lucide-react';
 import { cn, initials, stringHue } from './util';
+import { Tooltip } from './surfaces';
 
 /* ────────────────────────────── Spinner ────────────────────────────── */
 export function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
@@ -30,9 +31,9 @@ const BTN_VARIANT: Record<BtnVariant, string> = {
   danger: 'bg-transparent text-danger border border-danger/40 hover:bg-danger/10',
 };
 const BTN_SIZE: Record<BtnSize, string> = {
-  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-md',
-  md: 'h-9 px-4 text-sm gap-2 rounded-md',
-  lg: 'h-11 px-5 text-[15px] gap-2 rounded-lg',
+  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-lg',
+  md: 'h-9 px-4 text-sm gap-2 rounded-[10px]',
+  lg: 'h-11 px-5 text-[15px] gap-2 rounded-xl',
 };
 
 export function Button({
@@ -43,8 +44,8 @@ export function Button({
     <button
       className={cn(
         'inline-flex items-center justify-center whitespace-nowrap font-medium',
-        'transition-all duration-150 ease-ma active:scale-[0.98]',
-        'disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100',
+        'transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-ma active:scale-[0.97]',
+        'disabled:opacity-45 disabled:cursor-not-allowed',
         BTN_SIZE[size], BTN_VARIANT[variant], block && 'w-full', className,
       )}
       disabled={loading || disabled}
@@ -74,22 +75,23 @@ export const IconButton = forwardRef<HTMLButtonElement, IconBtnProps>(function I
     danger: 'text-fg-3 hover:text-danger hover:bg-danger/10',
   };
   return (
-    <button
-      ref={ref}
-      type="button"
-      aria-label={label}
-      title={label}
-      className={cn(
-        'inline-grid place-items-center rounded-md transition-colors',
-        'disabled:opacity-40 disabled:cursor-not-allowed',
-        size === 'sm' ? 'w-7 h-7' : 'w-9 h-9',
-        variants[variant], className,
-      )}
-      disabled={loading || disabled}
-      {...rest}
-    >
-      {loading ? <Spinner /> : children}
-    </button>
+    <Tooltip label={label}>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        className={cn(
+          'inline-grid place-items-center rounded-xl transition-[color,background-color,border-color,transform] active:scale-95',
+          'disabled:opacity-40 disabled:cursor-not-allowed',
+          size === 'sm' ? 'w-7 h-7' : 'w-9 h-9',
+          variants[variant], className,
+        )}
+        disabled={loading || disabled}
+        {...rest}
+      >
+        {loading ? <Spinner /> : children}
+      </button>
+    </Tooltip>
   );
 });
 
@@ -142,21 +144,6 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
         aria-invalid={invalid || undefined}
         {...rest}
       />
-    );
-  },
-);
-
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
-  function Select({ invalid, className = '', children, ...rest }, ref) {
-    return (
-      <select
-        ref={ref}
-        className={cn('cursor-pointer', invalid && 'border-danger focus:border-danger', className)}
-        aria-invalid={invalid || undefined}
-        {...rest}
-      >
-        {children}
-      </select>
     );
   },
 );
@@ -239,27 +226,29 @@ export function Radio({
 
 /* ─────────────────────────────── Switch ────────────────────────────── */
 export function Switch({
-  checked, onChange, label, disabled, id,
+  checked, onChange, label, ariaLabel, disabled, id,
 }: {
   checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; id?: string;
+  ariaLabel?: string;
 }) {
   const gen = useId();
   const inputId = id ?? gen;
   return (
-    <label htmlFor={inputId} className={cn('inline-flex items-center gap-2.5 cursor-pointer select-none !mb-0', disabled && 'opacity-50 cursor-not-allowed')}>
+    <span className={cn('inline-flex items-center gap-2.5 select-none', disabled && 'opacity-50')}>
       <button
         type="button"
         role="switch"
         id={inputId}
         aria-checked={checked}
+        aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={cn('relative w-9 h-5 rounded-full transition-colors flex-shrink-0', checked ? 'bg-brand' : 'bg-line-strong')}
+        className={cn('relative h-5 w-9 shrink-0 rounded-full transition-[background-color,transform] duration-200 ease-ma active:scale-95', checked ? 'bg-brand' : 'bg-line-strong')}
       >
-        <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', checked && 'translate-x-4')} />
+        <span className={cn('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-ma', checked && 'translate-x-4')} />
       </button>
       {label && <span className="text-sm text-fg-2">{label}</span>}
-    </label>
+    </span>
   );
 }
 
@@ -293,22 +282,18 @@ export function Badge({
 
 /* ─────────────────────────────── Avatar ────────────────────────────── */
 export function Avatar({
-  name, email, size = 36, className = '',
+  name, email, src, size = 36, className = '',
 }: {
-  name?: string | null; email?: string | null; size?: number; className?: string;
+  name?: string | null; email?: string | null; src?: string | null; size?: number; className?: string;
 }) {
   const hue = stringHue((name || email || '?').toLowerCase());
   return (
     <span
-      className={cn('inline-grid place-items-center rounded-full font-medium text-fg flex-shrink-0 select-none', className)}
-      style={{
-        width: size, height: size, fontSize: size * 0.4,
-        background: `hsl(${hue} 45% 22%)`,
-        border: `1px solid hsl(${hue} 45% 32%)`,
-      }}
+      className={cn('ma-avatar inline-grid place-items-center rounded-full font-medium flex-shrink-0 select-none overflow-hidden', className)}
+      style={{ width: size, height: size, fontSize: size * 0.4, '--ma-avatar-hue': hue } as CSSProperties}
       aria-hidden
     >
-      {initials(name, email)}
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initials(name, email)}
     </span>
   );
 }
