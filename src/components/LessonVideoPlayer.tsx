@@ -241,20 +241,24 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     const doc: any = document;
     const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
     if (isFs) {
-      (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.());
+      try { (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.()); } catch { /* ignore */ }
       setPseudoFs(false);
       return;
     }
     if (pseudoFs) { setPseudoFs(false); return; }
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
-    if (req) {
-      try {
-        await req.call(el);
-        try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
-        return;
-      } catch { /* fallback */ }
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (/(Macintosh)/.test(ua) && 'ontouchend' in document);
+    // iOS Safari doesn't support requestFullscreen on <div>/<iframe>; go straight to pseudo-fs
+    if (!isIOS) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        try {
+          await req.call(el);
+          try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
+          return;
+        } catch { /* fallback */ }
+      }
     }
-    // iOS Safari fallback: pseudo-fullscreen via CSS
     setPseudoFs(true);
   };
 
@@ -278,11 +282,21 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     if (!pseudoFs) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPseudoFs(false); };
     document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyPosition = document.body.style.position;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    try { (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.width = '';
+      try { (screen.orientation as any)?.unlock?.(); } catch { /* ignore */ }
     };
   }, [pseudoFs]);
 
@@ -325,7 +339,8 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   return (
     <div
       ref={containerRef}
-      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999] w-screen h-screen' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
+      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999]' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
+      style={pseudoFs ? { width: '100vw', height: '100dvh', maxHeight: '100dvh' } : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setShowControls(false)}
@@ -334,6 +349,18 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
       <div className="absolute inset-0 z-0">
         <div ref={playerHostRef} className="w-full h-full pointer-events-none" />
       </div>
+
+      {/* Botão fechar (pseudo-fullscreen no iOS/mobile) */}
+      {pseudoFs && (
+        <button
+          onClick={() => setPseudoFs(false)}
+          className="absolute top-3 right-3 z-40 w-10 h-10 rounded-full bg-black/70 text-white grid place-items-center hover:bg-black/90"
+          aria-label="Fechar tela cheia"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
+          ✕
+        </button>
+      )}
 
       {/* CAMADA 1: clique central (play/pause) — sempre presente sobre o vídeo, exceto quando ended */}
       {!isEnded && (
