@@ -66,7 +66,7 @@ export default function StudentCourse() {
   };
   const goNext = () => { const next = aulas[currentIdx + 1]; if (next) selectAula(next.id); };
 
-  if (loading) return <div className="max-w-7xl mx-auto px-6 py-8"><Skeleton className="h-8 w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-96 rounded-xl" /><Skeleton className="h-96 rounded-xl" /></div></div>;
+  if (loading) return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8"><Skeleton className="h-8 w-full max-w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-64 sm:h-96 rounded-xl" /><Skeleton className="h-64 sm:h-96 rounded-xl" /></div></div>;
   if (!curso) return null;
 
   const pct = aulas.length ? Math.round((done.size / aulas.length) * 100) : 0;
@@ -85,7 +85,7 @@ export default function StudentCourse() {
       </div>
 
       <div className="grid lg:grid-cols-[320px_1fr] gap-0">
-        <aside className="border-b lg:border-b-0 lg:border-r border-line lg:min-h-[calc(100vh-64px-120px)] max-h-[420px] lg:max-h-none overflow-y-auto scrollbar-thin">
+        <aside className="border-b lg:border-b-0 lg:border-r border-line lg:min-h-[calc(100vh-64px-120px)] max-h-[260px] lg:max-h-none overflow-y-auto scrollbar-thin">
           <div className="p-4">
             <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-3">Conteúdo</p>
             {aulas.length === 0 ? <p className="text-fg-3 text-sm">Sem aulas</p> : (
@@ -114,15 +114,15 @@ export default function StudentCourse() {
           {current ? (
             <>
               <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onEnded={markCurrentDone} onNext={goNext} /></div>
-              <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
-                <div><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2>{current.titulo}</h2></div>
-                <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
+                <div className="min-w-0"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
+                <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0">
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
                   <Button variant={isDone ? 'primary' : 'secondary'} onClick={toggleDone} icon={<Check className="w-4 h-4" />}>{isDone ? 'Concluída' : 'Marcar como concluída'}</Button>
                 </div>
               </div>
-              {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line">{current.descricao}</p>}
-              <div className="flex justify-between pt-6 border-t border-line">
+              {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words">{current.descricao}</p>}
+              <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 pt-6 border-t border-line">
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
               </div>

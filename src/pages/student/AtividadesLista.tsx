@@ -82,12 +82,12 @@ export default function AtividadesLista() {
                 const prazoLabel = a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : '–';
                 const pend = pendMap[a.id] ?? 0;
                 return (
-                  <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => nav(`/atividade/${a.id}`)}>
-                    <div className="flex-1 min-w-0"><p className="text-fg text-sm font-medium truncate">{a.titulo}</p><p className="text-fg-3 text-xs mt-0.5">Prazo: {prazoLabel}</p></div>
-                    {!isProfessor && <Badge tone={s.tone} dot>{s.label}</Badge>}
-                    {!isProfessor && <span className="text-sm text-brand font-medium w-16 text-right tabular-nums">{notaLabel}</span>}
-                    {isProfessor && pend > 0 && <Badge tone="warn">{pend} pendente{pend > 1 ? 's' : ''}</Badge>}
-                    <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0" />
+                  <li key={a.id} className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => nav(`/atividade/${a.id}`)}>
+                    <div className="flex-1 min-w-0"><p className="text-fg text-sm font-medium truncate">{a.titulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">Prazo: {prazoLabel}{!isProfessor && envio ? ` · ${notaLabel}` : ''}</p></div>
+                    {!isProfessor && <Badge tone={s.tone} dot className="flex-shrink-0">{s.label}</Badge>}
+                    {!isProfessor && <span className="hidden sm:inline text-sm text-brand font-medium w-16 text-right tabular-nums">{notaLabel}</span>}
+                    {isProfessor && pend > 0 && <Badge tone="warn" className="flex-shrink-0">{pend} pend.</Badge>}
+                    <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0 hidden sm:block" />
                   </li>
                 );
               })}

@@ -78,14 +78,14 @@ function Section({ title, rows, isStaff, nav }: { title: string; rows: Row[]; is
       <Card className="overflow-hidden">
         <ul>
           {rows.map((r) => (
-            <li key={r.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => nav(`/duvidas/${r.id}`)}>
+            <li key={r.id} className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => nav(`/duvidas/${r.id}`)}>
               {isStaff && <Avatar name={r.aluno_nome} email={r.aluno_email} size={30} />}
               <div className="flex-1 min-w-0">
                 <p className="text-fg text-sm font-medium truncate">{r.titulo}</p>
                 <p className="text-fg-3 text-xs truncate">{isStaff ? `${r.aluno_nome || r.aluno_email || ''} · ${r.turma_nome ?? ''} ${r.curso_titulo ?? ''}` : r.curso_titulo}</p>
               </div>
-              <Badge tone={r.status === 'resolvida' ? 'success' : 'warn'} dot>{r.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>
-              <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0" />
+              <Badge tone={r.status === 'resolvida' ? 'success' : 'warn'} dot className="flex-shrink-0">{r.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>
+              <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0 hidden sm:block" />
             </li>
           ))}
         </ul>
