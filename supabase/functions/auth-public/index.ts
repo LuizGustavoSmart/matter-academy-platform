@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
     if (action === "forgot") {
       const { email } = body as { email: string };
       const normalizedEmail = (email ?? "").trim().toLowerCase();
-      const { data: profile } = await admin.from("profiles").select("id,email").eq("email", normalizedEmail).maybeSingle();
+      const { data: profile } = await admin.from("profiles").select("id,email").ilike("email", normalizedEmail).maybeSingle();
       // Always return ok to prevent email enumeration
       if (!profile) return json({ ok: true });
       const reset_token = genToken();
