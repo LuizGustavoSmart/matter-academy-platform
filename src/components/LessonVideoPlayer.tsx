@@ -60,6 +60,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [pseudoFs, setPseudoFs] = useState(false);
 
   // Fetch videoId from edge function
   const fetchVideo = useCallback(async () => {
