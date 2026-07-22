@@ -271,7 +271,8 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && action === "forgot-link") {
       const { email } = body as { email: string };
-      const { data: profile } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+      const normalizedEmail = normalizeEmail(email);
+      const { data: profile } = await admin.from("profiles").select("id").ilike("email", normalizedEmail).maybeSingle();
       if (!profile) return json({ error: "Usuário não encontrado" }, 404);
       const reset_token = genToken();
       const reset_expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
