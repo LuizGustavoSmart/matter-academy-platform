@@ -154,15 +154,15 @@ export default function AtividadeDetalhe() {
                 {alunos.map((row) => {
                   const respStatus = row.envio?.corrigido_em ? { label: 'Corrigida', tone: 'success' as const } : row.envio?.enviado_em ? { label: 'Enviada', tone: 'warn' as const } : { label: 'Não enviada', tone: 'default' as const };
                   return (
-                    <li key={row.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setSelectedAluno(row)}>
+                    <li key={row.id} className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setSelectedAluno(row)}>
                       <Avatar name={row.nome} email={row.email} size={32} />
                       <div className="flex-1 min-w-0">
                         <p className="text-fg text-sm font-medium truncate">{row.nome || row.email.split('@')[0]}</p>
                         <p className="text-fg-3 text-xs truncate">{[row.nome ? row.email : null, row.envio?.enviado_em ? `Enviado em ${new Date(row.envio.enviado_em).toLocaleString('pt-BR')}` : null].filter(Boolean).join(' · ')}</p>
                       </div>
-                      {row.envio?.corrigido_em && <span className="text-sm font-medium text-brand flex-shrink-0 tabular-nums">{row.envio.nota}/{atividade.nota_maxima}</span>}
-                      <Badge tone={respStatus.tone} dot>{respStatus.label}</Badge>
-                      <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0" />
+                      {row.envio?.corrigido_em && <span className="hidden sm:inline text-sm font-medium text-brand flex-shrink-0 tabular-nums">{row.envio.nota}/{atividade.nota_maxima}</span>}
+                      <Badge tone={respStatus.tone} dot className="flex-shrink-0">{respStatus.label}</Badge>
+                      <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0 hidden sm:block" />
                     </li>
                   );
                 })}
