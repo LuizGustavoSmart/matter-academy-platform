@@ -241,20 +241,24 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     const doc: any = document;
     const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
     if (isFs) {
-      (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.());
+      try { (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.()); } catch { /* ignore */ }
       setPseudoFs(false);
       return;
     }
     if (pseudoFs) { setPseudoFs(false); return; }
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
-    if (req) {
-      try {
-        await req.call(el);
-        try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
-        return;
-      } catch { /* fallback */ }
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (/(Macintosh)/.test(ua) && 'ontouchend' in document);
+    // iOS Safari doesn't support requestFullscreen on <div>/<iframe>; go straight to pseudo-fs
+    if (!isIOS) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        try {
+          await req.call(el);
+          try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
+          return;
+        } catch { /* fallback */ }
+      }
     }
-    // iOS Safari fallback: pseudo-fullscreen via CSS
     setPseudoFs(true);
   };
 
