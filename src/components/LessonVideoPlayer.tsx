@@ -282,11 +282,21 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     if (!pseudoFs) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPseudoFs(false); };
     document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyPosition = document.body.style.position;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    try { (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.width = '';
+      try { (screen.orientation as any)?.unlock?.(); } catch { /* ignore */ }
     };
   }, [pseudoFs]);
 
