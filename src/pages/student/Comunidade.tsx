@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Paperclip, Send, ChevronDown, ChevronRight as ChevronRightIcon, X } from 'lucide-react';
+import { MessageSquare, Paperclip, Send, ChevronDown, ChevronRight as ChevronRightIcon, X, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadComunidadeFile } from '../../lib/storage';
@@ -114,8 +114,16 @@ export default function Comunidade() {
   const isSel = (p: Pair) => selected?.turmaId === p.turmaId && selected?.cursoId === p.cursoId;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] lg:h-screen">
-      <aside className="w-72 border-r border-line flex flex-col flex-shrink-0 overflow-y-auto scrollbar-thin bg-panel">
+    <div className="flex h-[calc(100vh-3.5rem)] lg:h-screen relative">
+      <aside
+        className={cn(
+          'border-r border-line flex flex-col flex-shrink-0 overflow-y-auto scrollbar-thin bg-panel',
+          'lg:w-72 lg:static',
+          selected
+            ? 'hidden lg:flex'
+            : 'flex w-full lg:w-72',
+        )}
+      >
         <div className="p-4 border-b border-line flex-shrink-0"><h2 className="text-fg text-base font-medium">Comunidade</h2></div>
         {loading ? (
           <div className="p-2 space-y-1">
@@ -158,37 +166,49 @@ export default function Comunidade() {
           )}
       </aside>
 
-      <section className="flex-1 flex flex-col min-w-0 bg-canvas">
+      <section className={cn('flex-1 flex-col min-w-0 bg-canvas', selected ? 'flex' : 'hidden lg:flex')}>
         {!selected ? (
           <div className="flex-1 grid place-items-center p-6"><EmptyState icon={<MessageSquare className="w-8 h-8" />} title="Selecione uma comunidade" description="Escolha uma conversa na lista ao lado." /></div>
         ) : (
           <>
-            <div className="px-4 sm:px-6 py-3.5 border-b border-line flex-shrink-0"><p className="text-fg font-medium">{selected.cursoTitulo}</p><p className="text-fg-3 text-xs">{selected.turmaNome}</p></div>
+            <div className="px-4 sm:px-6 py-3.5 border-b border-line flex-shrink-0 flex items-center gap-3">
+              <button
+                onClick={() => setSelected(null)}
+                aria-label="Voltar"
+                className="lg:hidden -ml-1 p-1.5 rounded-md text-fg-2 hover:bg-panel-2 transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-fg font-medium truncate">{selected.cursoTitulo}</p>
+                <p className="text-fg-3 text-xs truncate">{selected.turmaNome}</p>
+              </div>
+            </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 sm:px-6 py-4 space-y-3">
               {msgLoading ? <p className="text-fg-3 text-sm">Carregando mensagens…</p> :
                 messages.length === 0 ? <p className="text-fg-3 text-sm text-center mt-8">Nenhuma mensagem ainda. Envie a primeira!</p> :
                 messages.map((m) => {
                   const mine = m.user_id === profile?.id;
                   return (
-                    <div key={m.id} className={cn('flex gap-3', mine && 'flex-row-reverse')}>
+                    <div key={m.id} className={cn('flex gap-2 sm:gap-3', mine && 'flex-row-reverse')}>
                       <Avatar name={m.profiles?.nome} email={m.profiles?.email} size={32} />
-                      <div className={cn('max-w-[75%] rounded-xl px-3 py-2', mine ? 'bg-brand text-brand-ink' : 'bg-panel border border-line text-fg-2')}>
-                        {!mine && <p className="text-xs font-medium opacity-80 mb-0.5">{m.profiles?.nome || m.profiles?.email || 'Usuário'}</p>}
-                        {m.content && <p className="text-sm whitespace-pre-line">{m.content}</p>}
-                        {m.arquivo_url && <FileLink bucket="comunidade" path={m.arquivo_url} className={cn('inline-flex items-center gap-1 text-xs underline mt-1', mine ? 'text-brand-ink/80' : 'text-brand')}><Paperclip className="w-3 h-3" /> {m.arquivo_nome ?? 'Anexo'}</FileLink>}
+                      <div className={cn('max-w-[80%] sm:max-w-[75%] rounded-xl px-3 py-2 break-words', mine ? 'bg-brand text-brand-ink' : 'bg-panel border border-line text-fg-2')}>
+                        {!mine && <p className="text-xs font-medium opacity-80 mb-0.5 truncate">{m.profiles?.nome || m.profiles?.email || 'Usuário'}</p>}
+                        {m.content && <p className="text-sm whitespace-pre-line break-words">{m.content}</p>}
+                        {m.arquivo_url && <FileLink bucket="comunidade" path={m.arquivo_url} className={cn('inline-flex items-center gap-1 text-xs underline mt-1 break-all', mine ? 'text-brand-ink/80' : 'text-brand')}><Paperclip className="w-3 h-3" /> {m.arquivo_nome ?? 'Anexo'}</FileLink>}
                         <p className={cn('text-[10px] mt-1', mine ? 'text-brand-ink/60' : 'text-fg-3')}>{new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                     </div>
                   );
                 })}
             </div>
-            <div className="border-t border-line px-4 py-3 flex-shrink-0 bg-panel">
-              {file && <p className="text-xs text-fg-2 mb-2 flex items-center gap-1"><Paperclip className="w-3 h-3" /> {file.name}<button onClick={() => setFile(null)} className="text-danger ml-2 inline-flex items-center gap-0.5"><X className="w-3 h-3" />remover</button></p>}
+            <div className="border-t border-line px-3 sm:px-4 py-3 flex-shrink-0 bg-panel">
+              {file && <p className="text-xs text-fg-2 mb-2 flex items-center gap-1 break-all"><Paperclip className="w-3 h-3 flex-shrink-0" /> <span className="truncate">{file.name}</span><button onClick={() => setFile(null)} className="text-danger ml-2 inline-flex items-center gap-0.5 flex-shrink-0"><X className="w-3 h-3" />remover</button></p>}
               <div className="flex items-center gap-2">
                 <label className="flex-shrink-0 p-2 rounded-md text-fg-3 hover:text-fg hover:bg-panel-2 cursor-pointer transition-colors">
                   <Paperclip className="w-5 h-5" /><input type="file" className="hidden" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                 </label>
-                <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Digite uma mensagem…" className="flex-1" />
+                <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Digite uma mensagem…" className="flex-1 min-w-0" />
                 <button onClick={send} disabled={sending || (!text.trim() && !file)} aria-label="Enviar" className="flex-shrink-0 p-2.5 rounded-md bg-brand text-brand-ink disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-hover transition-colors"><Send className="w-4 h-4" /></button>
               </div>
             </div>
