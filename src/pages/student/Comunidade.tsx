@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Paperclip, Send, ChevronDown, ChevronRight as ChevronRightIcon, X } from 'lucide-react';
+import { MessageSquare, Paperclip, Send, ChevronDown, ChevronRight as ChevronRightIcon, X, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadComunidadeFile } from '../../lib/storage';
