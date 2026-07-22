@@ -324,7 +324,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   return (
     <div
       ref={containerRef}
-      className="relative aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black select-none"
+      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999] w-screen h-screen' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
       onContextMenu={(e) => e.preventDefault()}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setShowControls(false)}
