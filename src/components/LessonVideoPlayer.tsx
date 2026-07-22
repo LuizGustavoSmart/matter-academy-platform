@@ -245,6 +245,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
       setPseudoFs(false);
       return;
     }
+    if (pseudoFs) { setPseudoFs(false); return; }
     const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
     if (req) {
       try {
