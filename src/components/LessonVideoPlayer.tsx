@@ -339,7 +339,8 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   return (
     <div
       ref={containerRef}
-      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999] w-screen h-screen' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
+      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999]' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
+      style={pseudoFs ? { width: '100vw', height: '100dvh', maxHeight: '100dvh' } : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setShowControls(false)}
