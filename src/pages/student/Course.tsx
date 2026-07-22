@@ -66,7 +66,7 @@ export default function StudentCourse() {
   };
   const goNext = () => { const next = aulas[currentIdx + 1]; if (next) selectAula(next.id); };
 
-  if (loading) return <div className="max-w-7xl mx-auto px-6 py-8"><Skeleton className="h-8 w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-96 rounded-xl" /><Skeleton className="h-96 rounded-xl" /></div></div>;
+  if (loading) return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8"><Skeleton className="h-8 w-full max-w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-64 sm:h-96 rounded-xl" /><Skeleton className="h-64 sm:h-96 rounded-xl" /></div></div>;
   if (!curso) return null;
 
   const pct = aulas.length ? Math.round((done.size / aulas.length) * 100) : 0;
