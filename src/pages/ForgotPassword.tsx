@@ -20,7 +20,12 @@ export default function ForgotPassword() {
       await callFn('auth-public', 'forgot', { email });
       setSent(true);
     } catch (e) {
-      setErr((e as Error).message);
+      const message = (e as Error).message;
+      if (/não encontrado|nao encontrado|not found/i.test(message)) {
+        setSent(true);
+      } else {
+        setErr(message);
+      }
     } finally {
       setLoading(false);
     }
