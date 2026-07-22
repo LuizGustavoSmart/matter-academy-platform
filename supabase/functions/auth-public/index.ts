@@ -9,6 +9,27 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
+const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
+
+async function sendResetWebhook(email: string, token: string, expires_at: string) {
+  if (!INVITE_WEBHOOK_URL) {
+    console.log("[webhook] INVITE_WEBHOOK_URL not set, skipping reset email");
+    return;
+  }
+  const link = `${PUBLIC_APP_URL.replace(/\/$/, "")}/redefinir-senha?token=${token}`;
+  try {
+    const res = await fetch(INVITE_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "reset", email, link, expires_at }),
+      signal: AbortSignal.timeout(5000),
+    });
+    console.log(`[webhook] reset -> ${email} status=${res.status}`);
+  } catch (e) {
+    console.error(`[webhook] reset failed for ${email}:`, (e as Error).message);
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
