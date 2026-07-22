@@ -60,6 +60,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [pseudoFs, setPseudoFs] = useState(false);
 
   // Fetch videoId from edge function
   const fetchVideo = useCallback(async () => {
@@ -234,12 +235,56 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
     playerRef.current?.setPlaybackRate(r);
   };
 
-  const goFullscreen = () => {
+  const goFullscreen = async () => {
     const el = containerRef.current as any;
     if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else (el.requestFullscreen?.() || el.webkitRequestFullscreen?.());
+    const doc: any = document;
+    const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    if (isFs) {
+      (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.());
+      setPseudoFs(false);
+      return;
+    }
+    if (pseudoFs) { setPseudoFs(false); return; }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
+    if (req) {
+      try {
+        await req.call(el);
+        try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
+        return;
+      } catch { /* fallback */ }
+    }
+    // iOS Safari fallback: pseudo-fullscreen via CSS
+    setPseudoFs(true);
   };
+
+  useEffect(() => {
+    const onFsChange = () => {
+      const doc: any = document;
+      const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+      if (!isFs) {
+        try { (screen.orientation as any)?.unlock?.(); } catch { /* ignore */ }
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange as any);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange as any);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pseudoFs) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPseudoFs(false); };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [pseudoFs]);
 
   const replay = () => {
     const p = playerRef.current; if (!p) return;
@@ -280,7 +325,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
   return (
     <div
       ref={containerRef}
-      className="relative aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black select-none"
+      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999] w-screen h-screen' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
       onContextMenu={(e) => e.preventDefault()}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setShowControls(false)}
