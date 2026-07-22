@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Copy, Check } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { callFn } from '../lib/supabase';
 import { PublicAuthLayout } from '../public/components/PublicAuthLayout';
 import { PublicAction } from '../public/components/PublicAction';
@@ -8,8 +8,7 @@ import { FormAlert } from '../public/components/PublicStates';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
-  const [link, setLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -18,12 +17,8 @@ export default function ForgotPassword() {
     setErr(null);
     setLoading(true);
     try {
-      const r = await callFn('auth-public', 'forgot', { email });
-      if (r.reset_token) {
-        setLink(`${window.location.origin}/redefinir-senha?token=${r.reset_token}`);
-      } else {
-        setErr('Email não encontrado');
-      }
+      await callFn('auth-public', 'forgot', { email });
+      setSent(true);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -31,37 +26,32 @@ export default function ForgotPassword() {
     }
   };
 
-  const copy = () => {
-    if (link) {
-      navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   return (
-    <PublicAuthLayout state={link ? 'success' : 'form'}>
+    <PublicAuthLayout state={sent ? 'success' : 'form'}>
       <h1 className="mb-2">Recuperar senha</h1>
-      <p className="mb-8 text-[color:var(--pub-fg-soft)]">Informe seu email e geraremos um link de redefinição.</p>
+      <p className="mb-8 text-[color:var(--pub-fg-soft)]">
+        Informe seu email e enviaremos um link para redefinir sua senha.
+      </p>
 
-      {link ? (
+      {sent ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-[rgba(204,252,0,0.3)] bg-[rgba(204,252,0,0.06)] p-4">
-            <p className="pub-meta mb-2">Link de redefinição gerado</p>
-            <p className="mb-3 break-all text-sm text-[color:var(--pub-fg)]">{link}</p>
-            <PublicAction
-              variant="secondary"
-              size="sm"
-              onClick={copy}
-              icon={copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-            >
-              {copied ? 'Copiado' : 'Copiar link'}
-            </PublicAction>
-            <span className="sr-only" role="status" aria-live="polite">
-              {copied ? 'Link copiado' : ''}
-            </span>
+            <div className="mb-2 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-[color:var(--pub-lime)]" aria-hidden="true" />
+              <p className="pub-meta">Verifique seu email</p>
+            </div>
+            <p className="text-sm text-[color:var(--pub-fg)]">
+              Se existe uma conta associada a <strong>{email}</strong>, você receberá em breve um email com o link para
+              redefinir sua senha. O link expira em 24 horas.
+            </p>
+            <p className="mt-3 text-xs text-[color:var(--pub-fg-soft)]">
+              Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.
+            </p>
           </div>
-          <Link to="/login" className="block text-sm text-[color:var(--pub-fg-soft)] hover:text-[color:var(--pub-lime)]">
+          <Link
+            to="/login"
+            className="block text-sm text-[color:var(--pub-fg-soft)] hover:text-[color:var(--pub-lime)]"
+          >
             Voltar ao login
           </Link>
         </div>
@@ -80,7 +70,7 @@ export default function ForgotPassword() {
           </div>
           <FormAlert error={err} />
           <PublicAction type="submit" loading={loading} glow className="w-full">
-            Gerar link
+            Enviar link por email
           </PublicAction>
           <Link
             to="/login"
