@@ -350,6 +350,18 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
         <div ref={playerHostRef} className="w-full h-full pointer-events-none" />
       </div>
 
+      {/* Botão fechar (pseudo-fullscreen no iOS/mobile) */}
+      {pseudoFs && (
+        <button
+          onClick={() => setPseudoFs(false)}
+          className="absolute top-3 right-3 z-40 w-10 h-10 rounded-full bg-black/70 text-white grid place-items-center hover:bg-black/90"
+          aria-label="Fechar tela cheia"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
+          ✕
+        </button>
+      )}
+
       {/* CAMADA 1: clique central (play/pause) — sempre presente sobre o vídeo, exceto quando ended */}
       {!isEnded && (
         <div
