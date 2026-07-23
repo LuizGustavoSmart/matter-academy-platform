@@ -10,7 +10,7 @@ const STATUS_TONE: Record<string, 'success' | 'warn' | 'danger'> = {
   active: 'success', pending: 'warn', blocked: 'danger',
 };
 
-export type SortKey = 'nome' | 'email' | 'status' | 'created_at';
+export type SortKey = 'nome' | 'email' | 'telefone' | 'status' | 'created_at';
 
 function rowMenu(u: UserRow, isSelf: boolean, actions: RowActions): MenuItem[] {
   const items: MenuItem[] = [
