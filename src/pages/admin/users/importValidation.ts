@@ -168,6 +168,40 @@ export function downloadTemplate() {
   XLSX.writeFile(wb, 'modelo-importacao-usuarios.xlsx');
 }
 
+/** Modelo em branco (somente cabeçalho) — usado pelo botão "Baixar template". */
+export function downloadEmptyTemplate() {
+  const aoa = [TEMPLATE_COLUMNS as unknown as string[]];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = (TEMPLATE_COLUMNS as unknown as string[]).map(() => ({ wch: 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Usuários');
+  XLSX.writeFile(wb, 'modelo-usuarios.xlsx');
+}
+
+/** Exporta as linhas visíveis (filtradas) usando o mesmo cabeçalho da importação. */
+export type ExportUser = {
+  nome: string | null; sobrenome: string | null; email: string;
+  telefone: string | null; empresa: string | null; role: Role;
+  turmas: { nome: string }[];
+};
+const ROLE_EXPORT_LABEL: Record<Role, string> = {
+  admin: 'Administrador', professor: 'Professor', monitor: 'Monitor', student: 'Aluno',
+};
+export function exportUsersToXlsx(users: ExportUser[]) {
+  const rows = users.map((u) => [
+    u.nome ?? '', u.sobrenome ?? '', u.email, u.telefone ?? '', u.empresa ?? '',
+    ROLE_EXPORT_LABEL[u.role], u.turmas.map((t) => t.nome).join('; '), '', '',
+  ]);
+  const aoa = [TEMPLATE_COLUMNS as unknown as string[], ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = (TEMPLATE_COLUMNS as unknown as string[]).map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Usuários');
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `usuarios-${stamp}.xlsx`);
+}
+
+
 export function downloadErrorRows(rows: ValidatedRow[]) {
   const errored = rows.filter((r) => r.status === 'error');
   if (!errored.length) return;

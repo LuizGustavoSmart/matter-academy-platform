@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import {
   Plus, Upload, Search, Users as UsersIcon, SlidersHorizontal, X, Copy, Check,
-  RefreshCw, Ban, ShieldCheck, Trash2, AlertCircle,
+  RefreshCw, Ban, ShieldCheck, Trash2, AlertCircle, Download, FileDown,
 } from 'lucide-react';
 import { supabase, callFn } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,11 +10,12 @@ import {
   Pagination, FilterChip, StatTile, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
-import { ROLE_LABEL, fullName, type Role } from '../../lib/users';
+import { ROLE_LABEL, fullName, normalizePhone, type Role } from '../../lib/users';
 import { loadCoursesByTurma, type Turma, type CursoInfo } from './users/pickers';
 import type { UserRow } from './users/types';
 import { UsersTableDesktop, UsersCardsMobile, type SortKey, type RowActions } from './users/UsersTable';
 import { UserFormDrawer } from './users/UserFormDrawer';
+import { downloadEmptyTemplate, exportUsersToXlsx } from './users/importValidation';
 
 // Carregado sob demanda (traz o SheetJS/xlsx) só quando o admin abre a importação.
 const ImportWizard = lazy(() => import('./users/ImportWizard').then((m) => ({ default: m.ImportWizard })));
@@ -85,8 +86,18 @@ export default function AdminUsers() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const qDigits = normalizePhone(search).replace(/\D/g, '');
     return users.filter((u) => {
-      if (q && !u.email.toLowerCase().includes(q) && !fullName(u.nome, u.sobrenome).toLowerCase().includes(q) && !(u.empresa ?? '').toLowerCase().includes(q)) return false;
+      if (q) {
+        const phoneDigits = (u.telefone ?? '').replace(/\D/g, '');
+        const hitPhone = qDigits.length >= 3 && phoneDigits.includes(qDigits);
+        if (
+          !u.email.toLowerCase().includes(q)
+          && !fullName(u.nome, u.sobrenome).toLowerCase().includes(q)
+          && !(u.empresa ?? '').toLowerCase().includes(q)
+          && !hitPhone
+        ) return false;
+      }
       if (filterRole && u.role !== filterRole) return false;
       if (filterStatus && u.status !== filterStatus) return false;
       if (filterTurma && !u.turmas.some((t) => t.id === filterTurma)) return false;
@@ -100,6 +111,7 @@ export default function AdminUsers() {
       let av: string | number = '', bv: string | number = '';
       if (sort.key === 'nome') { av = fullName(a.nome, a.sobrenome) || a.email; bv = fullName(b.nome, b.sobrenome) || b.email; }
       else if (sort.key === 'email') { av = a.email; bv = b.email; }
+      else if (sort.key === 'telefone') { av = (a.telefone ?? '').replace(/\D/g, ''); bv = (b.telefone ?? '').replace(/\D/g, ''); }
       else if (sort.key === 'status') { av = STATUS_ORDER[a.status] ?? 9; bv = STATUS_ORDER[b.status] ?? 9; }
       else { av = a.created_at; bv = b.created_at; }
       const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
@@ -107,6 +119,7 @@ export default function AdminUsers() {
     });
     return arr;
   }, [filtered, sort]);
+
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -184,6 +197,8 @@ export default function AdminUsers() {
         subtitle="Gerencie administradores, professores, monitores e alunos."
         actions={
           <>
+            <Button variant="secondary" icon={<FileDown className="w-4 h-4" />} onClick={downloadEmptyTemplate}>Baixar template</Button>
+            <Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={() => exportUsersToXlsx(sorted)}>Exportar</Button>
             <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>Importar planilha</Button>
             <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setDrawer({ mode: 'create' })}>Novo usuário</Button>
           </>
@@ -200,7 +215,7 @@ export default function AdminUsers() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, e-mail ou empresa…" className="flex-1" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, e-mail, telefone ou empresa…" className="flex-1" />
         <div className="hidden sm:flex gap-2.5">
           <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-[168px]">
             <option value="">Todos os papéis</option>
