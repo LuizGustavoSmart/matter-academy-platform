@@ -10,11 +10,12 @@ import {
   Pagination, FilterChip, StatTile, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
-import { ROLE_LABEL, fullName, type Role } from '../../lib/users';
+import { ROLE_LABEL, fullName, normalizePhone, type Role } from '../../lib/users';
 import { loadCoursesByTurma, type Turma, type CursoInfo } from './users/pickers';
 import type { UserRow } from './users/types';
 import { UsersTableDesktop, UsersCardsMobile, type SortKey, type RowActions } from './users/UsersTable';
 import { UserFormDrawer } from './users/UserFormDrawer';
+import { downloadEmptyTemplate, exportUsersToXlsx } from './users/importValidation';
 
 // Carregado sob demanda (traz o SheetJS/xlsx) só quando o admin abre a importação.
 const ImportWizard = lazy(() => import('./users/ImportWizard').then((m) => ({ default: m.ImportWizard })));
