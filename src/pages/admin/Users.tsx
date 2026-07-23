@@ -215,7 +215,7 @@ export default function AdminUsers() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, e-mail ou empresa…" className="flex-1" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, e-mail, telefone ou empresa…" className="flex-1" />
         <div className="hidden sm:flex gap-2.5">
           <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-[168px]">
             <option value="">Todos os papéis</option>
