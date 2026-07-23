@@ -197,6 +197,8 @@ export default function AdminUsers() {
         subtitle="Gerencie administradores, professores, monitores e alunos."
         actions={
           <>
+            <Button variant="secondary" icon={<FileDown className="w-4 h-4" />} onClick={downloadEmptyTemplate}>Baixar template</Button>
+            <Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={() => exportUsersToXlsx(sorted)}>Exportar</Button>
             <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>Importar planilha</Button>
             <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setDrawer({ mode: 'create' })}>Novo usuário</Button>
           </>
