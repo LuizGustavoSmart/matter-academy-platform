@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import {
   Plus, Upload, Search, Users as UsersIcon, SlidersHorizontal, X, Copy, Check,
-  RefreshCw, Ban, ShieldCheck, Trash2, AlertCircle,
+  RefreshCw, Ban, ShieldCheck, Trash2, AlertCircle, Download, FileDown,
 } from 'lucide-react';
 import { supabase, callFn } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
