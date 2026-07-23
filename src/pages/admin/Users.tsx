@@ -86,8 +86,18 @@ export default function AdminUsers() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const qDigits = normalizePhone(search).replace(/\D/g, '');
     return users.filter((u) => {
-      if (q && !u.email.toLowerCase().includes(q) && !fullName(u.nome, u.sobrenome).toLowerCase().includes(q) && !(u.empresa ?? '').toLowerCase().includes(q)) return false;
+      if (q) {
+        const phoneDigits = (u.telefone ?? '').replace(/\D/g, '');
+        const hitPhone = qDigits.length >= 3 && phoneDigits.includes(qDigits);
+        if (
+          !u.email.toLowerCase().includes(q)
+          && !fullName(u.nome, u.sobrenome).toLowerCase().includes(q)
+          && !(u.empresa ?? '').toLowerCase().includes(q)
+          && !hitPhone
+        ) return false;
+      }
       if (filterRole && u.role !== filterRole) return false;
       if (filterStatus && u.status !== filterStatus) return false;
       if (filterTurma && !u.turmas.some((t) => t.id === filterTurma)) return false;
@@ -101,6 +111,7 @@ export default function AdminUsers() {
       let av: string | number = '', bv: string | number = '';
       if (sort.key === 'nome') { av = fullName(a.nome, a.sobrenome) || a.email; bv = fullName(b.nome, b.sobrenome) || b.email; }
       else if (sort.key === 'email') { av = a.email; bv = b.email; }
+      else if (sort.key === 'telefone') { av = (a.telefone ?? '').replace(/\D/g, ''); bv = (b.telefone ?? '').replace(/\D/g, ''); }
       else if (sort.key === 'status') { av = STATUS_ORDER[a.status] ?? 9; bv = STATUS_ORDER[b.status] ?? 9; }
       else { av = a.created_at; bv = b.created_at; }
       const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
@@ -108,6 +119,7 @@ export default function AdminUsers() {
     });
     return arr;
   }, [filtered, sort]);
+
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
