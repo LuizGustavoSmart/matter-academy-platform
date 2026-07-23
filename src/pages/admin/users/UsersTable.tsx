@@ -64,7 +64,9 @@ export function UsersTableDesktop({
           <thead>
             <tr className="border-b border-line">
               <Th className="w-10"><Checkbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={onToggleAll} /></Th>
-              <SortHeader label="Usuário" active={sort.key === 'nome'} dir={sortDir('nome')} onClick={() => onSort('nome')} />
+              <SortHeader label="Nome" active={sort.key === 'nome'} dir={sortDir('nome')} onClick={() => onSort('nome')} />
+              <SortHeader label="E-mail" active={sort.key === 'email'} dir={sortDir('email')} onClick={() => onSort('email')} />
+              <SortHeader label="Telefone" active={sort.key === 'telefone'} dir={sortDir('telefone')} onClick={() => onSort('telefone')} />
               <Th>Empresa</Th>
               <Th>Papel</Th>
               <SortHeader label="Status" active={sort.key === 'status'} dir={sortDir('status')} onClick={() => onSort('status')} />
@@ -83,17 +85,17 @@ export function UsersTableDesktop({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <Avatar name={fullName(u.nome, u.sobrenome)} email={u.email} size={34} />
-                      <div className="min-w-0">
-                        <p className="text-fg font-medium truncate max-w-[200px]">{name}{isSelf && <span className="text-fg-3 text-xs font-normal ml-1.5">(você)</span>}</p>
-                        <p className="text-fg-3 text-xs truncate max-w-[200px]">{u.email}</p>
-                      </div>
+                      <p className="text-fg font-medium truncate max-w-[220px]">{name}{isSelf && <span className="text-fg-3 text-xs font-normal ml-1.5">(você)</span>}</p>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-fg-2"><span className="truncate max-w-[240px] inline-block align-middle">{u.email}</span></td>
+                  <td className="px-4 py-3 text-fg-2 whitespace-nowrap">{u.telefone ? formatPhone(u.telefone) : <span className="text-fg-3 text-xs">—</span>}</td>
                   <td className="px-4 py-3 text-fg-2">{u.empresa || <span className="text-fg-3 text-xs">—</span>}</td>
                   <td className="px-4 py-3"><Badge tone={ROLE_TONE[u.role]} dot>{ROLE_LABEL[u.role]}</Badge></td>
                   <td className="px-4 py-3"><Badge tone={STATUS_TONE[u.status]} dot>{statusLabel(u.status)}</Badge></td>
                   <td className="px-4 py-3"><TurmaCell turmas={u.turmas} /></td>
                   <td className="px-4 py-3 text-fg-3 text-xs whitespace-nowrap">{new Date(u.created_at).toLocaleDateString('pt-BR')}</td>
+
                   <td className="px-4 py-3 text-right">
                     <DropdownMenu
                       items={rowMenu(u, isSelf, actions)}
