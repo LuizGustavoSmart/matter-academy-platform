@@ -186,29 +186,53 @@ export default function StudentDashboard() {
                 </div>
                 <div className="rounded-lg border border-line p-3">
                   <p className="text-2xl font-display font-semibold text-brand tabular-nums">{aulasFeitas}</p>
-                  <p className="text-fg-3 text-xs mt-1">Aulas feitas</p>
+                  <p className="text-fg-3 text-xs mt-1 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand inline-block" />Aulas feitas</p>
                 </div>
                 <div className="rounded-lg border border-line p-3">
                   <p className="text-2xl font-display font-semibold text-fg tabular-nums">{aulasLancadas}</p>
-                  <p className="text-fg-3 text-xs mt-1">Aulas lançadas</p>
+                  <p className="text-fg-3 text-xs mt-1 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand/40 inline-block" />Aulas lançadas</p>
                 </div>
                 <div className="rounded-lg border border-line p-3">
-                  <p className="text-2xl font-display font-semibold text-fg tabular-nums">{aulasRestantes}</p>
-                  <p className="text-fg-3 text-xs mt-1">Aulas restantes</p>
+                  <p className="text-2xl font-display font-semibold text-fg tabular-nums">{aulasTotais}</p>
+                  <p className="text-fg-3 text-xs mt-1 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-line inline-block" />Aulas totais</p>
                 </div>
               </div>
-              <div className="mt-5 space-y-4">
+
+              <div className="mt-5 space-y-5">
+                {/* Progresso geral: feitas / lançadas / totais */}
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-fg-2">Faixa atual ({faixaAtual}ª) — {aulasNaFaixaAtual}/{AULAS_POR_FAIXA} aulas</span><span className="text-brand font-medium">{pctFaixaAtual}%</span></div>
-                  <ProgressBar value={pctFaixaAtual} />
+                  <div className="flex justify-between text-xs">
+                    <span className="text-fg-2">Progresso geral — {aulasFeitas} de {aulasTotais} aulas</span>
+                    <span className="text-brand font-medium tabular-nums">{pctGeral}%</span>
+                  </div>
+                  <div className="h-3 w-full rounded-full bg-line/60 overflow-hidden flex">
+                    <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pctFeitas}%` }} />
+                    <div className="h-full bg-brand/40 transition-all duration-500" style={{ width: `${pctLancadas}%` }} />
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-3">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand inline-block" />{aulasFeitas} feitas</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand/40 inline-block" />{Math.max(aulasLancadas - aulasFeitas, 0)} lançadas a fazer</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-line inline-block" />{aulasNaoLancadas} ainda não lançadas</span>
+                  </div>
                 </div>
+
+                {/* Faixa atual em blocos de 12 */}
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-fg-2">Progresso geral — {aulasFeitas}/{aulasLancadas || '—'} aulas</span><span className="text-brand font-medium">{pctGeral}%</span></div>
-                  <ProgressBar value={pctGeral} />
+                  <div className="flex justify-between text-xs">
+                    <span className="text-fg-2">Faixa atual ({faixaAtual}ª) — {aulasNaFaixaAtual}/{AULAS_POR_FAIXA} aulas</span>
+                    <span className="text-brand font-medium tabular-nums">{pctFaixaAtual}%</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {Array.from({ length: AULAS_POR_FAIXA }).map((_, i) => (
+                      <div key={i} className={cn('h-2.5 flex-1 rounded-sm transition-colors', i < aulasNaFaixaAtual ? 'bg-brand' : 'bg-line/60')} />
+                    ))}
+                  </div>
                 </div>
-                <p className="text-fg-3 text-[11px]">Cada faixa equivale a {AULAS_POR_FAIXA} aulas concluídas.</p>
+
+                <p className="text-fg-3 text-[11px]">Cada faixa equivale a {AULAS_POR_FAIXA} aulas — {aulasRestantes} aulas restantes para concluir todas as faixas.</p>
               </div>
             </Card>
+
 
             {/* Continuar estudando */}
 
