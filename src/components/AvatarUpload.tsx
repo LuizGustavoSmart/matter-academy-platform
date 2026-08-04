@@ -48,15 +48,7 @@ export default function AvatarUpload({ size = 44 }: { size?: number }) {
     }
   };
 
-  const removePhoto = async () => {
-    if (!profile) return;
-    setBusy(true);
-    try {
-      const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
-      if (error) throw error;
-      await refresh();
-    } finally { setBusy(false); }
-  };
+
 
   return (
     <div className="flex items-center gap-3">
