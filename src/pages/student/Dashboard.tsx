@@ -137,6 +137,7 @@ export default function StudentDashboard() {
   const featured = inProgress[0] ?? courses[0] ?? null;
   const featuredPct = featured && featured.total ? Math.round((featured.done / featured.total) * 100) : 0;
 
+
   /* ── Visão geral por faixas (12 aulas = 1 faixa) ── */
   const AULAS_POR_FAIXA = 12;
   const aulasFeitas = courses.reduce((s, c) => s + c.done, 0);
