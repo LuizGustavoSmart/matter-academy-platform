@@ -158,6 +158,13 @@ export default function StudentDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div className="mb-5 rounded-xl border border-brand/25 bg-gradient-to-r from-brand/15 via-brand/5 to-transparent p-4">
+        <p className="text-fg text-sm sm:text-base font-medium">
+          {firstName ? `Que bom ver você por aqui, ${firstName}!` : 'Que bom ver você por aqui!'}
+        </p>
+        <p className="text-fg-2 text-xs sm:text-sm mt-0.5">A consistência é essencial para seu aprendizado.</p>
+      </div>
+
       <header className="mb-7 flex items-center gap-3">
         <AvatarUpload size={44} />
         <div>
@@ -165,6 +172,7 @@ export default function StudentDashboard() {
           <p className="text-fg-3 text-sm">Continue de onde parou e acompanhe seu progresso.</p>
         </div>
       </header>
+
 
       {loading ? (
         <div className="grid lg:grid-cols-3 gap-6">
