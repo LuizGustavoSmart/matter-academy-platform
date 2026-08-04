@@ -107,22 +107,25 @@ export default function StudentCourse() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="px-4 sm:px-6 py-6 border-b border-line">
-        <div className="flex items-center justify-between mb-4">
-          <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-fg-3 hover:text-fg transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</Link>
-          <Link to={`/curso/${id}/cronograma`} className="inline-flex items-center gap-1.5 text-sm text-fg-3 hover:text-brand transition-colors"><CalendarDays className="w-4 h-4" /> Cronograma</Link>
-        </div>
-
-        {/* Aviso motivacional */}
-        <div className="mb-5 rounded-xl border border-brand/25 bg-gradient-to-r from-brand/15 via-brand/5 to-transparent p-4 flex items-start gap-3">
+      {/* Aviso motivacional — sempre no topo */}
+      <div className="px-4 sm:px-6 pt-5">
+        <div className="rounded-xl border border-brand/25 bg-gradient-to-r from-brand/15 via-brand/5 to-transparent p-4 flex items-start gap-3">
           <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand/15 text-brand flex items-center justify-center">{aviso.icon}</div>
           <div className="min-w-0">
             <p className="text-fg text-sm font-medium">{aviso.title}</p>
             <p className="text-fg-2 text-xs sm:text-sm mt-0.5">{aviso.text}</p>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 sm:px-6 py-5 border-b border-line">
+        <div className="flex items-center justify-between mb-4">
+          <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-fg-3 hover:text-fg transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</Link>
+          <Link to={`/curso/${id}/cronograma`} className="inline-flex items-center gap-1.5 text-sm text-fg-3 hover:text-brand transition-colors"><CalendarDays className="w-4 h-4" /> Cronograma</Link>
+        </div>
 
         <h1 className="mb-3">{curso.titulo}</h1>
+
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className="inline-flex items-center gap-1.5 text-xs rounded-full border border-line px-2.5 py-1 text-fg-2"><CheckCircle2 className="w-3.5 h-3.5 text-brand" />{done.size} concluída{done.size === 1 ? '' : 's'}</span>
           <span className="inline-flex items-center gap-1.5 text-xs rounded-full border border-line px-2.5 py-1 text-fg-2"><PlayCircle className="w-3.5 h-3.5 text-fg-3" />{restantes} restante{restantes === 1 ? '' : 's'}</span>
