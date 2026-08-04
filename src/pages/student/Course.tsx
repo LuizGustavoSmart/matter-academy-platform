@@ -147,7 +147,7 @@ export default function StudentCourse() {
                   return (
                     <li key={a.id}>
                       <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border', isCurrent ? 'bg-brand/10 border-brand/30 shadow-sm' : 'hover:bg-panel-2 hover:border-line border-transparent')}>
-                        <span className={cn('w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums transition-colors', isDoneA ? 'bg-brand/15 text-brand' : isCurrent ? 'bg-brand text-brand-fg' : 'bg-panel-2 text-fg-3')}>
+                        <span className={cn('w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums transition-colors', isDoneA ? 'bg-brand/15 text-brand' : isCurrent ? 'bg-brand text-brand-ink' : 'bg-panel-2 text-fg-3')}>
                           {isDoneA ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <PlayCircle className="w-4 h-4" /> : a.ordem}
                         </span>
                         <div className="min-w-0 flex-1">
