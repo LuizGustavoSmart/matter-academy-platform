@@ -107,8 +107,15 @@ export default function StudentCourse() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Aviso motivacional — sempre no topo */}
+      {/* Boas-vindas + aviso motivacional — sempre no topo */}
       <div className="px-4 sm:px-6 pt-5">
+        <div className="mb-3">
+          <h2 className="text-lg sm:text-xl font-display font-semibold text-fg">
+            {profile?.nome ? `Que bom ver você por aqui, ${profile.nome.split(' ')[0]}!` : 'Que bom ver você por aqui!'}
+          </h2>
+          <p className="text-fg-2 text-sm mt-0.5">A consistência é essencial para seu aprendizado.</p>
+        </div>
+
         <div className="rounded-xl border border-brand/25 bg-gradient-to-r from-brand/15 via-brand/5 to-transparent p-4 flex items-start gap-3">
           <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand/15 text-brand flex items-center justify-center">{aviso.icon}</div>
           <div className="min-w-0">
