@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Check, HelpCircle, CalendarDays, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, HelpCircle, CalendarDays, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
