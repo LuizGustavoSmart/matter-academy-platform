@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle } from 'lucide-react';
+import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle, Target } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, Avatar, cn } from '../../components/ui';
