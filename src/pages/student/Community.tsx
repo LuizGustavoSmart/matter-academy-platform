@@ -8,8 +8,8 @@ import { Button, Badge, Avatar, EmptyState, Skeleton, useToast, useConfirm, cn }
 type PostTipo = 'duvida' | 'outros';
 type PostStatus = 'aberta' | 'resolvida';
 type Filtro = 'todos' | 'duvida' | 'duvida_aberta';
-type Post = { id: string; user_id: string; content: string; tipo: PostTipo; status: PostStatus; created_at: string | null; profiles: { email: string; nome?: string | null; role?: string } | null };
-type Comment = { id: string; user_id: string; content: string; created_at: string | null; profiles: { email: string; nome?: string | null; role?: string } | null };
+type Post = { id: string; user_id: string; content: string; tipo: PostTipo; status: PostStatus; created_at: string | null; profiles: { email: string; nome?: string | null; role?: string; avatar_url?: string | null } | null };
+type Comment = { id: string; user_id: string; content: string; created_at: string | null; profiles: { email: string; nome?: string | null; role?: string; avatar_url?: string | null } | null };
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '';
@@ -48,7 +48,7 @@ export default function StudentCommunity() {
   const [filtro, setFiltro] = useState<Filtro>(() => (searchParams.get('filtro') === 'duvidas' ? 'duvida_aberta' : 'todos'));
 
   const loadPosts = async () => {
-    const { data } = await supabase.from('community_posts').select('*, profiles(email,nome,role)').eq('turma_id', turmaId!).order('created_at', { ascending: false });
+    const { data } = await supabase.from('community_posts').select('*, profiles(email,nome,role,avatar_url)').eq('turma_id', turmaId!).order('created_at', { ascending: false });
     setPosts((data ?? []) as Post[]);
   };
 
@@ -99,7 +99,7 @@ export default function StudentCommunity() {
   };
   const loadComments = async (postId: string) => {
     if (comments[postId] !== undefined) return;
-    const { data } = await supabase.from('community_comments').select('*, profiles(email,nome,role)').eq('post_id', postId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('community_comments').select('*, profiles(email,nome,role,avatar_url)').eq('post_id', postId).order('created_at', { ascending: true });
     setComments((prev) => ({ ...prev, [postId]: (data ?? []) as Comment[] }));
   };
   const toggleExpand = async (postId: string) => {
@@ -110,7 +110,7 @@ export default function StudentCommunity() {
   const submitComment = async (postId: string) => {
     const text = (newComment[postId] ?? '').trim();
     if (!text || !profile) return;
-    const { data, error } = await supabase.from('community_comments').insert({ post_id: postId, user_id: profile.id, content: text }).select('*, profiles(email,nome,role)').single();
+    const { data, error } = await supabase.from('community_comments').insert({ post_id: postId, user_id: profile.id, content: text }).select('*, profiles(email,nome,role,avatar_url)').single();
     if (error) { toast.error(error.message); return; }
     setComments((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), data as Comment] }));
     setNewComment((prev) => ({ ...prev, [postId]: '' }));
@@ -185,7 +185,7 @@ export default function StudentCommunity() {
               <div key={post.id} className={cn('bg-panel border rounded-xl overflow-hidden transition-all', isResolvida ? 'border-brand/20 opacity-80' : isDuvida ? 'border-warn/30' : 'border-line')}>
                 <div className="p-4">
                   <div className="flex items-start gap-3">
-                    <Avatar name={post.profiles?.nome} email={post.profiles?.email} size={32} />
+                    <Avatar name={post.profiles?.nome} email={post.profiles?.email} src={post.profiles?.avatar_url} size={32} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-sm font-medium text-fg truncate">{post.profiles?.nome || post.profiles?.email || 'Usuário'}</span>
@@ -208,7 +208,7 @@ export default function StudentCommunity() {
                       <div className="divide-y divide-line/60">
                         {postComments.map((c) => (
                           <div key={c.id} className="px-4 py-3 flex items-start gap-2.5">
-                            <Avatar name={c.profiles?.nome} email={c.profiles?.email} size={24} />
+                            <Avatar name={c.profiles?.nome} email={c.profiles?.email} src={c.profiles?.avatar_url} size={24} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                                 <span className="text-xs font-medium text-fg truncate">{c.profiles?.nome || c.profiles?.email || 'Usuário'}</span>

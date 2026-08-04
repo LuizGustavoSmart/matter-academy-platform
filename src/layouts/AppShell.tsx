@@ -95,7 +95,7 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
         aria-expanded={open}
         className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors', !collapsed && 'w-full')}
       >
-        <Avatar name={profile?.nome} email={profile?.email} size={32} />
+        <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} />
         {!collapsed && (
           <span className="min-w-0 text-left flex-1">
             <span className="block text-sm text-fg font-medium truncate">{name}</span>
