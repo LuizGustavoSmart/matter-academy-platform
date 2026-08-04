@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle } from 'lucide-react';
+import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle, Target } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, Avatar, cn } from '../../components/ui';
@@ -129,6 +129,19 @@ export default function StudentDashboard() {
   const featured = inProgress[0] ?? courses[0] ?? null;
   const featuredPct = featured && featured.total ? Math.round((featured.done / featured.total) * 100) : 0;
 
+  /* ── Visão geral por faixas (12 aulas = 1 faixa) ── */
+  const AULAS_POR_FAIXA = 12;
+  const aulasFeitas = courses.reduce((s, c) => s + c.done, 0);
+  const aulasLancadas = courses.reduce((s, c) => s + c.total, 0);
+  const faixasTotais = Math.ceil(aulasLancadas / AULAS_POR_FAIXA);
+  const faixasConcluidas = Math.floor(aulasFeitas / AULAS_POR_FAIXA);
+  const aulasNaFaixaAtual = aulasFeitas % AULAS_POR_FAIXA;
+  const faixaAtual = Math.min(faixasConcluidas + 1, Math.max(faixasTotais, 1));
+  const pctFaixaAtual = Math.round((aulasNaFaixaAtual / AULAS_POR_FAIXA) * 100);
+  const pctGeral = aulasLancadas ? Math.round((aulasFeitas / aulasLancadas) * 100) : 0;
+  const aulasRestantes = Math.max(aulasLancadas - aulasFeitas, 0);
+
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <header className="mb-7 flex items-center gap-3">
@@ -150,7 +163,42 @@ export default function StudentDashboard() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Coluna principal */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Visão geral: faixas e aulas */}
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center gap-2 mb-4"><Target className="w-4 h-4 text-fg-2" /><h2 className="text-base">Sua evolução</h2></div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-line p-3">
+                  <p className="text-2xl font-display font-semibold text-fg tabular-nums">{faixasConcluidas}<span className="text-fg-3 text-base font-normal">/{faixasTotais || '—'}</span></p>
+                  <p className="text-fg-3 text-xs mt-1">Faixas concluídas</p>
+                </div>
+                <div className="rounded-lg border border-line p-3">
+                  <p className="text-2xl font-display font-semibold text-brand tabular-nums">{aulasFeitas}</p>
+                  <p className="text-fg-3 text-xs mt-1">Aulas feitas</p>
+                </div>
+                <div className="rounded-lg border border-line p-3">
+                  <p className="text-2xl font-display font-semibold text-fg tabular-nums">{aulasLancadas}</p>
+                  <p className="text-fg-3 text-xs mt-1">Aulas lançadas</p>
+                </div>
+                <div className="rounded-lg border border-line p-3">
+                  <p className="text-2xl font-display font-semibold text-fg tabular-nums">{aulasRestantes}</p>
+                  <p className="text-fg-3 text-xs mt-1">Aulas restantes</p>
+                </div>
+              </div>
+              <div className="mt-5 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs"><span className="text-fg-2">Faixa atual ({faixaAtual}ª) — {aulasNaFaixaAtual}/{AULAS_POR_FAIXA} aulas</span><span className="text-brand font-medium">{pctFaixaAtual}%</span></div>
+                  <ProgressBar value={pctFaixaAtual} />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs"><span className="text-fg-2">Progresso geral — {aulasFeitas}/{aulasLancadas || '—'} aulas</span><span className="text-brand font-medium">{pctGeral}%</span></div>
+                  <ProgressBar value={pctGeral} />
+                </div>
+                <p className="text-fg-3 text-[11px]">Cada faixa equivale a {AULAS_POR_FAIXA} aulas concluídas.</p>
+              </div>
+            </Card>
+
             {/* Continuar estudando */}
+
             {featured && (
               <Card className="p-5 sm:p-6 relative overflow-hidden">
                 <span className="absolute -right-16 -top-16 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(closest-side, rgba(203,251,0,0.10), transparent 70%)' }} />
