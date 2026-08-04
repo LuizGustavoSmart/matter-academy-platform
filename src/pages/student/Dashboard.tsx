@@ -5,7 +5,7 @@ import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, 
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AvatarUpload from '../../components/AvatarUpload';
-import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, Avatar, cn } from '../../components/ui';
+import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 
 type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number };
