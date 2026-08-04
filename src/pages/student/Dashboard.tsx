@@ -27,7 +27,14 @@ export default function StudentDashboard() {
       if (!profile) return;
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
       const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
-      const cursoIds = [...new Set((ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string))];
+      // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
+      const { data: ctRows } = turmaIds.length
+        ? await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds)
+        : { data: [] };
+      const cursoIds = [...new Set([
+        ...(ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string),
+        ...(ctRows ?? []).map((r) => r.curso_id),
+      ])];
 
       const { data: ts } = turmaIds.length
         ? await supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
