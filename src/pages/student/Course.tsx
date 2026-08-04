@@ -135,7 +135,10 @@ export default function StudentCourse() {
       <div className="grid lg:grid-cols-[320px_1fr] gap-0">
         <aside className="border-b lg:border-b-0 lg:border-r border-line lg:min-h-[calc(100vh-64px-120px)] max-h-[260px] lg:max-h-none overflow-y-auto scrollbar-thin">
           <div className="p-4">
-            <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-3">Conteúdo</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider">Conteúdo</p>
+              <span className="text-fg-3 text-[11px] tabular-nums">{done.size}/{aulas.length}</span>
+            </div>
             {aulas.length === 0 ? <p className="text-fg-3 text-sm">Sem aulas</p> : (
               <ul className="space-y-1">
                 {aulas.map((a) => {
@@ -143,14 +146,22 @@ export default function StudentCourse() {
                   const isDoneA = done.has(a.id);
                   return (
                     <li key={a.id}>
-                      <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors border', isCurrent ? 'bg-brand/10 border-brand/30' : 'hover:bg-panel-2 border-transparent')}>
-                        {isDoneA ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand" /> : <Circle className="w-4 h-4 mt-0.5 flex-shrink-0 text-fg-3" />}
+                      <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border', isCurrent ? 'bg-brand/10 border-brand/30 shadow-sm' : 'hover:bg-panel-2 hover:border-line border-transparent')}>
+                        <span className={cn('w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums transition-colors', isDoneA ? 'bg-brand/15 text-brand' : isCurrent ? 'bg-brand text-brand-fg' : 'bg-panel-2 text-fg-3')}>
+                          {isDoneA ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <PlayCircle className="w-4 h-4" /> : a.ordem}
+                        </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-fg-3 text-[11px]">Aula {a.ordem}</p>
                           <p className={cn('text-sm truncate', isCurrent ? 'text-fg font-medium' : 'text-fg-2')}>{a.titulo}</p>
                         </div>
+                        {isDoneA && <Check className="w-3.5 h-3.5 text-brand flex-shrink-0" />}
                       </button>
                     </li>
+                  );
+                })}
+              </ul>
+            )}
+
                   );
                 })}
               </ul>
