@@ -293,11 +293,21 @@ export function Badge({
 
 /* ─────────────────────────────── Avatar ────────────────────────────── */
 export function Avatar({
-  name, email, size = 36, className = '',
+  name, email, size = 36, className = '', src,
 }: {
-  name?: string | null; email?: string | null; size?: number; className?: string;
+  name?: string | null; email?: string | null; size?: number; className?: string; src?: string | null;
 }) {
   const hue = stringHue((name || email || '?').toLowerCase());
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={cn('rounded-full object-cover flex-shrink-0 select-none border border-line', className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <span
       className={cn('inline-grid place-items-center rounded-full font-medium text-fg flex-shrink-0 select-none', className)}
@@ -312,6 +322,7 @@ export function Avatar({
     </span>
   );
 }
+
 
 /* ──────────────────────────── ProgressBar ──────────────────────────── */
 export function ProgressBar({ value, className = '', tone = 'brand' }: { value: number; className?: string; tone?: 'brand' | 'ok' }) {

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle, Target } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import AvatarUpload from '../../components/AvatarUpload';
 import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, Avatar, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 
@@ -158,7 +159,7 @@ export default function StudentDashboard() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <header className="mb-7 flex items-center gap-3">
-        <Avatar name={profile?.nome} email={profile?.email} size={44} />
+        <AvatarUpload size={44} />
         <div>
           <h1 className="mb-0.5">{firstName ? `Olá, ${firstName}` : 'Meus cursos'}</h1>
           <p className="text-fg-3 text-sm">Continue de onde parou e acompanhe seu progresso.</p>

@@ -10,7 +10,7 @@ type Pair = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: 
 type Message = {
   id: string; turma_id: string; curso_id: string; user_id: string;
   content: string | null; arquivo_url: string | null; arquivo_nome: string | null;
-  created_at: string; profiles: { email: string; nome: string | null } | null;
+  created_at: string; profiles: { email: string; nome: string | null; avatar_url?: string | null } | null;
 };
 
 export default function Comunidade() {
@@ -71,7 +71,7 @@ export default function Comunidade() {
 
   const loadMessages = async (p: Pair) => {
     setMsgLoading(true);
-    const { data } = await supabase.from('community_messages').select('*, profiles(email,nome)').eq('turma_id', p.turmaId).eq('curso_id', p.cursoId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('community_messages').select('*, profiles(email,nome,avatar_url)').eq('turma_id', p.turmaId).eq('curso_id', p.cursoId).order('created_at', { ascending: true });
     setMessages((data ?? []) as Message[]);
     setMsgLoading(false);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
@@ -100,7 +100,7 @@ export default function Comunidade() {
       if (file) { const up = await uploadComunidadeFile(file, `${selected.turmaId}/${selected.cursoId}`); arquivo_url = up.path; arquivo_nome = up.nome; }
       const { data, error } = await supabase.from('community_messages')
         .insert({ turma_id: selected.turmaId, curso_id: selected.cursoId, user_id: profile.id, content: text.trim() || null, arquivo_url, arquivo_nome })
-        .select('*, profiles(email,nome)')
+        .select('*, profiles(email,nome,avatar_url)')
         .single();
       if (error) throw error;
       // Mostra a mensagem na hora, sem esperar o round-trip do realtime.
@@ -191,7 +191,7 @@ export default function Comunidade() {
                   const mine = m.user_id === profile?.id;
                   return (
                     <div key={m.id} className={cn('flex gap-2 sm:gap-3', mine && 'flex-row-reverse')}>
-                      <Avatar name={m.profiles?.nome} email={m.profiles?.email} size={32} />
+                      <Avatar name={m.profiles?.nome} email={m.profiles?.email} src={m.profiles?.avatar_url} size={32} />
                       <div className={cn('max-w-[80%] sm:max-w-[75%] rounded-xl px-3 py-2 break-words', mine ? 'bg-brand text-brand-ink' : 'bg-panel border border-line text-fg-2')}>
                         {!mine && <p className="text-xs font-medium opacity-80 mb-0.5 truncate">{m.profiles?.nome || m.profiles?.email || 'Usuário'}</p>}
                         {m.content && <p className="text-sm whitespace-pre-line break-words">{m.content}</p>}
