@@ -72,11 +72,6 @@ export default function AvatarUpload({ size = 44 }: { size?: number }) {
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
         </span>
       </button>
-      {profile?.avatar_url && (
-        <button type="button" onClick={removePhoto} className="text-[11px] text-fg-3 hover:text-fg transition-colors underline-offset-2 hover:underline">
-          Remover foto
-        </button>
-      )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
     </div>
   );
