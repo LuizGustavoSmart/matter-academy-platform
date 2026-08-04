@@ -6,9 +6,11 @@ export type Profile = {
   id: string;
   email: string;
   nome: string | null;
+  avatar_url?: string | null;
   role: 'admin' | 'student' | 'professor' | 'monitor';
   status: 'pending' | 'active' | 'blocked';
 };
+
 
 type AuthCtx = {
   session: Session | null;
