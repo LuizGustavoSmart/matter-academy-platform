@@ -23,6 +23,7 @@ export default function StudentCourse() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [duvidaOpen, setDuvidaOpen] = useState(false);
+  const [daysSince, setDaysSince] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -36,12 +37,19 @@ export default function StudentCourse() {
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id);
       setDone(new Set((ps ?? []).filter((p) => p.concluido).map((p) => p.aula_id)));
       const courseAulaIds = new Set((as ?? []).map((a: Aula) => a.id));
+      const lastAccessed = (ps ?? []).filter((p) => courseAulaIds.has(p.aula_id)).sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())[0];
+      if (lastAccessed?.updated_at) {
+        const diffMs = Date.now() - new Date(lastAccessed.updated_at).getTime();
+        setDaysSince(Math.max(0, Math.floor(diffMs / 86_400_000)));
+      } else {
+        setDaysSince(null);
+      }
       const requestedAula = searchParams.get('aula');
       if (requestedAula && courseAulaIds.has(requestedAula)) { setCurrentId(requestedAula); setLoading(false); return; }
-      const lastAccessed = (ps ?? []).filter((p) => courseAulaIds.has(p.aula_id)).sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())[0];
       setCurrentId(lastAccessed?.aula_id ?? (as?.[0]?.id ?? null));
       setLoading(false);
     };
+
     load();
   }, [id, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
