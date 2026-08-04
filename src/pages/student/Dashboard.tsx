@@ -140,13 +140,19 @@ export default function StudentDashboard() {
   const AULAS_POR_FAIXA = 12;
   const aulasFeitas = courses.reduce((s, c) => s + c.done, 0);
   const aulasLancadas = courses.reduce((s, c) => s + c.total, 0);
-  const faixasTotais = Math.ceil(aulasLancadas / AULAS_POR_FAIXA);
-  const faixasConcluidas = Math.floor(aulasFeitas / AULAS_POR_FAIXA);
+  // Cada curso (faixa) tem 12 aulas previstas no total
+  const faixasTotais = Math.max(courses.length, Math.ceil(aulasLancadas / AULAS_POR_FAIXA));
+  const aulasTotais = faixasTotais * AULAS_POR_FAIXA;
+  const faixasConcluidas = courses.filter((c) => c.total > 0 && c.done >= AULAS_POR_FAIXA).length;
   const aulasNaFaixaAtual = aulasFeitas % AULAS_POR_FAIXA;
   const faixaAtual = Math.min(faixasConcluidas + 1, Math.max(faixasTotais, 1));
   const pctFaixaAtual = Math.round((aulasNaFaixaAtual / AULAS_POR_FAIXA) * 100);
-  const pctGeral = aulasLancadas ? Math.round((aulasFeitas / aulasLancadas) * 100) : 0;
-  const aulasRestantes = Math.max(aulasLancadas - aulasFeitas, 0);
+  const pctFeitas = aulasTotais ? (aulasFeitas / aulasTotais) * 100 : 0;
+  const pctLancadas = aulasTotais ? (Math.max(aulasLancadas - aulasFeitas, 0) / aulasTotais) * 100 : 0;
+  const pctGeral = aulasTotais ? Math.round((aulasFeitas / aulasTotais) * 100) : 0;
+  const aulasRestantes = Math.max(aulasTotais - aulasFeitas, 0);
+  const aulasNaoLancadas = Math.max(aulasTotais - aulasLancadas, 0);
+
 
 
   return (
