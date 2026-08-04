@@ -78,6 +78,7 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
           if (j?.error) msg = j.error;
         } catch { /* ignore */ }
         if (ctx?.status === 403) msg = 'Você não tem acesso a esta aula';
+        if (ctx?.status === 404) msg = 'Esta aula ainda não possui vídeo cadastrado.';
         setLoadErr(msg);
         return;
       }
