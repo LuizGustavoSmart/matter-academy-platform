@@ -81,17 +81,56 @@ export default function StudentCourse() {
   const pct = aulas.length ? Math.round((done.size / aulas.length) * 100) : 0;
   const isDone = current ? done.has(current.id) : false;
   const hasNext = currentIdx < aulas.length - 1;
+  const restantes = Math.max(aulas.length - done.size, 0);
+
+  const aviso = (() => {
+    if (aulas.length > 0 && done.size >= aulas.length) {
+      return { icon: <Trophy className="w-5 h-5" />, title: 'Faixa concluída!', text: 'Você finalizou todas as aulas deste curso. Que tal revisar ou avançar para a próxima faixa?' };
+    }
+    if (daysSince === null) {
+      return { icon: <Sparkles className="w-5 h-5" />, title: 'Bora começar!', text: 'Sua primeira aula está esperando por você. Um passo por dia já muda o jogo.' };
+    }
+    if (daysSince === 0) {
+      return { icon: <Flame className="w-5 h-5" />, title: 'Você está no ritmo!', text: `Já estudou hoje. Faltam ${restantes} aula${restantes === 1 ? '' : 's'} para concluir esta faixa.` };
+    }
+    if (daysSince === 1) {
+      return { icon: <Flame className="w-5 h-5" />, title: 'Sequência quase intacta', text: 'Você estudou ontem — assista mais uma aula hoje e mantenha o ritmo.' };
+    }
+    if (daysSince <= 6) {
+      return { icon: <Clock className="w-5 h-5" />, title: `Você está há ${daysSince} dias sem acessar suas aulas`, text: 'Bora manter o ritmo? Só uma aula já te coloca de volta no jogo.' };
+    }
+    if (daysSince <= 20) {
+      return { icon: <Clock className="w-5 h-5" />, title: `Já são ${daysSince} dias longe das aulas`, text: `Você tem ${restantes} aula${restantes === 1 ? '' : 's'} restante${restantes === 1 ? '' : 's'} nesta faixa. Retome agora, do ponto onde parou.` };
+    }
+    return { icon: <PlayCircle className="w-5 h-5" />, title: `Faz ${daysSince} dias desde o seu último acesso`, text: 'Nunca é tarde para voltar. Comece com a próxima aula e reconstrua seu ritmo.' };
+  })();
 
   return (
     <div className="max-w-7xl mx-auto">
       <div className="px-4 sm:px-6 py-6 border-b border-line">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-fg-3 hover:text-fg transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</Link>
           <Link to={`/curso/${id}/cronograma`} className="inline-flex items-center gap-1.5 text-sm text-fg-3 hover:text-brand transition-colors"><CalendarDays className="w-4 h-4" /> Cronograma</Link>
         </div>
+
+        {/* Aviso motivacional */}
+        <div className="mb-5 rounded-xl border border-brand/25 bg-gradient-to-r from-brand/15 via-brand/5 to-transparent p-4 flex items-start gap-3">
+          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand/15 text-brand flex items-center justify-center">{aviso.icon}</div>
+          <div className="min-w-0">
+            <p className="text-fg text-sm font-medium">{aviso.title}</p>
+            <p className="text-fg-2 text-xs sm:text-sm mt-0.5">{aviso.text}</p>
+          </div>
+        </div>
+
         <h1 className="mb-3">{curso.titulo}</h1>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="inline-flex items-center gap-1.5 text-xs rounded-full border border-line px-2.5 py-1 text-fg-2"><CheckCircle2 className="w-3.5 h-3.5 text-brand" />{done.size} concluída{done.size === 1 ? '' : 's'}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs rounded-full border border-line px-2.5 py-1 text-fg-2"><PlayCircle className="w-3.5 h-3.5 text-fg-3" />{restantes} restante{restantes === 1 ? '' : 's'}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs rounded-full border border-line px-2.5 py-1 text-fg-2"><Clock className="w-3.5 h-3.5 text-fg-3" />{daysSince === null ? 'Primeiro acesso' : daysSince === 0 ? 'Acessou hoje' : `Há ${daysSince} dia${daysSince === 1 ? '' : 's'}`}</span>
+        </div>
         <div className="flex items-center gap-3 max-w-md"><div className="flex-1"><ProgressBar value={pct} /></div><span className="text-sm text-brand font-medium tabular-nums">{pct}%</span></div>
       </div>
+
 
       <div className="grid lg:grid-cols-[320px_1fr] gap-0">
         <aside className="border-b lg:border-b-0 lg:border-r border-line lg:min-h-[calc(100vh-64px-120px)] max-h-[260px] lg:max-h-none overflow-y-auto scrollbar-thin">
