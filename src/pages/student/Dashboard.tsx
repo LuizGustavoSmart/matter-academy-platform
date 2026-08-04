@@ -155,6 +155,12 @@ export default function StudentDashboard() {
   const aulasRestantes = Math.max(aulasTotais - aulasFeitas, 0);
   const aulasNaoLancadas = Math.max(aulasTotais - aulasLancadas, 0);
 
+  /* ── Card "Continuar estudando": mesmo modelo (feitas / lançadas / totais) ── */
+  const featuredTotais = Math.max(AULAS_POR_FAIXA, featured?.total ?? 0);
+  const featuredPctFeitas = featured ? ((featured.done / featuredTotais) * 100) : 0;
+  const featuredPctLancadas = featured ? (Math.max(featured.total - featured.done, 0) / featuredTotais) * 100 : 0;
+
+
 
 
   return (
