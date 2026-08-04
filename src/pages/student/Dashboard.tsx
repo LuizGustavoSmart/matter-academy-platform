@@ -137,6 +137,7 @@ export default function StudentDashboard() {
   const featured = inProgress[0] ?? courses[0] ?? null;
   const featuredPct = featured && featured.total ? Math.round((featured.done / featured.total) * 100) : 0;
 
+
   /* ── Visão geral por faixas (12 aulas = 1 faixa) ── */
   const AULAS_POR_FAIXA = 12;
   const aulasFeitas = courses.reduce((s, c) => s + c.done, 0);
@@ -153,6 +154,12 @@ export default function StudentDashboard() {
   const pctGeral = aulasTotais ? Math.round((aulasFeitas / aulasTotais) * 100) : 0;
   const aulasRestantes = Math.max(aulasTotais - aulasFeitas, 0);
   const aulasNaoLancadas = Math.max(aulasTotais - aulasLancadas, 0);
+
+  /* ── Card "Continuar estudando": mesmo modelo (feitas / lançadas / totais) ── */
+  const featuredTotais = Math.max(AULAS_POR_FAIXA, featured?.total ?? 0);
+  const featuredPctFeitas = featured ? ((featured.done / featuredTotais) * 100) : 0;
+  const featuredPctLancadas = featured ? (Math.max(featured.total - featured.done, 0) / featuredTotais) * 100 : 0;
+
 
 
 
@@ -255,9 +262,18 @@ export default function StudentDashboard() {
                     <h2 className="mb-1 truncate">{featured.titulo}</h2>
                     <p className="text-fg-3 text-sm line-clamp-2">{featured.descricao || 'Retome sua próxima aula.'}</p>
                     <div className="mt-4 space-y-2 max-w-md">
-                      <div className="flex justify-between text-xs"><span className="text-fg-2">{featured.done} de {featured.total || '—'} aulas</span><span className="text-brand font-medium">{featuredPct}%</span></div>
-                      <ProgressBar value={featuredPct} />
+                      <div className="flex justify-between text-xs"><span className="text-fg-2">{featured.done} de {featuredTotais} aulas</span><span className="text-brand font-medium tabular-nums">{featuredPct}%</span></div>
+                      <div className="h-3 w-full rounded-full bg-line/60 overflow-hidden flex">
+                        <div className="h-full bg-brand transition-all duration-500" style={{ width: `${featuredPctFeitas}%` }} />
+                        <div className="h-full bg-brand/40 transition-all duration-500" style={{ width: `${featuredPctLancadas}%` }} />
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-3">
+                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand inline-block" />{featured.done} feitas</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand/40 inline-block" />{Math.max(featured.total - featured.done, 0)} lançadas a fazer</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-line inline-block" />{Math.max(featuredTotais - featured.total, 0)} ainda não lançadas</span>
+                      </div>
                     </div>
+
                     <Link to={`/curso/${featured.id}`} className="mt-4 inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">
                       {featured.done === 0 ? 'Começar curso' : 'Continuar'}<ArrowRight className="w-4 h-4" />
                     </Link>
