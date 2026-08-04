@@ -129,6 +129,19 @@ export default function StudentDashboard() {
   const featured = inProgress[0] ?? courses[0] ?? null;
   const featuredPct = featured && featured.total ? Math.round((featured.done / featured.total) * 100) : 0;
 
+  /* ── Visão geral por faixas (12 aulas = 1 faixa) ── */
+  const AULAS_POR_FAIXA = 12;
+  const aulasFeitas = courses.reduce((s, c) => s + c.done, 0);
+  const aulasLancadas = courses.reduce((s, c) => s + c.total, 0);
+  const faixasTotais = Math.ceil(aulasLancadas / AULAS_POR_FAIXA);
+  const faixasConcluidas = Math.floor(aulasFeitas / AULAS_POR_FAIXA);
+  const aulasNaFaixaAtual = aulasFeitas % AULAS_POR_FAIXA;
+  const faixaAtual = Math.min(faixasConcluidas + 1, Math.max(faixasTotais, 1));
+  const pctFaixaAtual = Math.round((aulasNaFaixaAtual / AULAS_POR_FAIXA) * 100);
+  const pctGeral = aulasLancadas ? Math.round((aulasFeitas / aulasLancadas) * 100) : 0;
+  const aulasRestantes = Math.max(aulasLancadas - aulasFeitas, 0);
+
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <header className="mb-7 flex items-center gap-3">
