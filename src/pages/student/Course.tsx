@@ -161,11 +161,6 @@ export default function StudentCourse() {
                 })}
               </ul>
             )}
-
-                  );
-                })}
-              </ul>
-            )}
           </div>
         </aside>
 
