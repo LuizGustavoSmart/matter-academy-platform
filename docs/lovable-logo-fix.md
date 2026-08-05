@@ -1,17 +1,22 @@
-O logo não está aparecendo nos e-mails transacionais (convite, reconvite e redefinição de senha) enviados pelo Resend.
+Os e-mails transacionais (convite, reconvite e redefinição de senha) continuam com dois problemas visuais: o logo não aparece (ícone de imagem quebrada) e o fundo aparece cinza em vez do dark theme da marca quando o cliente de e-mail está em modo escuro (Outlook).
 
-Causa: o e-mail referencia `https://plataforma.matteracademy.ai/logos/matter-academy-email.png`, mas esse arquivo ainda não está publicado no domínio de produção (retorna 404 hoje). Ele existe no repositório em `public/logos/matter-academy-email.png`, no branch `Marcos`, mas depende de um deploy/sync desse branch para ir ao ar.
+Causa raiz dos dois problemas: **o branch `Marcos` ainda não foi publicado (deploy/sync) em produção.** As correções já estão no código desse branch há alguns commits, mas nunca foram sincronizadas. Confirmei agora mesmo que os dois arquivos de logo continuam retornando 404 em produção:
 
-Anexo o vetor oficial do lockup (`matter-academy-negative.svg`) para conferência. Ele já está versionado em `public/logos/matter-academy-negative.svg` no mesmo branch.
+- `https://plataforma.matteracademy.ai/logos/matter-academy-email.png` → 404
+- `https://plataforma.matteracademy.ai/logos/matter-academy-negative.svg` → 404
+
+Enquanto esses arquivos não existirem no domínio de produção, o logo vai continuar quebrado, e enquanto as Edge Functions (`admin-users`, `auth-public`, `_shared/email.ts`) não forem republicadas com o código atual do branch `Marcos`, o e-mail enviado continua sendo a versão antiga do template, sem a correção de dark mode do Outlook.
 
 Pedido:
 
-1. Fazer o deploy/sync do branch `Marcos` para produção, garantindo que os arquivos abaixo fiquem acessíveis publicamente:
+1. Fazer o deploy/sync completo do branch `Marcos` para produção — isso inclui tanto os arquivos estáticos em `public/logos/` quanto as Edge Functions em `supabase/functions/`.
+
+2. Depois do deploy, confirmar que estas URLs retornam HTTP 200:
    - `https://plataforma.matteracademy.ai/logos/matter-academy-email.png`
    - `https://plataforma.matteracademy.ai/logos/matter-academy-negative.svg`
 
-2. Depois do deploy, confirmar que a URL acima do PNG retorna HTTP 200 e mostra o logo (triângulo verde-limão + "matter academy" em cinza-claro, sem fundo).
+3. Confirmar que as Edge Functions publicadas são a versão atual: `supabase functions deploy admin-users` e `supabase functions deploy auth-public` (ou o equivalente do fluxo de deploy do Lovable), garantindo que `supabase/functions/_shared/email.ts` também vá junto (é um módulo compartilhado importado pelas duas funções).
 
-3. Reenviar um convite de teste (criar um usuário no admin com um e-mail real) e confirmar visualmente que o logo aparece no topo do e-mail.
+4. Reenviar um convite de teste (criar um usuário no admin com um e-mail real) e confirmar visualmente: logo aparecendo no topo, e fundo escuro mantido mesmo com o Outlook em modo escuro.
 
-Observação: o PNG é a versão usada especificamente nos e-mails — clientes de e-mail (Gmail, Outlook) não renderizam SVG, então esse arquivo é uma versão já rasterizada e recortada do SVG oficial, criada a partir dele. Não precisa gerar um PNG novo, só publicar o que já está no repositório.
+Anexo o vetor oficial do logo (`matter-academy-negative.svg`) para conferência, embora ele já esteja versionado no repositório — o problema não é o arquivo em si, é ele não estar publicado.
