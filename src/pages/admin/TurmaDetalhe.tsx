@@ -1,32 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, GraduationCap, Calendar, Building2, DollarSign, Search, X } from 'lucide-react';
+import {
+  Plus, Pencil, Trash2, PlayCircle, Users, BookOpen, GraduationCap, Calendar, Building2, DollarSign,
+  Search, MoreHorizontal,
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Button, Card, Modal, Empty, Toast, Badge } from '../../components/ui';
+import {
+  Button, IconButton, Card, Modal, EmptyState, Skeleton, Badge, Avatar, StatTile, Tabs,
+  SearchInput, Select, Field, Input, Textarea, Alert, FilterChip, DropdownMenu,
+  TableWrap, THead, TBody, Tr, Th, Td, useToast, useConfirm,
+} from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
+import { statusLabel } from '../../lib/users';
 import { TipoCobranca, TIPO_COBRANCA_LABEL, describeCobranca } from '../../lib/financeiro';
 
-type Turma = {
-  id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null;
-  tipo_cobranca: TipoCobranca | null; valor: number | null;
-};
+type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
 type Curso = { id: string; titulo: string; descricao: string | null };
 type Tab = 'dashboard' | 'cursos' | 'participantes';
 type ParticipanteRole = 'student' | 'professor' | 'monitor' | 'admin';
-type Participante = {
-  id: string;
-  email: string;
-  nome: string | null;
-  role: ParticipanteRole;
-  status: string;
-  cursoTitulo: string | null;
-};
+type Participante = { id: string; email: string; nome: string | null; role: ParticipanteRole; status: string; cursoTitulo: string | null };
 
-const ROLE_LABEL: Record<ParticipanteRole, string> = {
-  student: 'Aluno', professor: 'Professor', monitor: 'Monitor', admin: 'Admin',
-};
-const ROLE_TONE: Record<ParticipanteRole, 'default' | 'warn' | 'success'> = {
-  student: 'default', professor: 'warn', monitor: 'success', admin: 'default',
-};
+const ROLE_LABEL: Record<ParticipanteRole, string> = { student: 'Aluno', professor: 'Professor', monitor: 'Monitor', admin: 'Admin' };
+const ROLE_TONE: Record<ParticipanteRole, 'default' | 'warn' | 'info' | 'success'> = { student: 'default', professor: 'warn', monitor: 'info', admin: 'success' };
+const STATUS_TONE: Record<string, 'success' | 'warn' | 'danger'> = { active: 'success', pending: 'warn', blocked: 'danger' };
 
 function dateOnlyBR(iso: string | null): string {
   if (!iso) return '—';
@@ -37,26 +33,24 @@ function dateOnlyBR(iso: string | null): string {
 export default function TurmaDetalhe() {
   const { turmaId } = useParams<{ turmaId: string }>();
   const nav = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [turma, setTurma] = useState<Turma | null>(null);
   const [editTurmaOpen, setEditTurmaOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
-  // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
   const [alunosCount, setAlunosCount] = useState(0);
   const [professoresCount, setProfessoresCount] = useState(0);
   const [cursosCount, setCursosCount] = useState(0);
   const [aulasPerCurso, setAulasPerCurso] = useState<{ titulo: string; count: number }[]>([]);
 
-  // Cursos tab
   const [cursosLoading, setCursosLoading] = useState(false);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [aulaCounts, setAulaCounts] = useState<Record<string, number>>({});
   const [createCursoOpen, setCreateCursoOpen] = useState(false);
   const [editCurso, setEditCurso] = useState<Curso | null>(null);
 
-  // Participantes tab
   const [participantesLoading, setParticipantesLoading] = useState(false);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [search, setSearch] = useState('');
@@ -66,24 +60,16 @@ export default function TurmaDetalhe() {
     setDashLoading(true);
     const { data: t } = await supabase.from('turmas').select('*').eq('id', turmaId!).maybeSingle();
     setTurma(t as Turma | null);
-
-    // Usuários da turma por role
     const { data: utData } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!);
     const userIds = (utData ?? []).map((r) => r.user_id);
     if (userIds.length > 0) {
       const { data: profiles } = await supabase.from('profiles').select('id,role').in('id', userIds);
       setAlunosCount((profiles ?? []).filter((p) => p.role === 'student').length);
-      setProfessoresCount((profiles ?? []).filter((p) => p.role === 'professor').length);
-    } else {
-      setAlunosCount(0);
-      setProfessoresCount(0);
-    }
-
-    // Cursos e aulas
+      setProfessoresCount((profiles ?? []).filter((p) => p.role === 'professor' || p.role === 'monitor').length);
+    } else { setAlunosCount(0); setProfessoresCount(0); }
     const { data: cts } = await supabase.from('curso_turmas').select('curso_id').eq('turma_id', turmaId!);
     const cursoIds = (cts ?? []).map((r) => r.curso_id);
     setCursosCount(cursoIds.length);
-
     if (cursoIds.length > 0) {
       const [{ data: cs }, { data: as }] = await Promise.all([
         supabase.from('cursos').select('id,titulo').in('id', cursoIds),
@@ -92,10 +78,7 @@ export default function TurmaDetalhe() {
       const countMap: Record<string, number> = {};
       (as ?? []).forEach((a) => { countMap[a.curso_id] = (countMap[a.curso_id] ?? 0) + 1; });
       setAulasPerCurso((cs ?? []).map((c) => ({ titulo: c.titulo, count: countMap[c.id] ?? 0 })));
-    } else {
-      setAulasPerCurso([]);
-    }
-
+    } else setAulasPerCurso([]);
     setDashLoading(false);
   };
 
@@ -112,10 +95,7 @@ export default function TurmaDetalhe() {
       const counts: Record<string, number> = {};
       (as ?? []).forEach((a) => { counts[a.curso_id] = (counts[a.curso_id] ?? 0) + 1; });
       setAulaCounts(counts);
-    } else {
-      setCursos([]);
-      setAulaCounts({});
-    }
+    } else { setCursos([]); setAulaCounts({}); }
     setCursosLoading(false);
   };
 
@@ -124,195 +104,126 @@ export default function TurmaDetalhe() {
     const { data: uts } = await supabase.from('user_turmas').select('user_id,curso_id').eq('turma_id', turmaId!);
     const userIds = [...new Set((uts ?? []).map((r) => r.user_id))];
     if (!userIds.length) { setParticipantes([]); setParticipantesLoading(false); return; }
-
     const cursoIds = [...new Set((uts ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string))];
     const [{ data: profiles }, { data: cs }] = await Promise.all([
       supabase.from('profiles').select('id,email,nome,role,status').in('id', userIds),
       cursoIds.length ? supabase.from('cursos').select('id,titulo').in('id', cursoIds) : Promise.resolve({ data: [] }),
     ]);
-
     const cursoMap = new Map((cs ?? []).map((c) => [c.id, c.titulo]));
     const cursoPorUser = new Map<string, string | null>();
-    (uts ?? []).forEach((r) => {
-      if (r.curso_id && !cursoPorUser.has(r.user_id)) cursoPorUser.set(r.user_id, cursoMap.get(r.curso_id) ?? null);
-    });
-
-    const rows: Participante[] = (profiles ?? []).map((p: any) => ({
-      id: p.id,
-      email: p.email,
-      nome: p.nome,
-      role: p.role,
-      status: p.status,
-      cursoTitulo: cursoPorUser.get(p.id) ?? null,
+    (uts ?? []).forEach((r) => { if (r.curso_id && !cursoPorUser.has(r.user_id)) cursoPorUser.set(r.user_id, cursoMap.get(r.curso_id) ?? null); });
+    const rows: Participante[] = (profiles ?? []).map((p) => ({
+      id: p.id, email: p.email, nome: p.nome, role: p.role as ParticipanteRole, status: p.status, cursoTitulo: cursoPorUser.get(p.id) ?? null,
     })).sort((a, b) => (a.nome ?? a.email).localeCompare(b.nome ?? b.email));
-
     setParticipantes(rows);
     setParticipantesLoading(false);
   };
 
-  useEffect(() => { loadDashboard(); }, [turmaId]);
-  useEffect(() => { if (tab === 'cursos') loadCursos(); }, [tab, turmaId]);
-  useEffect(() => { if (tab === 'participantes') loadParticipantes(); }, [tab, turmaId]);
+  useEffect(() => { loadDashboard(); }, [turmaId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'cursos') loadCursos(); }, [tab, turmaId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'participantes') loadParticipantes(); }, [tab, turmaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const delCurso = async (e: React.MouseEvent, c: Curso) => {
-    e.stopPropagation();
-    if (!confirm(`Excluir curso "${c.titulo}"? Todas as aulas serão removidas.`)) return;
+  const delCurso = async (c: Curso) => {
+    const ok = await confirm({ title: 'Excluir curso', tone: 'danger', confirmLabel: 'Excluir', message: <>Excluir <strong className="text-fg">{c.titulo}</strong>? Todas as aulas serão removidas.</> });
+    if (!ok) return;
     const { error } = await supabase.from('cursos').delete().eq('id', c.id);
-    if (error) setToast(error.message);
-    else { setToast('Curso excluído'); loadCursos(); loadDashboard(); }
+    if (error) toast.error(error.message); else { toast.success('Curso excluído.'); loadCursos(); loadDashboard(); }
   };
 
   const delTurma = async () => {
-    if (!confirm(`Excluir turma "${turma?.nome}"? Os vínculos com alunos e cursos serão removidos.`)) return;
+    const ok = await confirm({ title: 'Excluir turma', tone: 'danger', confirmLabel: 'Excluir', requireText: turma?.nome, message: <>Excluir <strong className="text-fg">{turma?.nome}</strong>? Os vínculos com alunos e cursos serão removidos.</> });
+    if (!ok) return;
     const { error } = await supabase.from('turmas').delete().eq('id', turmaId!);
-    if (error) setToast(error.message);
-    else nav('/admin/turmas');
+    if (error) toast.error(error.message); else { toast.success('Turma excluída.'); nav('/admin/turmas'); }
   };
 
   const totalAulas = aulasPerCurso.reduce((s, c) => s + c.count, 0);
-
   const filteredParticipantes = participantes.filter((p) => {
     if (search && !p.email.toLowerCase().includes(search.toLowerCase()) && !(p.nome ?? '').toLowerCase().includes(search.toLowerCase())) return false;
     if (filterRole && p.role !== filterRole) return false;
     return true;
   });
   const hasFilters = !!(search || filterRole);
-  const clearFilters = () => { setSearch(''); setFilterRole(''); };
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-[#d6deed] mb-6">
-        <button onClick={() => nav('/admin/turmas')} className="hover:text-white transition-colors">Turmas</button>
-        <ChevronRight className="w-4 h-4 text-[#434d5e]" />
-        <span className="text-white">{turma?.nome ?? '...'}</span>
-      </div>
+      <PageHeader
+        breadcrumbs={[{ label: 'Turmas', to: '/admin/turmas' }, { label: turma?.nome ?? '…' }]}
+        title={turma?.nome ?? '…'}
+        subtitle={turma?.descricao || undefined}
+        actions={
+          <>
+            <Button variant="secondary" icon={<Pencil className="w-4 h-4" />} onClick={() => setEditTurmaOpen(true)}>Editar</Button>
+            <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={delTurma}>Excluir</Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1>{turma?.nome ?? '...'}</h1>
-          <p className="meta mt-1">{turma?.descricao || '—'}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" icon={<Pencil className="w-4 h-4" />} onClick={() => setEditTurmaOpen(true)}>Editar</Button>
-          <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={delTurma}>Excluir</Button>
-        </div>
-      </div>
+      <Tabs className="mb-6" value={tab} onChange={setTab}
+        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'cursos', label: 'Cursos', count: cursosCount }, { value: 'participantes', label: 'Participantes' }]} />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-[#1c1f26]">
-        {([
-          { key: 'dashboard', label: 'Dashboard' },
-          { key: 'cursos', label: 'Cursos' },
-          { key: 'participantes', label: 'Participantes' },
-        ] as { key: Tab; label: string }[]).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === key
-                ? 'border-[#cbfb00] text-[#cbfb00]'
-                : 'border-transparent text-[#d6deed] hover:text-white'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── DASHBOARD ── */}
-      {tab === 'dashboard' && (
-        dashLoading ? <p className="meta">Carregando...</p> : (
-          <div className="space-y-6">
-            {/* Stats cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard icon={<Users className="w-5 h-5 text-[#cbfb00]" />} label="Alunos" value={alunosCount} />
-              <StatCard icon={<GraduationCap className="w-5 h-5 text-[#cbfb00]" />} label="Professores" value={professoresCount} />
-              <StatCard icon={<BookOpen className="w-5 h-5 text-[#cbfb00]" />} label="Cursos" value={cursosCount} />
-              <StatCard icon={<PlayCircle className="w-5 h-5 text-[#cbfb00]" />} label="Aulas (total)" value={totalAulas} />
-            </div>
-
-            {/* Info cards */}
-            {(() => {
-              const cobranca = describeCobranca(turma?.tipo_cobranca, turma?.valor, alunosCount);
-              return (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <InfoCard icon={<Calendar className="w-4 h-4" />} label="Início da turma" value={dateOnlyBR(turma?.data_inicio ?? null)} />
-                  <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de criação" value={turma?.created_at ? new Date(turma.created_at).toLocaleDateString('pt-BR') : '—'} />
-                  <InfoCard icon={<Building2 className="w-4 h-4" />} label="Empresa associada" value="—" placeholder />
-                  <InfoCard
-                    icon={<DollarSign className="w-4 h-4" />}
-                    label="Cobrança"
-                    value={cobranca.total}
-                    sub={cobranca.detalhe ?? undefined}
-                    placeholder={!turma?.tipo_cobranca}
-                    placeholderText="Não configurada"
-                  />
-                </div>
-              );
-            })()}
-
-            {/* Aulas por curso */}
-            {aulasPerCurso.length > 0 && (
-              <div>
-                <h3 className="mb-3 text-sm font-medium text-[#d6deed] uppercase tracking-wider">Aulas por curso</h3>
-                <Card>
-                  <ul>
-                    {aulasPerCurso.map((item, i) => (
-                      <li key={i} className="flex items-center justify-between px-4 py-3 border-b border-[#1c1f26] last:border-0">
-                        <span className="text-white text-sm">{item.titulo}</span>
-                        <Badge>{item.count} aula{item.count !== 1 ? 's' : ''}</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              </div>
-            )}
+      {/* DASHBOARD */}
+      {tab === 'dashboard' && (dashLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile label="Alunos" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+            <StatTile label="Professores/monitores" value={professoresCount} icon={<GraduationCap className="w-4 h-4" />} />
+            <StatTile label="Cursos" value={cursosCount} icon={<BookOpen className="w-4 h-4" />} />
+            <StatTile label="Aulas (total)" value={totalAulas} icon={<PlayCircle className="w-4 h-4" />} />
           </div>
-        )
-      )}
+          {(() => {
+            const cobranca = describeCobranca(turma?.tipo_cobranca, turma?.valor, alunosCount);
+            return (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <InfoCard icon={<Calendar className="w-4 h-4" />} label="Início da turma" value={dateOnlyBR(turma?.data_inicio ?? null)} />
+                <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de criação" value={turma?.created_at ? new Date(turma.created_at).toLocaleDateString('pt-BR') : '—'} />
+                <InfoCard icon={<Building2 className="w-4 h-4" />} label="Empresa associada" value="—" placeholder placeholderText="—" />
+                <InfoCard icon={<DollarSign className="w-4 h-4" />} label="Cobrança" value={cobranca.total} sub={cobranca.detalhe ?? undefined} placeholder={!turma?.tipo_cobranca} placeholderText="Não configurada" />
+              </div>
+            );
+          })()}
+          {aulasPerCurso.length > 0 && (
+            <div>
+              <h2 className="text-base mb-3">Aulas por curso</h2>
+              <Card className="overflow-hidden">
+                <ul>
+                  {aulasPerCurso.map((item, i) => (
+                    <li key={i} className="flex items-center justify-between px-4 py-3 border-b border-line last:border-0">
+                      <span className="text-fg text-sm">{item.titulo}</span>
+                      <Badge>{item.count} aula{item.count !== 1 ? 's' : ''}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
+          )}
+        </div>
+      ))}
 
-      {/* ── CURSOS ── */}
+      {/* CURSOS */}
       {tab === 'cursos' && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="meta">Cursos exclusivos desta turma</p>
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <p className="text-fg-3 text-sm">Cursos vinculados a esta turma.</p>
             <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateCursoOpen(true)}>Novo curso</Button>
           </div>
-
-          {cursosLoading ? <p className="meta">Carregando...</p> :
-            cursos.length === 0 ? <Empty title="Nenhum curso nesta turma" description="Crie o primeiro curso para esta turma" /> : (
+          {cursosLoading ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+            cursos.length === 0 ? <EmptyState icon={<BookOpen className="w-8 h-8" />} title="Nenhum curso nesta turma" description="Crie o primeiro curso para esta turma." action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateCursoOpen(true)}>Novo curso</Button>} /> : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {cursos.map((c) => (
-                  <Card
-                    key={c.id}
-                    className="p-5 cursor-pointer hover:border-[#434d5e] transition-colors relative"
-                    onClick={() => nav(`/admin/turmas/${turmaId}/cursos/${c.id}`)}
-                  >
-                    {/* Ícones de ação */}
-                    <div className="absolute top-4 right-4 flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditCurso(c); }}
-                        className="p-1.5 rounded text-[#d6deed] hover:bg-[#434d5e]/30 transition-colors"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => delCurso(e, c)}
-                        className="p-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  <Card key={c.id} className="p-5 cursor-pointer hover:border-line-strong transition-colors relative" onClick={() => nav(`/admin/turmas/${turmaId}/cursos/${c.id}`)}>
+                    <div className="absolute top-3.5 right-3.5" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu
+                        items={[{ label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditCurso(c) }, { type: 'separator' }, { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger', onClick: () => delCurso(c) }]}
+                        trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações do curso" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
+                      />
                     </div>
-
-                    <h3 className="mb-1 pr-16">{c.titulo}</h3>
-                    <p className="text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || '—'}</p>
-                    <div className="flex items-center gap-1 text-sm text-[#d6deed]">
-                      <PlayCircle className="w-4 h-4 text-[#434d5e]" /> {aulaCounts[c.id] ?? 0} aulas
-                    </div>
+                    <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                    <h3 className="mb-1 pr-10 line-clamp-1">{c.titulo}</h3>
+                    <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>
+                    <div className="flex items-center gap-1.5 text-sm text-fg-2"><PlayCircle className="w-4 h-4 text-fg-3" /> {aulaCounts[c.id] ?? 0} aulas</div>
                   </Card>
                 ))}
               </div>
@@ -320,122 +231,56 @@ export default function TurmaDetalhe() {
         </div>
       )}
 
-      {/* ── PARTICIPANTES ── */}
+      {/* PARTICIPANTES */}
       {tab === 'participantes' && (
         <div>
-          <Card className="p-4 mb-4">
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[220px]">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar nome ou email..."
-                  className="!pl-9"
-                />
-              </div>
-              <select value={filterRole} onChange={(e) => setFilterRole(e.target.value as '' | ParticipanteRole)} className="max-w-[180px]">
-                <option value="">Todos os papéis</option>
-                <option value="student">Aluno</option>
-                <option value="professor">Professor</option>
-                <option value="monitor">Monitor</option>
-                <option value="admin">Admin</option>
-              </select>
-              {hasFilters && (
-                <button onClick={clearFilters} className="flex items-center gap-1.5 text-xs text-[#8b929e] hover:text-[#d6deed] transition-colors whitespace-nowrap">
-                  <X className="w-3.5 h-3.5" /> Limpar filtros
-                </button>
-              )}
+          <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
+            <SearchInput value={search} onChange={setSearch} placeholder="Buscar nome ou e-mail…" className="flex-1" />
+            <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value as '' | ParticipanteRole)} className="sm:w-[180px]">
+              <option value="">Todos os papéis</option>
+              <option value="student">Aluno</option><option value="professor">Professor</option><option value="monitor">Monitor</option><option value="admin">Admin</option>
+            </Select>
+          </div>
+          {hasFilters && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {search && <FilterChip label={<>Busca: <span className="text-fg">{search}</span></>} onRemove={() => setSearch('')} />}
+              {filterRole && <FilterChip label={<>Papel: <span className="text-fg">{ROLE_LABEL[filterRole]}</span></>} onRemove={() => setFilterRole('')} />}
+              <span className="text-fg-3 text-xs">{filteredParticipantes.length} de {participantes.length}</span>
             </div>
-            {hasFilters && !participantesLoading && (
-              <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
-                Mostrando <span className="text-white font-medium">{filteredParticipantes.length}</span> de{' '}
-                <span className="text-white font-medium">{participantes.length}</span> participantes
-              </p>
-            )}
-          </Card>
-
-          {participantesLoading ? (
-            <Card className="p-10 text-center"><p className="meta">Carregando...</p></Card>
-          ) : filteredParticipantes.length === 0 ? (
-            hasFilters ? (
-              <Empty icon={<Search className="w-8 h-8" />} title="Nenhum resultado para este filtro" description="Tente ajustar a busca ou clique em 'Limpar filtros'" />
-            ) : (
-              <Empty icon={<Users className="w-8 h-8" />} title="Nenhum participante nesta turma" description="Vincule alunos, professores ou monitores em Usuários" />
-            )
-          ) : (
-            <Card>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#1c1f26] text-left">
-                    <th className="px-4 py-3 font-medium text-[#d6deed]">Nome</th>
-                    <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
-                    <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
-                    <th className="px-4 py-3 font-medium text-[#d6deed]">Curso vinculado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredParticipantes.map((p) => (
-                    <tr key={p.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="text-white block truncate max-w-[220px]">{p.nome || p.email}</span>
-                        {p.nome && <span className="text-[#8b929e] text-xs">{p.email}</span>}
-                      </td>
-                      <td className="px-4 py-3"><Badge tone={ROLE_TONE[p.role]}>{ROLE_LABEL[p.role]}</Badge></td>
-                      <td className="px-4 py-3">
-                        {p.status === 'active'  && <Badge tone="success">Ativo</Badge>}
-                        {p.status === 'pending' && <Badge tone="warn">Pendente</Badge>}
-                        {p.status === 'blocked' && <Badge tone="danger">Bloqueado</Badge>}
-                      </td>
-                      <td className="px-4 py-3 text-[#d6deed]">{p.cursoTitulo ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
           )}
+          {participantesLoading ? <Skeleton className="h-64 rounded-xl" /> :
+            filteredParticipantes.length === 0 ? (
+              hasFilters ? <EmptyState icon={<Search className="w-8 h-8" />} title="Nenhum resultado" description="Ajuste a busca ou os filtros." />
+                : <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum participante nesta turma" description="Vincule alunos, professores ou monitores em Usuários." />
+            ) : (
+              <Card className="overflow-hidden">
+                <TableWrap>
+                  <THead><Tr><Th>Participante</Th><Th>Papel</Th><Th>Status</Th><Th>Curso vinculado</Th></Tr></THead>
+                  <TBody>
+                    {filteredParticipantes.map((p) => (
+                      <Tr key={p.id} className="hover:bg-panel-2/40 transition-colors">
+                        <Td>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar name={p.nome} email={p.email} size={32} />
+                            <div className="min-w-0"><p className="text-fg truncate max-w-[200px]">{p.nome || p.email.split('@')[0]}</p><p className="text-fg-3 text-xs truncate max-w-[200px]">{p.email}</p></div>
+                          </div>
+                        </Td>
+                        <Td><Badge tone={ROLE_TONE[p.role]} dot>{ROLE_LABEL[p.role]}</Badge></Td>
+                        <Td><Badge tone={STATUS_TONE[p.status]} dot>{statusLabel(p.status)}</Badge></Td>
+                        <Td className="text-fg-2">{p.cursoTitulo ?? <span className="text-fg-3 text-xs">—</span>}</Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </TableWrap>
+              </Card>
+            )}
         </div>
       )}
 
-      {/* Modais */}
-      <TurmaEditModal
-        open={editTurmaOpen}
-        turma={turma}
-        onClose={() => setEditTurmaOpen(false)}
-        onDone={() => { setEditTurmaOpen(false); loadDashboard(); }}
-      />
-      <CursoModal
-        open={createCursoOpen}
-        curso={null}
-        turmaId={turmaId!}
-        onClose={() => setCreateCursoOpen(false)}
-        onDone={() => { setCreateCursoOpen(false); loadCursos(); loadDashboard(); }}
-      />
-      <CursoModal
-        open={!!editCurso}
-        curso={editCurso}
-        turmaId={turmaId!}
-        onClose={() => setEditCurso(null)}
-        onDone={() => { setEditCurso(null); loadCursos(); loadDashboard(); }}
-      />
-      <Toast message={toast} />
+      <TurmaEditModal open={editTurmaOpen} turma={turma} onClose={() => setEditTurmaOpen(false)} onDone={() => { setEditTurmaOpen(false); loadDashboard(); }} />
+      <CursoModal open={createCursoOpen} curso={null} turmaId={turmaId!} onClose={() => setCreateCursoOpen(false)} onDone={() => { setCreateCursoOpen(false); loadCursos(); loadDashboard(); }} />
+      <CursoModal open={!!editCurso} curso={editCurso} turmaId={turmaId!} onClose={() => setEditCurso(null)} onDone={() => { setEditCurso(null); loadCursos(); loadDashboard(); }} />
     </div>
-  );
-}
-
-/* ── Sub-components ── */
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <Card className="p-5 flex items-center gap-4">
-      <div className="w-10 h-10 rounded-lg bg-[#cbfb00]/10 flex items-center justify-center flex-shrink-0">
-        {icon}
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-white">{value}</p>
-        <p className="text-xs text-[#d6deed]">{label}</p>
-      </div>
-    </Card>
   );
 }
 
@@ -444,16 +289,15 @@ function InfoCard({ icon, label, value, sub, placeholder, placeholderText = 'Em 
 }) {
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2 mb-2 text-[#434d5e]">{icon}<span className="text-xs uppercase tracking-wider">{label}</span></div>
-      <p className={`text-sm font-medium ${placeholder ? 'text-[#434d5e] italic' : 'text-white'}`}>
-        {placeholder ? placeholderText : value}
-      </p>
-      {!placeholder && sub && <p className="text-xs text-[#8b929e] mt-0.5">{sub}</p>}
+      <div className="flex items-center gap-2 mb-2 text-fg-3">{icon}<span className="text-xs uppercase tracking-wider">{label}</span></div>
+      <p className={placeholder ? 'text-fg-3 italic text-sm' : 'text-fg text-sm font-medium'}>{placeholder ? placeholderText : value}</p>
+      {!placeholder && sub && <p className="text-fg-3 text-xs mt-0.5">{sub}</p>}
     </Card>
   );
 }
 
 function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -463,88 +307,61 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setNome(turma?.nome ?? '');
-    setDescricao(turma?.descricao ?? '');
-    setDataInicio(turma?.data_inicio ?? '');
-    setTipoCobranca(turma?.tipo_cobranca ?? '');
-    setValor(turma?.valor != null ? String(turma.valor) : '');
-    setErr(null);
+    setNome(turma?.nome ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? '');
+    setTipoCobranca(turma?.tipo_cobranca ?? ''); setValor(turma?.valor != null ? String(turma.valor) : ''); setErr(null);
   }, [turma, open]);
 
-  const valorLabel =
-    tipoCobranca === 'por_aluno' ? 'Valor por aluno (R$)'
-    : tipoCobranca === 'recorrente_mensal' ? 'Valor mensal (R$)'
-    : 'Valor (R$)';
+  const valorLabel = tipoCobranca === 'por_aluno' ? 'Valor por aluno (R$)' : tipoCobranca === 'recorrente_mensal' ? 'Valor mensal (R$)' : 'Valor (R$)';
 
   const submit = async () => {
     setErr(null);
-    if (!nome.trim()) { setErr('Nome obrigatório'); return; }
-    if (tipoCobranca && (valor === '' || isNaN(parseFloat(valor)))) {
-      setErr('Informe um valor válido para a cobrança'); return;
-    }
+    if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
+    if (tipoCobranca && (valor === '' || isNaN(parseFloat(valor)))) { setErr('Informe um valor válido para a cobrança.'); return; }
     setLoading(true);
     const { error } = await supabase.from('turmas').update({
-      nome: nome.trim(),
-      descricao: descricao.trim(),
-      data_inicio: dataInicio || null,
-      tipo_cobranca: tipoCobranca || null,
-      valor: tipoCobranca ? parseFloat(valor) : null,
+      nome: nome.trim(), descricao: descricao.trim(), data_inicio: dataInicio || null,
+      tipo_cobranca: tipoCobranca || null, valor: tipoCobranca ? parseFloat(valor) : null,
     }).eq('id', turma!.id);
     setLoading(false);
-    if (error) setErr(error.message);
-    else onDone();
+    if (error) setErr(error.message); else { toast.success('Turma atualizada.'); onDone(); }
   };
 
   return (
     <Modal open={open} onClose={onClose} title="Editar turma"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Salvar</Button>
-        </>
-      }>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Salvar</Button></>}>
       <div className="space-y-4">
-        <div><label>Nome</label><input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
-        <div><label>Descrição</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></div>
-        <div><label>Data de início</label><input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
-        <div className="border-t border-[#1c1f26] pt-4">
-          <label>Tipo de cobrança</label>
-          <select value={tipoCobranca} onChange={(e) => setTipoCobranca(e.target.value as '' | TipoCobranca)}>
-            <option value="">Não configurada</option>
-            <option value="fixo">{TIPO_COBRANCA_LABEL.fixo}</option>
-            <option value="por_aluno">{TIPO_COBRANCA_LABEL.por_aluno}</option>
-            <option value="recorrente_mensal">{TIPO_COBRANCA_LABEL.recorrente_mensal}</option>
-          </select>
+        {err && <Alert tone="danger">{err}</Alert>}
+        <Field label="Nome" required htmlFor="td-nome"><Input id="td-nome" value={nome} onChange={(e) => setNome(e.target.value)} data-autofocus /></Field>
+        <Field label="Descrição" htmlFor="td-desc"><Textarea id="td-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Data de início" htmlFor="td-data"><Input id="td-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
+        <div className="border-t border-line pt-4">
+          <Field label="Tipo de cobrança" htmlFor="td-tipo">
+            <Select id="td-tipo" value={tipoCobranca} onChange={(e) => setTipoCobranca(e.target.value as '' | TipoCobranca)}>
+              <option value="">Não configurada</option>
+              <option value="fixo">{TIPO_COBRANCA_LABEL.fixo}</option>
+              <option value="por_aluno">{TIPO_COBRANCA_LABEL.por_aluno}</option>
+              <option value="recorrente_mensal">{TIPO_COBRANCA_LABEL.recorrente_mensal}</option>
+            </Select>
+          </Field>
         </div>
-        {tipoCobranca && (
-          <div>
-            <label>{valorLabel}</label>
-            <input type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
-          </div>
-        )}
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {tipoCobranca && <Field label={valorLabel} htmlFor="td-valor"><Input id="td-valor" type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" className="max-w-[200px]" /></Field>}
       </div>
     </Modal>
   );
 }
 
-function CursoModal({ open, curso, turmaId, onClose, onDone }: {
-  open: boolean; curso: Curso | null; turmaId: string; onClose: () => void; onDone: () => void;
-}) {
+function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; curso: Curso | null; turmaId: string; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    setTitulo(curso?.titulo ?? '');
-    setDescricao(curso?.descricao ?? '');
-    setErr(null);
-  }, [curso, open]);
+  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setErr(null); }, [curso, open]);
 
   const submit = async () => {
     setErr(null);
-    if (!titulo.trim()) { setErr('Título obrigatório'); return; }
+    if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
     const payload = { titulo: titulo.trim(), descricao: descricao.trim() };
     if (curso) {
@@ -556,21 +373,17 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: {
       await supabase.from('curso_turmas').insert({ curso_id: data.id, turma_id: turmaId });
     }
     setLoading(false);
+    toast.success(curso ? 'Curso atualizado.' : 'Curso criado.');
     onDone();
   };
 
   return (
     <Modal open={open} onClose={onClose} title={curso ? 'Editar curso' : 'Novo curso'}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Salvar</Button>
-        </>
-      }>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Salvar</Button></>}>
       <div className="space-y-4">
-        <div><label>Título</label><input value={titulo} onChange={(e) => setTitulo(e.target.value)} /></div>
-        <div><label>Descrição</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <Alert tone="danger">{err}</Alert>}
+        <Field label="Título" required htmlFor="tdc-tit"><Input id="tdc-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
+        <Field label="Descrição" htmlFor="tdc-desc"><Textarea id="tdc-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
       </div>
     </Modal>
   );

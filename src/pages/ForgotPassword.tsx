@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Copy, Check } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { callFn } from '../lib/supabase';
-import { Button } from '../components/ui';
-import { Logo } from '../components/Logo';
+import { PublicAuthLayout } from '../public/components/PublicAuthLayout';
+import { PublicAction } from '../public/components/PublicAction';
+import { FormAlert } from '../public/components/PublicStates';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
-  const [link, setLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -17,58 +17,74 @@ export default function ForgotPassword() {
     setErr(null);
     setLoading(true);
     try {
-      const r = await callFn('auth-public', 'forgot', { email });
-      if (r.reset_token) {
-        setLink(`${window.location.origin}/redefinir-senha?token=${r.reset_token}`);
-      } else {
-        setErr('Email não encontrado');
-      }
+      await callFn('auth-public', 'forgot', { email });
+      setSent(true);
     } catch (e) {
-      setErr((e as Error).message);
+      const message = (e as Error).message;
+      if (/não encontrado|nao encontrado|not found/i.test(message)) {
+        setSent(true);
+      } else {
+        setErr(message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const copy = () => {
-    if (link) {
-      navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   return (
-    <div className="min-h-screen grid place-items-center px-4">
-      <div className="w-full max-w-md">
-        <Link to="/" className="inline-block mb-10"><Logo height={110} /></Link>
+    <PublicAuthLayout state={sent ? 'success' : 'form'}>
+      <h1 className="mb-2">Recuperar senha</h1>
+      <p className="mb-8 text-[color:var(--pub-fg-soft)]">
+        Informe seu email e enviaremos um link para redefinir sua senha.
+      </p>
 
-        <h1 className="mb-2">Recuperar senha</h1>
-        <p className="text-[#d6deed] mb-8">Informe seu email e geraremos um link de redefinição.</p>
-
-        {link ? (
-          <div className="space-y-4">
-            <div className="border border-[#cbfb00]/30 bg-[#cbfb00]/5 rounded-md p-4">
-              <p className="meta mb-2">Link de redefinição gerado</p>
-              <p className="text-sm text-white break-all mb-3">{link}</p>
-              <Button onClick={copy} variant="secondary" icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}>
-                {copied ? 'Copiado' : 'Copiar link'}
-              </Button>
+      {sent ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-[rgba(204,252,0,0.3)] bg-[rgba(204,252,0,0.06)] p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-[color:var(--pub-lime)]" aria-hidden="true" />
+              <p className="pub-meta">Verifique seu email</p>
             </div>
-            <Link to="/login" className="block text-sm text-[#d6deed] hover:text-[#cbfb00]">Voltar ao login</Link>
+            <p className="text-sm text-[color:var(--pub-fg)]">
+              Se existe uma conta associada a <strong>{email}</strong>, você receberá em breve um email com o link para
+              redefinir sua senha. O link expira em 24 horas.
+            </p>
+            <p className="mt-3 text-xs text-[color:var(--pub-fg-soft)]">
+              Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.
+            </p>
           </div>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label>Email</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            {err && <p className="text-red-400 text-sm">{err}</p>}
-            <Button type="submit" variant="primary" loading={loading} className="w-full">Gerar link</Button>
-            <Link to="/login" className="block text-center text-sm text-[#d6deed] hover:text-[#cbfb00]">Voltar ao login</Link>
-          </form>
-        )}
-      </div>
-    </div>
+          <Link
+            to="/login"
+            className="block text-sm text-[color:var(--pub-fg-soft)] hover:text-[color:var(--pub-lime)]"
+          >
+            Voltar ao login
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label htmlFor="forgot-email">Email</label>
+            <input
+              id="forgot-email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <FormAlert error={err} />
+          <PublicAction type="submit" loading={loading} glow className="w-full">
+            Enviar link por email
+          </PublicAction>
+          <Link
+            to="/login"
+            className="block text-center text-sm text-[color:var(--pub-fg-soft)] hover:text-[color:var(--pub-lime)]"
+          >
+            Voltar ao login
+          </Link>
+        </form>
+      )}
+    </PublicAuthLayout>
   );
 }

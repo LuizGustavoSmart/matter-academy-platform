@@ -1,0 +1,429 @@
+/* ============================================================
+   MATTER ACADEMY — Tema público (.public-theme)
+   Tokens extraídos do Claude Design "Matter Academy Design System"
+   (projeto 74f70bc0-438d-4b5d-982c-e548b848d0d2 · colors_and_type.css).
+   Escopo isolado: nada aqui afeta admin/dashboard/telas autenticadas.
+   ============================================================ */
+
+/*
+  Fonte da marca: Söhne (Klim). Os OTFs vivem em fonts/ do projeto de design
+  e não puderam ser transferidos pelo canal disponível nesta sessão.
+  O stack abaixo usa o fallback declarado pelo próprio design system (Inter).
+  Para ativar Söhne: copiar os OTFs para public/fonts/sohne/ e descomentar.
+
+@font-face { font-family: "Söhne"; font-style: normal; font-weight: 300; src: url("/fonts/sohne/Sohne-Leicht.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Söhne"; font-style: normal; font-weight: 400; src: url("/fonts/sohne/Sohne-Buch.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Söhne"; font-style: normal; font-weight: 500; src: url("/fonts/sohne/Sohne-Kraftig.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Söhne"; font-style: normal; font-weight: 600; src: url("/fonts/sohne/Sohne-Halbfett.otf") format("opentype"); font-display: swap; }
+*/
+
+.public-theme {
+  /* Cores primárias */
+  --pub-lime: #CCFC00;
+  --pub-lime-hover: #B8E600;
+  --pub-lime-press: #A3CC00;
+
+  /* Superfícies (identidade escura sobre a escala slate do DS) */
+  --pub-ink: #0B0D10;
+  --pub-ink-2: #1A1F27;
+  --pub-ink-3: #2A313C;
+  --pub-paper: #F5F7F5;
+
+  /* Texto sobre superfície escura */
+  --pub-fg: rgba(245, 247, 245, 0.95);
+  --pub-fg-soft: rgba(245, 247, 245, 0.72);
+  --pub-fg-muted: #7F8A9B; /* slate-400 — ≥4.5:1 sobre ink (corrige o antigo .meta) */
+
+  /* Bordas em superfície escura (DS: nunca branco puro) */
+  --pub-border: rgba(255, 255, 255, 0.08);
+  --pub-border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Semânticas */
+  --pub-danger: #E0523C;
+  --pub-success: #6EBF4D;
+
+  /* Raios */
+  --pub-r-input: 12px;
+  --pub-r-card: 24px;
+  --pub-r-card-lg: 32px;
+  --pub-r-pill: 999px;
+
+  /* Sombras / anéis */
+  --pub-shadow-3: 0 8px 24px rgba(11, 13, 16, 0.32), 0 2px 4px rgba(11, 13, 16, 0.2);
+  --pub-shadow-4: 0 20px 48px rgba(11, 13, 16, 0.42), 0 4px 12px rgba(11, 13, 16, 0.24);
+  --pub-ring: 0 0 0 3px rgba(204, 252, 0, 0.45);
+  --pub-ring-input: 0 0 0 3px rgba(204, 252, 0, 0.35);
+  --pub-glow: 0 0 48px rgba(204, 252, 0, 0.45), 0 0 96px rgba(204, 252, 0, 0.2);
+
+  /* Motion (tokens do DS) */
+  --pub-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --pub-dur-fast: 140ms;
+  --pub-dur-base: 220ms;
+  --pub-dur-slow: 380ms;
+
+  /* Tipografia */
+  --pub-font: "Söhne", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  background-color: var(--pub-ink);
+  color: var(--pub-fg-soft);
+  font-family: var(--pub-font);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Overrides dos estilos globais dentro do escopo ---------- */
+
+.public-theme h1,
+.public-theme h2,
+.public-theme h3,
+.public-theme h4,
+.public-theme h5,
+.public-theme h6 {
+  font-family: var(--pub-font);
+  color: var(--pub-fg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.public-theme h1 { font-size: clamp(34px, 4.6vw, 48px); line-height: 1.05; letter-spacing: -0.02em; }
+.public-theme h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.2; }
+.public-theme h3 { font-size: 22px; font-weight: 600; }
+
+/* Quebra de texto: títulos com linhas equilibradas; parágrafos sem órfãs */
+.public-theme h1,
+.public-theme h2,
+.public-theme h3 {
+  text-wrap: balance;
+}
+.public-theme p {
+  text-wrap: pretty;
+}
+
+/* Tamanhos de título específicos (vencem os padrões acima de forma determinística) */
+.public-theme .pub-hero-title {
+  font-size: clamp(40px, 5.5vw, 68px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+}
+
+.public-theme .pub-card-title { font-size: 18px; line-height: 1.3; }
+.public-theme .pub-step-title { font-size: 16px; line-height: 1.3; }
+
+.public-theme input,
+.public-theme select,
+.public-theme textarea {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--pub-r-input);
+  padding: 12px 14px;
+  color: var(--pub-fg);
+  width: 100%;
+  font-size: 15px;
+  font-family: var(--pub-font);
+  outline: none;
+  transition: border-color var(--pub-dur-base) var(--pub-ease-out), box-shadow var(--pub-dur-base) var(--pub-ease-out);
+}
+
+.public-theme input:focus,
+.public-theme select:focus,
+.public-theme textarea:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: var(--pub-ring-input);
+}
+
+.public-theme input::placeholder,
+.public-theme textarea::placeholder {
+  color: var(--pub-fg-muted);
+}
+
+.public-theme label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #A7B0BD;
+  margin-bottom: 6px;
+}
+
+.public-theme a {
+  transition: color var(--pub-dur-fast) var(--pub-ease-out);
+}
+
+.public-theme :focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--pub-ring);
+  border-radius: 6px;
+}
+
+/* ---------- Utilitários de texto ---------- */
+
+.pub-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pub-lime);
+}
+
+.pub-meta {
+  font-size: 12px;
+  color: var(--pub-fg-muted);
+}
+
+.pub-lead {
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.45;
+  color: var(--pub-fg-soft);
+}
+
+@media (min-width: 768px) {
+  .pub-lead { font-size: 19px; }
+}
+
+/* ---------- Botões (pill — spec literal dos previews) ---------- */
+
+.pub-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--pub-font);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 12px 22px;
+  border-radius: var(--pub-r-pill);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--pub-dur-base) var(--pub-ease-out),
+    border-color var(--pub-dur-base) var(--pub-ease-out),
+    color var(--pub-dur-base) var(--pub-ease-out),
+    box-shadow var(--pub-dur-base) var(--pub-ease-out),
+    transform var(--pub-dur-fast) var(--pub-ease-out);
+}
+
+.pub-btn:active { transform: scale(0.98); }
+
+.pub-btn--sm { padding: 9px 18px; font-size: 13px; }
+.pub-btn--lg { padding: 16px 28px; font-size: 16px; }
+
+.pub-btn--primary { background: var(--pub-lime); color: var(--pub-ink); }
+.pub-btn--primary:hover { background: var(--pub-lime-hover); }
+.pub-btn--primary:active { background: var(--pub-lime-press); }
+
+.pub-btn--secondary { background: rgba(255, 255, 255, 0.08); color: var(--pub-paper); }
+.pub-btn--secondary:hover { background: rgba(255, 255, 255, 0.14); }
+
+.pub-btn--ghost { background: transparent; color: var(--pub-paper); border-color: var(--pub-border-strong); }
+.pub-btn--ghost:hover { background: rgba(255, 255, 255, 0.06); }
+
+.pub-btn--glow { box-shadow: var(--pub-glow); }
+
+.pub-btn[disabled],
+.pub-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pub-btn__arrow { transition: transform var(--pub-dur-base) var(--pub-ease-out); }
+.pub-btn:hover .pub-btn__arrow,
+.pub-btn:focus-visible .pub-btn__arrow { transform: translateX(3px); }
+
+/* ---------- Badge pill ---------- */
+
+.pub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--pub-r-pill);
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(204, 252, 0, 0.1);
+  border: 1px solid rgba(204, 252, 0, 0.25);
+  color: var(--pub-lime);
+}
+
+/* ---------- Cards ---------- */
+
+.pub-card {
+  background: var(--pub-ink-2);
+  border: 1px solid var(--pub-border);
+  border-radius: var(--pub-r-card);
+  padding: 24px;
+  transition: transform var(--pub-dur-base) var(--pub-ease-out),
+    box-shadow var(--pub-dur-base) var(--pub-ease-out),
+    border-color var(--pub-dur-base) var(--pub-ease-out);
+}
+
+.pub-card--hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--pub-shadow-3);
+  border-color: rgba(204, 252, 0, 0.28);
+}
+
+.pub-card--auth {
+  background: rgba(26, 31, 39, 0.72);
+  border-radius: var(--pub-r-card);
+  padding: 32px;
+  box-shadow: var(--pub-shadow-4);
+}
+
+@media (min-width: 640px) {
+  .pub-card--auth { padding: 40px; }
+}
+
+/* Passo numerado — único lugar onde a faixa lime esquerda é permitida (DS) */
+.pub-step {
+  background: var(--pub-ink-2);
+  border: 1px solid var(--pub-border);
+  border-left: 4px solid var(--pub-lime);
+  border-radius: 20px;
+  padding: 22px;
+}
+
+.pub-step__n {
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1;
+  color: var(--pub-fg);
+}
+
+/* Superfície tonalizada do CTA final, com halo discreto (spec card-dark) */
+.pub-cta-surface {
+  position: relative;
+  overflow: hidden;
+  background: var(--pub-ink-2);
+  border: 1px solid var(--pub-border);
+  border-radius: var(--pub-r-card-lg);
+}
+
+.pub-cta-surface::before {
+  content: '';
+  position: absolute;
+  right: -60px;
+  bottom: -60px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(204, 252, 0, 0.28), rgba(204, 252, 0, 0) 70%);
+  pointer-events: none;
+}
+
+/* ---------- Navbar pill (spec navbar, variante escura) ---------- */
+
+.pub-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 8px 16px 8px 20px;
+  background: rgba(11, 13, 16, 0.72);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--pub-border);
+  border-radius: var(--pub-r-pill);
+  box-shadow: 0 6px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+.pub-navlink {
+  position: relative;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--pub-fg-soft);
+  text-decoration: none;
+  padding: 4px 2px;
+}
+
+.pub-navlink:hover,
+.pub-navlink:focus-visible {
+  color: var(--pub-fg);
+}
+
+.pub-navlink::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pub-lime);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--pub-dur-base) var(--pub-ease-out);
+}
+
+.pub-navlink:hover::after,
+.pub-navlink:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ---------- Máscara de proteção do conteúdo sobre a cena ---------- */
+
+.pub-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(11, 13, 16, 0.97) 0%,
+    rgba(11, 13, 16, 0.94) 44%,
+    rgba(11, 13, 16, 0.55) 60%,
+    rgba(11, 13, 16, 0.08) 78%,
+    rgba(11, 13, 16, 0) 100%
+  );
+}
+
+@media (max-width: 1023px) {
+  .pub-scrim {
+    background: rgba(11, 13, 16, 0.82);
+  }
+}
+
+/* ---------- Alertas / estados ---------- */
+
+.pub-alert {
+  color: var(--pub-danger);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pub-success-icon {
+  color: var(--pub-lime);
+}
+
+/* Link para pular a navegação (visível apenas com foco) */
+.pub-skiplink {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 100;
+  padding: 10px 18px;
+  border-radius: var(--pub-r-pill);
+  background: var(--pub-lime);
+  color: var(--pub-ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top var(--pub-dur-base) var(--pub-ease-out);
+}
+
+.pub-skiplink:focus-visible { top: 16px; }
+
+/* ---------- Movimento reduzido ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .public-theme *,
+  .public-theme *::before,
+  .public-theme *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

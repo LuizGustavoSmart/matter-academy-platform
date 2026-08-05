@@ -3,17 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus, ClipboardList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, Card, Badge, Empty, Toast } from '../../components/ui';
+import { Button, Card, Badge, EmptyState, Skeleton, useToast } from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
 import CriarAtividadeModal from './CriarAtividadeModal';
 
-type Atividade = {
-  id: string; titulo: string; prazo: string | null; nota_maxima: number;
-};
+type Atividade = { id: string; titulo: string; prazo: string | null; nota_maxima: number };
 type Envio = { atividade_id: string; enviado_em: string | null; nota: number | null; corrigido_em: string | null };
 
-function statusOf(a: Atividade, envio: Envio | undefined): { label: string; tone: 'default' | 'success' | 'warn' | 'danger' } {
+function statusOf(a: Atividade, envio: Envio | undefined): { label: string; tone: 'default' | 'success' | 'info' | 'warn' | 'danger' } {
   if (envio?.corrigido_em) return { label: 'Corrigida', tone: 'success' };
-  if (envio?.enviado_em) return { label: 'Enviada', tone: 'default' };
+  if (envio?.enviado_em) return { label: 'Enviada', tone: 'info' };
   if (a.prazo && new Date(a.prazo) < new Date()) return { label: 'Atrasada', tone: 'danger' };
   return { label: 'Não enviada', tone: 'warn' };
 }
@@ -22,6 +21,7 @@ export default function AtividadesLista() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
   const nav = useNavigate();
   const { profile } = useAuth();
+  const toast = useToast();
   const isProfessor = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
 
   const [turmaNome, setTurmaNome] = useState('');
@@ -31,7 +31,6 @@ export default function AtividadesLista() {
   const [pendMap, setPendMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -40,75 +39,55 @@ export default function AtividadesLista() {
       supabase.from('cursos').select('titulo').eq('id', cursoId!).maybeSingle(),
       supabase.from('atividades').select('id,titulo,prazo,nota_maxima').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('created_at', { ascending: false }),
     ]);
-    setTurmaNome(t?.nome ?? '');
-    setCursoTitulo(c?.titulo ?? '');
-    setAtividades(as ?? []);
-
+    setTurmaNome(t?.nome ?? ''); setCursoTitulo(c?.titulo ?? ''); setAtividades(as ?? []);
     const atividadeIds = (as ?? []).map((a) => a.id);
     if (atividadeIds.length) {
       if (isProfessor) {
         const { data: es } = await supabase.from('atividade_envios').select('atividade_id,enviado_em,nota,corrigido_em').in('atividade_id', atividadeIds);
         const pend: Record<string, number> = {};
-        (es ?? []).forEach((e: any) => {
-          if (e.enviado_em && e.nota === null) pend[e.atividade_id] = (pend[e.atividade_id] ?? 0) + 1;
-        });
+        (es ?? []).forEach((e) => { if (e.enviado_em && e.nota === null) pend[e.atividade_id] = (pend[e.atividade_id] ?? 0) + 1; });
         setPendMap(pend);
       } else if (profile) {
         const { data: es } = await supabase.from('atividade_envios').select('atividade_id,enviado_em,nota,corrigido_em').in('atividade_id', atividadeIds).eq('aluno_id', profile.id);
         const map: Record<string, Envio> = {};
-        (es ?? []).forEach((e: any) => { map[e.atividade_id] = e; });
+        (es ?? []).forEach((e) => { map[e.atividade_id] = e as Envio; });
         setEnvios(map);
       }
     }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [turmaId, cursoId, profile]);
+  useEffect(() => { load(); }, [turmaId, cursoId, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div>
-      <div className="flex items-center gap-2 text-sm text-[#d6deed] mb-6 flex-wrap">
-        <button onClick={() => nav('/atividades')} className="hover:text-white transition-colors">Atividades</button>
-        <ChevronRight className="w-4 h-4 text-[#434d5e]" />
-        <span className="text-white">{turmaNome} {cursoTitulo}</span>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <PageHeader
+        breadcrumbs={[{ label: 'Atividades', to: '/atividades' }, { label: `${turmaNome} ${cursoTitulo}`.trim() || '…' }]}
+        title={`${turmaNome} ${cursoTitulo}`.trim() || '…'}
+        subtitle={isProfessor ? 'Atividades desta turma.' : 'Suas atividades.'}
+        actions={isProfessor ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button> : undefined}
+      />
 
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1>{turmaNome} {cursoTitulo}</h1>
-          <p className="meta mt-1">{isProfessor ? 'Atividades desta turma' : 'Suas atividades'}</p>
-        </div>
-        {isProfessor && (
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button>
-        )}
-      </div>
-
-      {loading ? <p className="meta">Carregando...</p> :
+      {loading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
         atividades.length === 0 ? (
-          <Empty icon={<ClipboardList className="w-10 h-10" />} title="Nenhuma atividade" description={isProfessor ? 'Crie a primeira atividade desta turma' : 'Aguarde o professor publicar atividades'} />
+          <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade" description={isProfessor ? 'Crie a primeira atividade desta turma.' : 'Aguarde o professor publicar atividades.'}
+            action={isProfessor ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button> : undefined} />
         ) : (
-          <Card>
+          <Card className="overflow-hidden">
             <ul>
               {atividades.map((a) => {
                 const envio = envios[a.id];
                 const s = statusOf(a, envio);
-                const notaLabel = envio?.corrigido_em ? `${envio.nota}/${a.nota_maxima}` : `-/${a.nota_maxima}`;
-                const prazoLabel = a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : '-';
+                const notaLabel = envio?.corrigido_em ? `${envio.nota}/${a.nota_maxima}` : `–/${a.nota_maxima}`;
+                const prazoLabel = a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : '–';
                 const pend = pendMap[a.id] ?? 0;
                 return (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-4 px-4 py-3 border-b border-[#1c1f26] last:border-0 hover:bg-[#111] cursor-pointer"
-                    onClick={() => nav(`/atividade/${a.id}`)}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">{a.titulo}</p>
-                      <p className="meta">Prazo: {prazoLabel}</p>
-                    </div>
-                    {!isProfessor && <Badge tone={s.tone}>{s.label}</Badge>}
-                    {!isProfessor && <span className="text-sm text-[#cbfb00] font-medium w-16 text-right">{notaLabel}</span>}
-                    {isProfessor && pend > 0 && <Badge tone="warn">{pend} pendente{pend > 1 ? 's' : ''}</Badge>}
-                    <ChevronRight className="w-4 h-4 text-[#434d5e] flex-shrink-0" />
+                  <li key={a.id} className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => nav(`/atividade/${a.id}`)}>
+                    <div className="flex-1 min-w-0"><p className="text-fg text-sm font-medium truncate">{a.titulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">Prazo: {prazoLabel}{!isProfessor && envio ? ` · ${notaLabel}` : ''}</p></div>
+                    {!isProfessor && <Badge tone={s.tone} dot className="flex-shrink-0">{s.label}</Badge>}
+                    {!isProfessor && <span className="hidden sm:inline text-sm text-brand font-medium w-16 text-right tabular-nums">{notaLabel}</span>}
+                    {isProfessor && pend > 0 && <Badge tone="warn" className="flex-shrink-0">{pend} pend.</Badge>}
+                    <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0 hidden sm:block" />
                   </li>
                 );
               })}
@@ -116,14 +95,7 @@ export default function AtividadesLista() {
           </Card>
         )}
 
-      <CriarAtividadeModal
-        open={createOpen}
-        turmaId={turmaId!}
-        cursoId={cursoId!}
-        onClose={() => setCreateOpen(false)}
-        onDone={() => { setCreateOpen(false); setToast('Atividade criada'); load(); }}
-      />
-      <Toast message={toast} tone="success" />
+      <CriarAtividadeModal open={createOpen} turmaId={turmaId!} cursoId={cursoId!} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); toast.success('Atividade criada.'); load(); }} />
     </div>
   );
 }

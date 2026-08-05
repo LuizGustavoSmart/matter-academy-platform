@@ -2,17 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DollarSign, TrendingUp, Repeat, Coins } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Card, Badge, Empty } from '../../components/ui';
+import { Card, Badge, EmptyState, Skeleton, Alert, TableWrap, THead, TBody, Tr, Th, Td } from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
 import { TipoCobranca, TIPO_COBRANCA_LABEL, formatBRL, calcTotal, describeCobranca } from '../../lib/financeiro';
 
-type TurmaFin = {
-  id: string;
-  nome: string;
-  tipo_cobranca: TipoCobranca | null;
-  valor: number | null;
-  alunos: number;
-  total: number;
-};
+type TurmaFin = { id: string; nome: string; tipo_cobranca: TipoCobranca | null; valor: number | null; alunos: number; total: number };
 
 export default function Financeiro() {
   const [turmas, setTurmas] = useState<TurmaFin[]>([]);
@@ -25,108 +19,62 @@ export default function Financeiro() {
         supabase.from('user_turmas').select('turma_id,user_id'),
         supabase.from('profiles').select('id,role'),
       ]);
-
-      const studentIds = new Set((profiles ?? []).filter((p: any) => p.role === 'student').map((p: any) => p.id));
+      const studentIds = new Set((profiles ?? []).filter((p) => p.role === 'student').map((p) => p.id));
       const alunosPorTurma: Record<string, Set<string>> = {};
-      (uts ?? []).forEach((r: any) => {
-        if (studentIds.has(r.user_id)) (alunosPorTurma[r.turma_id] ??= new Set()).add(r.user_id);
-      });
-
-      const rows: TurmaFin[] = (ts ?? []).map((t: any) => {
+      (uts ?? []).forEach((r) => { if (studentIds.has(r.user_id)) (alunosPorTurma[r.turma_id] ??= new Set()).add(r.user_id); });
+      const rows: TurmaFin[] = (ts ?? []).map((t) => {
         const alunos = alunosPorTurma[t.id]?.size ?? 0;
-        return {
-          id: t.id, nome: t.nome, tipo_cobranca: t.tipo_cobranca, valor: t.valor,
-          alunos,
-          total: calcTotal(t.tipo_cobranca, t.valor, alunos),
-        };
+        return { id: t.id, nome: t.nome, tipo_cobranca: t.tipo_cobranca as TipoCobranca | null, valor: t.valor, alunos, total: calcTotal(t.tipo_cobranca as TipoCobranca | null, t.valor, alunos) };
       });
-
       setTurmas(rows);
       setLoading(false);
     })();
   }, []);
 
-  const somaPorTipo = (tipo: TipoCobranca) =>
-    turmas.filter((t) => t.tipo_cobranca === tipo).reduce((s, t) => s + t.total, 0);
-
-  const totalFixo = somaPorTipo('fixo');
-  const totalPorAluno = somaPorTipo('por_aluno');
-  const totalMensal = somaPorTipo('recorrente_mensal');
+  const somaPorTipo = (tipo: TipoCobranca) => turmas.filter((t) => t.tipo_cobranca === tipo).reduce((s, t) => s + t.total, 0);
+  const nTipo = (tipo: TipoCobranca) => turmas.filter((t) => t.tipo_cobranca === tipo).length;
   const semConfig = turmas.filter((t) => !t.tipo_cobranca).length;
 
   return (
     <div>
-      <div className="mb-6">
-        <h1>Financeiro</h1>
-        <p className="meta mt-1">Visão consolidada da cobrança de todas as turmas</p>
-      </div>
+      <PageHeader title="Financeiro" subtitle="Visão consolidada da cobrança de todas as turmas." />
 
-      {loading ? <p className="meta">Carregando...</p> : turmas.length === 0 ? (
-        <Empty icon={<DollarSign className="w-8 h-8" />} title="Nenhuma turma criada" />
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      ) : turmas.length === 0 ? (
+        <EmptyState icon={<DollarSign className="w-8 h-8" />} title="Nenhuma turma criada" description="Crie turmas e configure a cobrança para ver o consolidado." />
       ) : (
-        <div className="space-y-8">
-          {/* Totais por tipo */}
+        <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
-            <SummaryCard
-              icon={<Coins className="w-5 h-5 text-[#cbfb00]" />}
-              label="Valor fixo (único)"
-              value={formatBRL(totalFixo)}
-              hint={`${turmas.filter((t) => t.tipo_cobranca === 'fixo').length} turma(s)`}
-            />
-            <SummaryCard
-              icon={<TrendingUp className="w-5 h-5 text-[#cbfb00]" />}
-              label="Por aluno (calculado)"
-              value={formatBRL(totalPorAluno)}
-              hint={`${turmas.filter((t) => t.tipo_cobranca === 'por_aluno').length} turma(s)`}
-            />
-            <SummaryCard
-              icon={<Repeat className="w-5 h-5 text-[#cbfb00]" />}
-              label="Recorrente mensal"
-              value={`${formatBRL(totalMensal)}/mês`}
-              hint={`${turmas.filter((t) => t.tipo_cobranca === 'recorrente_mensal').length} turma(s)`}
-            />
+            <SummaryCard icon={<Coins className="w-5 h-5 text-brand" />} label="Valor fixo (único)" value={formatBRL(somaPorTipo('fixo'))} hint={`${nTipo('fixo')} turma(s)`} />
+            <SummaryCard icon={<TrendingUp className="w-5 h-5 text-brand" />} label="Por aluno (calculado)" value={formatBRL(somaPorTipo('por_aluno'))} hint={`${nTipo('por_aluno')} turma(s)`} />
+            <SummaryCard icon={<Repeat className="w-5 h-5 text-brand" />} label="Recorrente mensal" value={`${formatBRL(somaPorTipo('recorrente_mensal'))}/mês`} hint={`${nTipo('recorrente_mensal')} turma(s)`} />
           </div>
 
-          {semConfig > 0 && (
-            <p className="text-xs text-[#8b929e]">
-              {semConfig} turma(s) sem cobrança configurada não entram nos totais acima.
-            </p>
-          )}
+          {semConfig > 0 && <Alert tone="info">{semConfig} turma(s) sem cobrança configurada não entram nos totais acima.</Alert>}
 
-          {/* Tabela por turma */}
-          <Card>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#1c1f26] text-left">
-                  <th className="px-4 py-3 font-medium text-[#d6deed]">Turma</th>
-                  <th className="px-4 py-3 font-medium text-[#d6deed]">Tipo</th>
-                  <th className="px-4 py-3 font-medium text-[#d6deed]">Alunos</th>
-                  <th className="px-4 py-3 font-medium text-[#d6deed] text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card className="overflow-hidden">
+            <TableWrap>
+              <THead>
+                <Tr><Th>Turma</Th><Th>Tipo</Th><Th>Alunos</Th><Th className="text-right">Total</Th></Tr>
+              </THead>
+              <TBody>
                 {turmas.map((t) => {
                   const cobranca = describeCobranca(t.tipo_cobranca, t.valor, t.alunos);
                   return (
-                    <tr key={t.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
-                      <td className="px-4 py-3">
-                        <Link to={`/admin/turmas/${t.id}`} className="text-white hover:text-[#cbfb00] transition-colors">{t.nome}</Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        {t.tipo_cobranca
-                          ? <Badge>{TIPO_COBRANCA_LABEL[t.tipo_cobranca]}</Badge>
-                          : <span className="text-[#434d5e] italic text-xs">Não configurada</span>}
-                      </td>
-                      <td className="px-4 py-3 text-[#d6deed]">{t.alunos}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-white font-medium">{cobranca.total}</span>
-                        {cobranca.detalhe && <p className="text-xs text-[#8b929e]">{cobranca.detalhe}</p>}
-                      </td>
-                    </tr>
+                    <Tr key={t.id} className="hover:bg-panel-2/40 transition-colors">
+                      <Td><Link to={`/admin/turmas/${t.id}`} className="text-fg hover:text-brand transition-colors font-medium">{t.nome}</Link></Td>
+                      <Td>{t.tipo_cobranca ? <Badge>{TIPO_COBRANCA_LABEL[t.tipo_cobranca]}</Badge> : <span className="text-fg-3 italic text-xs">Não configurada</span>}</Td>
+                      <Td className="text-fg-2 tabular-nums">{t.alunos}</Td>
+                      <Td className="text-right"><span className="text-fg font-medium tabular-nums">{cobranca.total}</span>{cobranca.detalhe && <p className="text-fg-3 text-xs">{cobranca.detalhe}</p>}</Td>
+                    </Tr>
                   );
                 })}
-              </tbody>
-            </table>
+              </TBody>
+            </TableWrap>
           </Card>
         </div>
       )}
@@ -138,11 +86,11 @@ function SummaryCard({ icon, label, value, hint }: { icon: React.ReactNode; labe
   return (
     <Card className="p-5">
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-lg bg-[#cbfb00]/10 flex items-center justify-center flex-shrink-0">{icon}</div>
-        <span className="text-xs text-[#8b929e] uppercase tracking-wider">{label}</span>
+        <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0">{icon}</span>
+        <span className="text-fg-3 text-xs uppercase tracking-wider">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-xs text-[#8b929e] mt-1">{hint}</p>
+      <p className="text-2xl font-display font-semibold text-fg tabular-nums">{value}</p>
+      <p className="text-fg-3 text-xs mt-1">{hint}</p>
     </Card>
   );
 }

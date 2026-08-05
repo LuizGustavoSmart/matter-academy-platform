@@ -30,6 +30,26 @@ function normalizeRole(value: unknown): UserRole | null {
   return ROLE_ALIASES[value.trim().toLowerCase()] ?? null;
 }
 
+function normalizeEmail(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+/** Mantém dígitos e um "+" inicial opcional; devolve null se vazio. */
+function normalizePhone(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const plus = trimmed.startsWith("+") ? "+" : "";
+  const digits = trimmed.replace(/[^\d]/g, "");
+  return digits ? plus + digits : null;
+}
+
+function cleanText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  return t ? t : null;
+}
+
 async function sendInviteWebhook(payload: {
   event: InviteEvent;
   email: string;
@@ -111,15 +131,21 @@ Deno.serve(async (req: Request) => {
     const body = req.method === "POST" || req.method === "PUT" ? await req.json().catch(() => ({})) : {};
 
     if (req.method === "POST" && action === "create") {
-      const { email, nome, turma_cursos, turma_ids, role = "student" } = body as {
+      const { email: rawEmail, nome, sobrenome, telefone, empresa, turma_cursos, turma_ids, role = "student", send_invite = true } = body as {
         email: string;
         nome?: string;
+        sobrenome?: string;
+        telefone?: string;
+        empresa?: string;
         turma_cursos?: { turma_id: string; curso_id: string }[];
         turma_ids?: string[];
         role?: string;
+        send_invite?: boolean;
       };
+      const email = normalizeEmail(rawEmail);
       const normalizedRole = normalizeRole(role);
       if (!email) return json({ error: "Email obrigatório" }, 400);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Email inválido" }, 400);
       if (!normalizedRole) return json({ error: "Papel inválido" }, 400);
 
       const { data: existing } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
@@ -142,7 +168,10 @@ Deno.serve(async (req: Request) => {
       const { error: profErr } = await admin.from("profiles").insert({
         id: created.user.id,
         email,
-        nome: nome?.trim() || null,
+        nome: cleanText(nome),
+        sobrenome: cleanText(sobrenome),
+        telefone: normalizePhone(telefone),
+        empresa: cleanText(empresa),
         role: normalizedRole,
         status: "pending",
         invite_token,
@@ -169,9 +198,11 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      await fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
+      if (send_invite) {
+        await fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
+      }
 
-      return json({ user_id: created.user.id, invite_token });
+      return json({ user_id: created.user.id, invite_token, invite_sent: !!send_invite });
     }
 
     if (req.method === "POST" && action === "reinvite") {
@@ -191,14 +222,19 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === "POST" && action === "update") {
-      const { user_id, email, nome, status, role, turma_cursos, turma_ids } = body as {
-        user_id: string; email?: string; nome?: string; status?: string; role?: string;
+      const { user_id, email: rawEmail, nome, sobrenome, telefone, empresa, status, role, turma_cursos, turma_ids } = body as {
+        user_id: string; email?: string; nome?: string; sobrenome?: string; telefone?: string; empresa?: string;
+        status?: string; role?: string;
         turma_cursos?: { turma_id: string; curso_id: string }[];
         turma_ids?: string[];
       };
+      const email = rawEmail !== undefined ? normalizeEmail(rawEmail) : undefined;
       const updates: Record<string, unknown> = {};
       if (email) updates.email = email;
-      if (nome !== undefined) updates.nome = nome.trim() || null;
+      if (nome !== undefined) updates.nome = cleanText(nome);
+      if (sobrenome !== undefined) updates.sobrenome = cleanText(sobrenome);
+      if (telefone !== undefined) updates.telefone = normalizePhone(telefone);
+      if (empresa !== undefined) updates.empresa = cleanText(empresa);
       if (status) updates.status = status;
       if (role) {
         const normalizedRole = normalizeRole(role);
@@ -235,7 +271,8 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && action === "forgot-link") {
       const { email } = body as { email: string };
-      const { data: profile } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+      const normalizedEmail = normalizeEmail(email);
+      const { data: profile } = await admin.from("profiles").select("id").ilike("email", normalizedEmail).maybeSingle();
       if (!profile) return json({ error: "Usuário não encontrado" }, 404);
       const reset_token = genToken();
       const reset_expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

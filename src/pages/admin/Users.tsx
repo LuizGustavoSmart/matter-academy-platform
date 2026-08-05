@@ -1,70 +1,82 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Copy, Check, Trash2, RefreshCw, Pencil, Search, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import {
+  Plus, Upload, Search, Users as UsersIcon, SlidersHorizontal, X, Copy, Check,
+  RefreshCw, Ban, ShieldCheck, Trash2, AlertCircle, Download, FileDown,
+} from 'lucide-react';
 import { supabase, callFn } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, Card, Badge, Modal, Empty, Toast } from '../../components/ui';
+import {
+  Button, IconButton, SearchInput, Select, Modal, EmptyState, TableSkeleton, Alert,
+  Pagination, FilterChip, StatTile, useToast, useConfirm,
+} from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
+import { ROLE_LABEL, fullName, normalizePhone, type Role } from '../../lib/users';
+import { loadCoursesByTurma, type Turma, type CursoInfo } from './users/pickers';
+import type { UserRow } from './users/types';
+import { UsersTableDesktop, UsersCardsMobile, type SortKey, type RowActions } from './users/UsersTable';
+import { UserFormDrawer } from './users/UserFormDrawer';
+import { downloadEmptyTemplate, exportUsersToXlsx } from './users/importValidation';
 
-type Turma = { id: string; nome: string };
-type Role = 'admin' | 'student' | 'professor' | 'monitor';
-type UserRow = {
-  id: string; email: string; nome: string | null; role: Role; status: string;
-  created_at: string; invite_token: string | null;
-  turmas: { id: string; nome: string }[];
-};
+// Carregado sob demanda (traz o SheetJS/xlsx) só quando o admin abre a importação.
+const ImportWizard = lazy(() => import('./users/ImportWizard').then((m) => ({ default: m.ImportWizard })));
 
-const ROLE_LABEL: Record<Role, string> = {
-  admin: 'Administrador', student: 'Aluno', professor: 'Professor', monitor: 'Monitor',
-};
-const ROLE_TONE: Record<Role, 'success' | 'default' | 'warn'> = {
-  admin: 'success', professor: 'warn', monitor: 'warn', student: 'default',
-};
+const PAGE_SIZE = 12;
+const STATUS_ORDER: Record<string, number> = { pending: 0, active: 1, blocked: 2 };
 
 export default function AdminUsers() {
   const { profile: current } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+
   const [users, setUsers] = useState<UserRow[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [filterRole, setFilterRole] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterTurma, setFilterTurma] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState<UserRow | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'created_at', dir: 'desc' });
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const [drawer, setDrawer] = useState<{ mode: 'create' | 'edit'; user?: UserRow } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [linkModal, setLinkModal] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; tone: 'danger' | 'success' } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const showToast = (msg: string, tone: 'danger' | 'success') => {
-    setToast({ msg, tone });
-    setTimeout(() => setToast(null), 3500);
-  };
-
   const load = async () => {
-    setLoading(true);
-    const [{ data: ps }, { data: ts }, { data: uts }] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('turmas').select('id,nome').order('nome'),
-      supabase.from('user_turmas').select('user_id,turma_id'),
-    ]);
-    const turmasMap = new Map((ts ?? []).map((t) => [t.id, t]));
-    const rows: UserRow[] = (ps ?? []).map((p: any) => ({
-      ...p,
-      turmas: [...new Map(
-        (uts ?? [])
-          .filter((r) => r.user_id === p.id)
-          .map((r) => turmasMap.get(r.turma_id))
-          .filter(Boolean)
-          .map((t: any) => [t.id, t])
-      ).values()] as Turma[],
-    }));
-    setUsers(rows);
-    setTurmas(ts ?? []);
-    setLoading(false);
+    setLoading(true); setError(null);
+    try {
+      const [{ data: ps, error: pe }, { data: ts }, { data: uts }, byTurma] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('turmas').select('id,nome').order('nome'),
+        supabase.from('user_turmas').select('user_id,turma_id'),
+        loadCoursesByTurma(),
+      ]);
+      if (pe) throw pe;
+      const turmasMap = new Map((ts ?? []).map((t) => [t.id, t]));
+      const rows: UserRow[] = (ps ?? []).map((p: Record<string, unknown>) => ({
+        id: p.id as string, email: p.email as string,
+        nome: (p.nome as string) ?? null, sobrenome: (p.sobrenome as string) ?? null,
+        telefone: (p.telefone as string) ?? null, empresa: (p.empresa as string) ?? null,
+        role: p.role as Role, status: p.status as UserRow['status'],
+        created_at: (p.created_at as string) ?? new Date().toISOString(),
+        invite_token: (p.invite_token as string) ?? null,
+        turmas: [...new Map((uts ?? []).filter((r) => r.user_id === p.id).map((r) => turmasMap.get(r.turma_id)).filter(Boolean).map((t) => [t!.id, t!])).values()] as Turma[],
+      }));
+      setUsers(rows); setTurmas(ts ?? []); setCoursesByTurma(byTurma);
+    } catch (e) {
+      setError((e as Error).message || 'Falha ao carregar usuários.');
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { setPage(1); }, [search, filterRole, filterStatus, filterTurma]);
 
-  /* ── Stats derivadas de TODOS os usuários (não filtrados) ── */
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter((u) => u.status === 'active').length,
@@ -73,718 +85,235 @@ export default function AdminUsers() {
   }), [users]);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const qDigits = normalizePhone(search).replace(/\D/g, '');
     return users.filter((u) => {
-      if (search && !u.email.toLowerCase().includes(search.toLowerCase()) && !(u.nome ?? '').toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterStatus && u.status !== filterStatus) return false;
+      if (q) {
+        const phoneDigits = (u.telefone ?? '').replace(/\D/g, '');
+        const hitPhone = qDigits.length >= 3 && phoneDigits.includes(qDigits);
+        if (
+          !u.email.toLowerCase().includes(q)
+          && !fullName(u.nome, u.sobrenome).toLowerCase().includes(q)
+          && !(u.empresa ?? '').toLowerCase().includes(q)
+          && !hitPhone
+        ) return false;
+      }
       if (filterRole && u.role !== filterRole) return false;
+      if (filterStatus && u.status !== filterStatus) return false;
       if (filterTurma && !u.turmas.some((t) => t.id === filterTurma)) return false;
       return true;
     });
-  }, [users, search, filterStatus, filterRole, filterTurma]);
+  }, [users, search, filterRole, filterStatus, filterTurma]);
 
-  const hasFilters = !!(search || filterStatus || filterRole || filterTurma);
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let av: string | number = '', bv: string | number = '';
+      if (sort.key === 'nome') { av = fullName(a.nome, a.sobrenome) || a.email; bv = fullName(b.nome, b.sobrenome) || b.email; }
+      else if (sort.key === 'email') { av = a.email; bv = b.email; }
+      else if (sort.key === 'telefone') { av = (a.telefone ?? '').replace(/\D/g, ''); bv = (b.telefone ?? '').replace(/\D/g, ''); }
+      else if (sort.key === 'status') { av = STATUS_ORDER[a.status] ?? 9; bv = STATUS_ORDER[b.status] ?? 9; }
+      else { av = a.created_at; bv = b.created_at; }
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtered, sort]);
 
-  const clearFilters = () => {
-    setSearch('');
-    setFilterStatus('');
-    setFilterRole('');
-    setFilterTurma('');
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const hasFilters = !!(search || filterRole || filterStatus || filterTurma);
+  const clearFilters = () => { setSearch(''); setFilterRole(''); setFilterStatus(''); setFilterTurma(''); };
+
+  const toggleSort = (k: SortKey) => setSort((s) => (s.key === k ? { key: k, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: k === 'created_at' ? 'desc' : 'asc' }));
+
+  /* ── seleção ── */
+  const pageIds = pageRows.map((u) => u.id);
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const someSelected = pageIds.some((id) => selected.has(id));
+  const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () => setSelected((s) => { const n = new Set(s); if (allSelected) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id)); return n; });
+  const clearSelection = () => setSelected(new Set());
+
+  /* ── ações individuais ── */
+  const showLink = (token: string) => setLinkModal(`${window.location.origin}/ativar?token=${token}`);
+  const copyLinkText = (text: string) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
+  const actions: RowActions = {
+    edit: (u) => setDrawer({ mode: 'edit', user: u }),
+    copyLink: (u) => u.invite_token && showLink(u.invite_token),
+    reinvite: async (u) => {
+      try { const r = await callFn('admin-users', 'reinvite', { user_id: u.id }); showLink(r.invite_token); toast.success('Convite reenviado.'); load(); }
+      catch (e) { toast.error((e as Error).message); }
+    },
+    toggleBlock: async (u) => {
+      const next = u.status === 'blocked' ? 'active' : 'blocked';
+      try { await callFn('admin-users', 'update', { user_id: u.id, status: next }); toast.success(next === 'blocked' ? 'Usuário bloqueado.' : 'Usuário desbloqueado.'); load(); }
+      catch (e) { toast.error((e as Error).message); }
+    },
+    remove: async (u) => {
+      if (u.id === current?.id) { toast.error('Você não pode excluir sua própria conta.'); return; }
+      const ok = await confirm({ title: 'Excluir usuário', tone: 'danger', confirmLabel: 'Excluir',
+        message: <>Excluir <strong className="text-fg">{u.email}</strong>? Esta ação é permanente e remove todos os vínculos.</> });
+      if (!ok) return;
+      try { await callFn('admin-users', 'delete', { user_id: u.id }); toast.success('Usuário excluído.'); load(); }
+      catch (e) { toast.error((e as Error).message); }
+    },
   };
 
-  const showLink = (token: string) => {
-    setLinkModal(`${window.location.origin}/ativar?token=${token}`);
+  /* ── ações em massa ── */
+  const targets = () => users.filter((u) => selected.has(u.id) && u.id !== current?.id);
+  const runBulk = async (label: string, fn: (u: UserRow) => Promise<void>) => {
+    const list = targets();
+    if (!list.length) { toast.info('Nenhum usuário elegível na seleção.'); return; }
+    const id = toast.show(`${label} ${list.length} usuário(s)…`, { tone: 'loading', duration: 0 });
+    let ok = 0, fail = 0;
+    for (const u of list) { try { await fn(u); ok++; } catch { fail++; } }
+    toast.dismiss(id);
+    toast.show(`${label}: ${ok} concluído(s)${fail ? `, ${fail} com erro` : ''}.`, { tone: fail ? 'warn' : 'success' });
+    clearSelection(); load();
   };
 
-  const reinvite = async (u: UserRow) => {
-    try {
-      const r = await callFn('admin-users', 'reinvite', { user_id: u.id });
-      showLink(r.invite_token);
-      load();
-    } catch (e) { showToast((e as Error).message, 'danger'); }
+  const bulkReinvite = () => runBulk('Reenviando convite para', async (u) => { await callFn('admin-users', 'reinvite', { user_id: u.id }); });
+  const bulkBlock = () => runBulk('Bloqueando', async (u) => { await callFn('admin-users', 'update', { user_id: u.id, status: 'blocked' }); });
+  const bulkUnblock = () => runBulk('Desbloqueando', async (u) => { await callFn('admin-users', 'update', { user_id: u.id, status: 'active' }); });
+  const bulkDelete = async () => {
+    const list = targets();
+    if (!list.length) { toast.info('Nenhum usuário elegível na seleção.'); return; }
+    const ok = await confirm({ title: 'Excluir usuários', tone: 'danger', confirmLabel: `Excluir ${list.length}`, requireText: 'EXCLUIR',
+      message: <>Excluir <strong className="text-fg">{list.length}</strong> usuário(s)? Esta ação é permanente.</> });
+    if (!ok) return;
+    runBulk('Excluindo', async (u) => { await callFn('admin-users', 'delete', { user_id: u.id }); });
   };
 
-  const del = async (u: UserRow) => {
-    if (u.id === current?.id) { showToast('Você não pode excluir sua própria conta', 'danger'); return; }
-    if (!confirm(`Excluir ${u.email}? Esta ação não pode ser desfeita.`)) return;
-    try {
-      await callFn('admin-users', 'delete', { user_id: u.id });
-      showToast('Usuário excluído', 'success');
-      load();
-    } catch (e) { showToast((e as Error).message, 'danger'); }
-  };
-
-  const toggleBlock = async (u: UserRow) => {
-    const newStatus = u.status === 'blocked' ? 'active' : 'blocked';
-    try {
-      await callFn('admin-users', 'update', { user_id: u.id, status: newStatus });
-      load();
-    } catch (e) { showToast((e as Error).message, 'danger'); }
-  };
-
-  const copy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  /* ── Configuração dos cards de stats ── */
-  const STAT_CARDS = [
-    { label: 'Total', value: stats.total,   filterValue: '',        valueClass: 'text-white' },
-    { label: 'Ativos',     value: stats.active,  filterValue: 'active',  valueClass: 'text-[#cbfb00]' },
-    { label: 'Pendentes',  value: stats.pending, filterValue: 'pending', valueClass: 'text-yellow-400' },
-    { label: 'Bloqueados', value: stats.blocked, filterValue: 'blocked', valueClass: 'text-red-400' },
-  ];
+  const selectedCount = targets().length;
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1>Usuários</h1>
-          <p className="meta mt-1">Gerencie administradores, professores e alunos</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>
-          Novo usuário
-        </Button>
+      <PageHeader
+        title="Usuários"
+        subtitle="Gerencie administradores, professores, monitores e alunos."
+        actions={
+          <>
+            <Button variant="secondary" icon={<FileDown className="w-4 h-4" />} onClick={downloadEmptyTemplate}>Baixar template</Button>
+            <Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={() => exportUsersToXlsx(sorted)}>Exportar</Button>
+            <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>Importar planilha</Button>
+            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setDrawer({ mode: 'create' })}>Novo usuário</Button>
+          </>
+        }
+      />
+
+      {/* Indicadores clicáveis */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatTile label="Total" value={stats.total} icon={<UsersIcon className="w-4 h-4" />} active={!filterStatus} onClick={() => setFilterStatus('')} />
+        <StatTile label="Ativos" value={stats.active} tone="ok" active={filterStatus === 'active'} onClick={() => setFilterStatus(filterStatus === 'active' ? '' : 'active')} />
+        <StatTile label="Pendentes" value={stats.pending} tone="warn" active={filterStatus === 'pending'} onClick={() => setFilterStatus(filterStatus === 'pending' ? '' : 'pending')} />
+        <StatTile label="Bloqueados" value={stats.blocked} tone="danger" active={filterStatus === 'blocked'} onClick={() => setFilterStatus(filterStatus === 'blocked' ? '' : 'blocked')} />
       </div>
 
-      {/* ── Cards de resumo ── */}
-      {!loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          {STAT_CARDS.map((card) => {
-            const isSelected = card.filterValue !== '' && filterStatus === card.filterValue;
-            return (
-              <button
-                key={card.label}
-                onClick={() => {
-                  if (card.filterValue === '') {
-                    /* "Total" limpa o filtro de status */
-                    setFilterStatus('');
-                  } else {
-                    /* toggle: clica de novo → remove o filtro */
-                    setFilterStatus(isSelected ? '' : card.filterValue);
-                  }
-                }}
-                className={`p-4 rounded-lg border text-left transition-all ${
-                  isSelected
-                    ? 'bg-[#cbfb00]/5 border-[#cbfb00]/40'
-                    : 'bg-[#0d0d0d] border-[#1c1f26] hover:border-[#434d5e]'
-                }`}
-              >
-                <p className={`text-2xl font-bold mb-1 ${card.valueClass}`}>{card.value}</p>
-                <p className="text-[#8b929e] text-xs font-medium uppercase tracking-wider">{card.label}</p>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Barra de filtros ── */}
-      <Card className="p-4 mb-4">
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#434d5e]" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar email..."
-              className="!pl-9"
-            />
-          </div>
-          <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="max-w-[180px]">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, e-mail, telefone ou empresa…" className="flex-1" />
+        <div className="hidden sm:flex gap-2.5">
+          <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-[168px]">
             <option value="">Todos os papéis</option>
-            <option value="admin">Administrador</option>
-            <option value="professor">Professor</option>
-            <option value="monitor">Monitor</option>
-            <option value="student">Aluno</option>
-          </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="max-w-[180px]">
-            <option value="">Todos os status</option>
-            <option value="pending">Pendente</option>
-            <option value="active">Ativo</option>
-            <option value="blocked">Bloqueado</option>
-          </select>
-          <select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="max-w-[220px]">
+            {(['admin', 'professor', 'monitor', 'student'] as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          </Select>
+          <Select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="w-[180px]">
             <option value="">Todas as turmas</option>
             {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-          </select>
-          {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-1.5 text-xs text-[#8b929e] hover:text-[#d6deed] transition-colors whitespace-nowrap"
-            >
-              <X className="w-3.5 h-3.5" />
-              Limpar filtros
-            </button>
-          )}
+          </Select>
         </div>
+        <Button variant="secondary" className="sm:hidden" icon={<SlidersHorizontal className="w-4 h-4" />} onClick={() => setShowFilters((v) => !v)}>Filtros</Button>
+      </div>
 
-        {/* Contador de resultados quando filtros ativos */}
-        {hasFilters && !loading && (
-          <p className="text-xs text-[#8b929e] mt-3 border-t border-[#1c1f26] pt-3">
-            Mostrando{' '}
-            <span className="text-white font-medium">{filtered.length}</span>
-            {' '}de{' '}
-            <span className="text-white font-medium">{users.length}</span>
-            {' '}usuários
-          </p>
-        )}
-      </Card>
-
-      {/* ── Conteúdo principal ── */}
-      {loading ? (
-        <Card className="p-10 text-center">
-          <p className="meta">Carregando usuários...</p>
-        </Card>
-      ) : filtered.length === 0 ? (
-        hasFilters ? (
-          <Empty
-            icon={<Search className="w-8 h-8" />}
-            title="Nenhum resultado para este filtro"
-            description="Tente ajustar a busca ou clique em 'Limpar filtros'"
-          />
-        ) : (
-          <Empty
-            icon={<Users className="w-8 h-8" />}
-            title="Nenhum usuário cadastrado"
-            description="Clique em 'Novo usuário' para convidar alunos, professores ou administradores"
-          />
-        )
-      ) : (
-        <Card>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#1c1f26] text-left">
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Nome</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Email</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Papel</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Status</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed]">Turmas</th>
-                <th className="px-4 py-3 font-medium text-[#d6deed] hidden md:table-cell">Cadastro</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-[#1c1f26] last:border-0 hover:bg-[#111] transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="text-white block truncate max-w-[160px]">{u.nome || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-white block truncate max-w-[200px]">{u.email}</span>
-                    {u.id === current?.id && (
-                      <span className="text-[#8b929e] text-xs">você</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {u.status === 'active'  && <Badge tone="success">Ativo</Badge>}
-                    {u.status === 'pending' && <Badge tone="warn">Pendente</Badge>}
-                    {u.status === 'blocked' && <Badge tone="danger">Bloqueado</Badge>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {u.turmas.length === 0
-                        ? <span className="text-[#434d5e] text-xs">—</span>
-                        : u.turmas.map((t) => <Badge key={t.id}>{t.nome}</Badge>)
-                      }
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell text-[#8b929e] text-xs">
-                    {new Date(u.created_at).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1 flex-wrap">
-                      {u.status === 'pending' && u.invite_token && (
-                        <Button variant="ghost" onClick={() => showLink(u.invite_token!)} icon={<Copy className="w-4 h-4" />}>
-                          Link
-                        </Button>
-                      )}
-                      <Button variant="ghost" onClick={() => reinvite(u)} icon={<RefreshCw className="w-4 h-4" />}>
-                        Reenviar
-                      </Button>
-                      <Button variant="ghost" onClick={() => setEditOpen(u)} icon={<Pencil className="w-4 h-4" />}>
-                        Editar
-                      </Button>
-                      {u.id !== current?.id && (
-                        <>
-                          <Button variant="ghost" onClick={() => toggleBlock(u)}>
-                            {u.status === 'blocked' ? 'Desbloquear' : 'Bloquear'}
-                          </Button>
-                          <Button variant="danger" onClick={() => del(u)} icon={<Trash2 className="w-4 h-4" />} />
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+      {/* Filtros mobile */}
+      {showFilters && (
+        <div className="sm:hidden grid grid-cols-2 gap-2.5 mb-3">
+          <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+            <option value="">Todos os papéis</option>
+            {(['admin', 'professor', 'monitor', 'student'] as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          </Select>
+          <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">Todos os status</option>
+            <option value="pending">Pendente</option><option value="active">Ativo</option><option value="blocked">Bloqueado</option>
+          </Select>
+          <Select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="col-span-2">
+            <option value="">Todas as turmas</option>
+            {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+          </Select>
+        </div>
       )}
 
-      {/* ── Modais ── */}
-      <CreateUserModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        turmas={turmas}
-        onDone={(token) => { setCreateOpen(false); if (token) showLink(token); load(); }}
-        onBulkDone={(msg) => { setCreateOpen(false); showToast(msg, 'success'); load(); }}
-      />
-      <EditUserModal
-        user={editOpen}
-        currentId={current?.id}
-        onClose={() => setEditOpen(null)}
-        turmas={turmas}
-        onDone={() => { setEditOpen(null); load(); }}
-      />
-
-      <Modal
-        open={!!linkModal}
-        onClose={() => setLinkModal(null)}
-        title="Link de ativação"
-        footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}
-      >
-        <p className="mb-3">Copie e envie este link ao usuário. Válido por 7 dias.</p>
-        <div className="border border-[#1c1f26] bg-black rounded-md p-3 text-sm text-[#cbfb00] break-all">
-          {linkModal}
+      {/* Chips de filtros ativos */}
+      {hasFilters && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {search && <FilterChip label={<>Busca: <span className="text-fg">{search}</span></>} onRemove={() => setSearch('')} />}
+          {filterRole && <FilterChip label={<>Papel: <span className="text-fg">{ROLE_LABEL[filterRole as Role]}</span></>} onRemove={() => setFilterRole('')} />}
+          {filterStatus && <FilterChip label={<>Status: <span className="text-fg">{filterStatus === 'active' ? 'Ativo' : filterStatus === 'pending' ? 'Pendente' : 'Bloqueado'}</span></>} onRemove={() => setFilterStatus('')} />}
+          {filterTurma && <FilterChip label={<>Turma: <span className="text-fg">{turmas.find((t) => t.id === filterTurma)?.nome}</span></>} onRemove={() => setFilterTurma('')} />}
+          <button onClick={clearFilters} className="text-fg-3 hover:text-fg text-xs inline-flex items-center gap-1"><X className="w-3.5 h-3.5" />Limpar tudo</button>
         </div>
-        <Button
-          variant="primary"
-          className="mt-4"
-          onClick={() => linkModal && copy(linkModal)}
-          icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-        >
+      )}
+
+      {/* Conteúdo */}
+      {loading ? (
+        <TableSkeleton rows={8} cols={6} />
+      ) : error ? (
+        <Alert tone="danger" title="Não foi possível carregar os usuários" action={<Button size="sm" variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={load}>Tentar novamente</Button>}>{error}</Alert>
+      ) : sorted.length === 0 ? (
+        hasFilters ? (
+          <EmptyState icon={<Search className="w-8 h-8" />} title="Nenhum resultado" description="Ajuste a busca ou os filtros para encontrar usuários." action={<Button variant="secondary" onClick={clearFilters}>Limpar filtros</Button>} />
+        ) : (
+          <EmptyState icon={<UsersIcon className="w-8 h-8" />} title="Nenhum usuário cadastrado" description="Crie um usuário individualmente ou importe uma planilha para começar."
+            action={<div className="flex gap-2"><Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>Importar</Button><Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setDrawer({ mode: 'create' })}>Novo usuário</Button></div>} />
+        )
+      ) : (
+        <>
+          <UsersTableDesktop rows={pageRows} currentId={current?.id} selected={selected} onToggle={toggle} onToggleAll={toggleAll} allSelected={allSelected} someSelected={someSelected} sort={sort} onSort={toggleSort} actions={actions} />
+          <UsersCardsMobile rows={pageRows} currentId={current?.id} selected={selected} onToggle={toggle} actions={actions} />
+          <div className="mt-4"><Pagination page={page} pageCount={pageCount} onPage={setPage} total={sorted.length} pageSize={PAGE_SIZE} /></div>
+        </>
+      )}
+
+      {/* Barra de ações em massa */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(720px,calc(100vw-2rem))] ma-anim-toast">
+          <div className="flex items-center gap-2 ma-glass ma-glass-strong rounded-xl px-3 py-2.5">
+            <span className="text-sm text-fg font-medium px-1">{selected.size} selecionado(s)</span>
+            <span className="text-fg-3 text-xs hidden sm:inline">{selectedCount !== selected.size && `(${selectedCount} elegíveis)`}</span>
+            <div className="flex-1" />
+            <Button size="sm" variant="ghost" icon={<RefreshCw className="w-4 h-4" />} onClick={bulkReinvite}>Reenviar</Button>
+            <Button size="sm" variant="ghost" icon={<Ban className="w-4 h-4" />} onClick={bulkBlock}>Bloquear</Button>
+            <Button size="sm" variant="ghost" icon={<ShieldCheck className="w-4 h-4" />} onClick={bulkUnblock} className="hidden sm:inline-flex">Desbloquear</Button>
+            <Button size="sm" variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={bulkDelete}>Excluir</Button>
+            <IconButton label="Limpar seleção" onClick={clearSelection}><X className="w-4 h-4" /></IconButton>
+          </div>
+        </div>
+      )}
+
+      {/* Drawers */}
+      <UserFormDrawer open={!!drawer} mode={drawer?.mode ?? 'create'} user={drawer?.user} turmas={turmas} onClose={() => setDrawer(null)} onSaved={load} />
+      {importOpen && (
+        <Suspense fallback={null}>
+          <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} turmas={turmas} coursesByTurma={coursesByTurma} existingUsers={users.map((u) => ({ id: u.id, email: u.email }))} onDone={load} />
+        </Suspense>
+      )}
+
+      {/* Modal do link de ativação */}
+      <Modal open={!!linkModal} onClose={() => setLinkModal(null)} title="Link de ativação"
+        footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}>
+        <div className="flex items-start gap-3 mb-4">
+          <span className="w-9 h-9 rounded-full bg-brand/12 text-brand grid place-items-center flex-shrink-0"><AlertCircle className="w-5 h-5" /></span>
+          <p className="text-sm text-fg-2">Copie e envie este link ao usuário. Ele é válido por 7 dias.</p>
+        </div>
+        <div className="rounded-lg border border-line bg-panel-3/40 p-3 text-xs text-brand break-all font-mono">{linkModal}</div>
+        <Button variant="primary" className="mt-4" block icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} onClick={() => linkModal && copyLinkText(linkModal)}>
           {copied ? 'Copiado' : 'Copiar link'}
         </Button>
       </Modal>
-
-      <Toast message={toast?.msg ?? null} tone={toast?.tone} />
     </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  Tipos compartilhados dos modais                                */
-/* ─────────────────────────────────────────────────────────────── */
-type CursoInfo = { id: string; titulo: string };
-type TurmaSelection = { turma_id: string; curso_ids: string[] };
-
-/* Carrega os cursos de cada turma via curso_turmas */
-async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
-  const [{ data: cts }, { data: cs }] = await Promise.all([
-    supabase.from('curso_turmas').select('turma_id,curso_id'),
-    supabase.from('cursos').select('id,titulo'),
-  ]);
-  const cursoMap = new Map((cs ?? []).map((c) => [c.id, c]));
-  const byTurma: Record<string, CursoInfo[]> = {};
-  (cts ?? []).forEach((ct) => {
-    const curso = cursoMap.get(ct.curso_id);
-    if (!curso) return;
-    if (!byTurma[ct.turma_id]) byTurma[ct.turma_id] = [];
-    byTurma[ct.turma_id].push(curso);
-  });
-  return byTurma;
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  TurmaCoursePicker — seletor aninhado Turma > Cursos           */
-/* ─────────────────────────────────────────────────────────────── */
-function TurmaCoursePicker({
-  turmas, coursesByTurma, value, onChange, showCourses,
-}: {
-  turmas: Turma[];
-  coursesByTurma: Record<string, CursoInfo[]>;
-  value: TurmaSelection[];
-  onChange: (v: TurmaSelection[]) => void;
-  showCourses: boolean;
-}) {
-  const isTurmaSelected = (tid: string) => value.some((v) => v.turma_id === tid);
-  const getCursoIds = (tid: string) => value.find((v) => v.turma_id === tid)?.curso_ids ?? [];
-
-  const toggleTurma = (tid: string) => {
-    if (isTurmaSelected(tid)) {
-      onChange(value.filter((v) => v.turma_id !== tid));
-    } else {
-      onChange([...value, { turma_id: tid, curso_ids: [] }]);
-    }
-  };
-
-  const toggleCurso = (tid: string, cid: string) => {
-    onChange(value.map((v) => {
-      if (v.turma_id !== tid) return v;
-      const curso_ids = v.curso_ids.includes(cid)
-        ? v.curso_ids.filter((c) => c !== cid)
-        : [...v.curso_ids, cid];
-      return { ...v, curso_ids };
-    }));
-  };
-
-  if (turmas.length === 0) return <p className="meta">Nenhuma turma criada ainda</p>;
-
-  return (
-    <div className="space-y-2 max-h-64 overflow-y-auto border border-[#1c1f26] rounded-md p-3">
-      {turmas.map((t) => {
-        const selected = isTurmaSelected(t.id);
-        const courses = coursesByTurma[t.id] ?? [];
-        const selectedCursoIds = getCursoIds(t.id);
-        const missingCourse = showCourses && selected && selectedCursoIds.length === 0;
-
-        return (
-          <div key={t.id}>
-            <label className="flex items-center gap-2 cursor-pointer !mb-0">
-              <input type="checkbox" checked={selected} onChange={() => toggleTurma(t.id)} className="!w-4 !h-4" />
-              <span className="text-white text-sm font-medium">{t.nome}</span>
-              {missingCourse && (
-                <span className="text-red-400 text-xs">selecione ao menos 1 curso</span>
-              )}
-            </label>
-
-            {selected && showCourses && (
-              <div className="ml-6 mt-2 space-y-1.5 pb-1">
-                {courses.length === 0 ? (
-                  <p className="text-[#434d5e] text-xs italic">Nenhum curso nesta turma</p>
-                ) : courses.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 cursor-pointer !mb-0">
-                    <input
-                      type="checkbox"
-                      checked={selectedCursoIds.includes(c.id)}
-                      onChange={() => toggleCurso(t.id, c.id)}
-                      className="!w-3.5 !h-3.5"
-                    />
-                    <span className="text-[#d6deed] text-xs">{c.titulo}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  Modal: Criar usuário                                           */
-/* ─────────────────────────────────────────────────────────────── */
-function CreateUserModal({
-  open, onClose, turmas, onDone, onBulkDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  turmas: Turma[];
-  onDone: (token: string) => void;
-  onBulkDone: (msg: string) => void;
-}) {
-  const [bulkMode, setBulkMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [nome, setNome] = useState('');
-  const [bulkText, setBulkText] = useState('');
-  const [role, setRole] = useState<Role>('student');
-  const [selection, setSelection] = useState<TurmaSelection[]>([]);
-  const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setBulkMode(false);
-      setEmail(''); setNome(''); setBulkText(''); setRole('student'); setSelection([]); setErr(null);
-      setProgress(null);
-      loadCoursesByTurma().then(setCoursesByTurma);
-    }
-  }, [open]);
-
-  const isStudent = role === 'student';
-
-  const parseBulk = (): { email: string; nome: string }[] => {
-    const lines = bulkText.split(/[\n;]+/).map((l) => l.trim()).filter(Boolean);
-    const out: { email: string; nome: string }[] = [];
-    for (const line of lines) {
-      // Formatos aceitos: "email", "Nome, email", "Nome <email>", "email, Nome"
-      const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
-      if (angle) { out.push({ nome: angle[1].trim(), email: angle[2].trim() }); continue; }
-      const parts = line.split(/[,\t]/).map((p) => p.trim()).filter(Boolean);
-      if (parts.length === 1) { out.push({ nome: '', email: parts[0] }); continue; }
-      const emailIdx = parts.findIndex((p) => p.includes('@'));
-      if (emailIdx === -1) { out.push({ nome: parts.slice(1).join(' '), email: parts[0] }); continue; }
-      const em = parts[emailIdx];
-      const nm = parts.filter((_, i) => i !== emailIdx).join(' ');
-      out.push({ nome: nm, email: em });
-    }
-    return out;
-  };
-
-  const buildPayloadBase = () => (isStudent
-    ? { role, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))) }
-    : { role, turma_ids: selection.map((s) => s.turma_id) });
-
-  const submit = async () => {
-    setErr(null);
-    if (isStudent) {
-      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
-      if (selection.some((s) => s.curso_ids.length === 0)) {
-        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
-      }
-    }
-
-    if (!bulkMode) {
-      if (!email.trim()) { setErr('Email obrigatório'); return; }
-      setLoading(true);
-      try {
-        const r = await callFn('admin-users', 'create', { email: email.trim(), nome: nome.trim(), ...buildPayloadBase() });
-        onDone(r.invite_token);
-      } catch (e) {
-        setErr((e as Error).message);
-      } finally { setLoading(false); }
-      return;
-    }
-
-    // Bulk
-    const entries = parseBulk();
-    if (entries.length === 0) { setErr('Adicione ao menos um email'); return; }
-    const invalid = entries.filter((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email));
-    if (invalid.length) { setErr(`Emails inválidos: ${invalid.map((i) => i.email).join(', ')}`); return; }
-
-    setLoading(true);
-    setProgress({ done: 0, total: entries.length });
-    const base = buildPayloadBase();
-    const failures: { email: string; error: string }[] = [];
-    let success = 0;
-    for (let i = 0; i < entries.length; i++) {
-      const { email: em, nome: nm } = entries[i];
-      try {
-        await callFn('admin-users', 'create', { email: em, nome: nm, ...base });
-        success++;
-      } catch (e) {
-        failures.push({ email: em, error: (e as Error).message });
-      }
-      setProgress({ done: i + 1, total: entries.length });
-    }
-    setLoading(false);
-    setProgress(null);
-    if (failures.length === 0) {
-      onBulkDone(`${success} usuário${success !== 1 ? 's' : ''} criado${success !== 1 ? 's' : ''} com sucesso`);
-    } else {
-      setErr(`Criados: ${success}. Falhas (${failures.length}):\n${failures.map((f) => `• ${f.email}: ${f.error}`).join('\n')}`);
-      if (success > 0) onBulkDone(`${success} criado(s), ${failures.length} com erro`);
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Convidar usuário"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>
-            {bulkMode
-              ? (progress ? `Criando ${progress.done}/${progress.total}...` : 'Criar em lote')
-              : 'Criar e gerar link'}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div className="flex gap-2 border-b border-[#1c1f26] pb-3">
-          <button
-            type="button"
-            onClick={() => setBulkMode(false)}
-            className={`px-3 py-1.5 rounded text-sm ${!bulkMode ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/40' : 'text-[#8b929e] hover:text-white'}`}
-          >Individual</button>
-          <button
-            type="button"
-            onClick={() => setBulkMode(true)}
-            className={`px-3 py-1.5 rounded text-sm ${bulkMode ? 'bg-[#cbfb00]/10 text-[#cbfb00] border border-[#cbfb00]/40' : 'text-[#8b929e] hover:text-white'}`}
-          >Em lote</button>
-        </div>
-
-        {!bulkMode ? (
-          <>
-            <div>
-              <label>Nome</label>
-              <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
-            </div>
-            <div>
-              <label>Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-          </>
-        ) : (
-          <div>
-            <label>Usuários (um por linha)</label>
-            <textarea
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              rows={8}
-              placeholder={`aluno1@exemplo.com\nJoão Silva, joao@exemplo.com\nMaria <maria@exemplo.com>`}
-              className="w-full font-mono text-xs"
-            />
-            <p className="text-[#434d5e] text-xs mt-1.5">
-              Formatos aceitos por linha: <code>email</code>, <code>Nome, email</code> ou <code>Nome &lt;email&gt;</code>. Todos receberão o mesmo papel e turmas/cursos selecionados abaixo.
-            </p>
-          </div>
-        )}
-
-        <div>
-          <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="student">Aluno</option>
-            <option value="professor">Professor</option>
-            <option value="monitor">Monitor</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
-        <div>
-          <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
-          <TurmaCoursePicker
-            turmas={turmas}
-            coursesByTurma={coursesByTurma}
-            value={selection}
-            onChange={setSelection}
-            showCourses={isStudent}
-          />
-          {isStudent && (
-            <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
-          )}
-        </div>
-        {err && <p className="text-red-400 text-sm whitespace-pre-wrap">{err}</p>}
-      </div>
-    </Modal>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  Modal: Editar usuário                                          */
-/* ─────────────────────────────────────────────────────────────── */
-function EditUserModal({
-  user, currentId, onClose, turmas, onDone,
-}: {
-  user: UserRow | null;
-  currentId?: string;
-  onClose: () => void;
-  turmas: Turma[];
-  onDone: () => void;
-}) {
-  const [email, setEmail] = useState('');
-  const [nome, setNome] = useState('');
-  const [role, setRole] = useState<Role>('student');
-  const [selection, setSelection] = useState<TurmaSelection[]>([]);
-  const [coursesByTurma, setCoursesByTurma] = useState<Record<string, CursoInfo[]>>({});
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    setEmail(user.email);
-    setNome(user.nome ?? '');
-    setRole(user.role);
-    setErr(null);
-
-    (async () => {
-      const [byTurma, { data: ut }] = await Promise.all([
-        loadCoursesByTurma(),
-        supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', user.id),
-      ]);
-      setCoursesByTurma(byTurma);
-
-      // Agrupa as linhas de user_turmas por turma_id
-      const grouped: Record<string, string[]> = {};
-      (ut ?? []).forEach((row: any) => {
-        if (!grouped[row.turma_id]) grouped[row.turma_id] = [];
-        if (row.curso_id) grouped[row.turma_id].push(row.curso_id);
-      });
-      setSelection(Object.entries(grouped).map(([turma_id, curso_ids]) => ({ turma_id, curso_ids })));
-    })();
-  }, [user]);
-
-  if (!user) return null;
-  const isSelf = user.id === currentId;
-  const isStudent = role === 'student';
-
-  const submit = async () => {
-    setErr(null);
-    if (isStudent) {
-      if (selection.length === 0) { setErr('Selecione ao menos uma turma'); return; }
-      if (selection.some((s) => s.curso_ids.length === 0)) {
-        setErr('Selecione ao menos um curso para cada turma escolhida'); return;
-      }
-    }
-    setLoading(true);
-    try {
-      const payload: Record<string, unknown> = {
-        user_id: user.id,
-        email: email !== user.email ? email : undefined,
-        nome: nome !== (user.nome ?? '') ? nome : undefined,
-        role: role !== user.role ? role : undefined,
-      };
-      if (isStudent) {
-        payload.turma_cursos = selection.flatMap((s) =>
-          s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid }))
-        );
-      } else {
-        payload.turma_ids = selection.map((s) => s.turma_id);
-      }
-      await callFn('admin-users', 'update', payload);
-      onDone();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={!!user}
-      onClose={onClose}
-      title="Editar usuário"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>Salvar</Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label>Nome</label>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
-        </div>
-        <div>
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <label>Papel</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)} disabled={isSelf}>
-            <option value="student">Aluno</option>
-            <option value="professor">Professor</option>
-            <option value="monitor">Monitor</option>
-            <option value="admin">Administrador</option>
-          </select>
-          {isSelf && <p className="meta mt-1">Você não pode alterar seu próprio papel</p>}
-        </div>
-        <div>
-          <label>{isStudent ? 'Turmas e cursos' : 'Turmas'}</label>
-          <TurmaCoursePicker
-            turmas={turmas}
-            coursesByTurma={coursesByTurma}
-            value={selection}
-            onChange={setSelection}
-            showCourses={isStudent}
-          />
-          {isStudent && (
-            <p className="text-[#434d5e] text-xs mt-1.5">O aluno terá acesso somente aos cursos selecionados.</p>
-          )}
-        </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
-      </div>
-    </Modal>
   );
 }
