@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { buildLink, sendTransactionalEmail } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
-const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
 
 type InviteEvent = "invite" | "reinvite";
 type UserRole = "admin" | "student" | "professor" | "monitor";
@@ -50,18 +50,17 @@ function cleanText(value: unknown): string | null {
   return t ? t : null;
 }
 
-async function sendInviteWebhook(payload: {
+type InvitePayload = {
   event: InviteEvent;
   email: string;
   token: string;
   expires_at: string;
   role: string;
-}) {
-  if (!INVITE_WEBHOOK_URL) {
-    console.log("[webhook] INVITE_WEBHOOK_URL not set, skipping");
-    return;
-  }
-  const link = `${PUBLIC_APP_URL.replace(/\/$/, "")}/ativar?token=${payload.token}`;
+  nome?: string | null;
+};
+
+async function sendInviteWebhook(payload: InvitePayload, link: string) {
+  if (!INVITE_WEBHOOK_URL) return;
   const body = {
     event: payload.event,
     email: payload.email,
@@ -82,10 +81,23 @@ async function sendInviteWebhook(payload: {
   }
 }
 
-async function fireWebhook(payload: Parameters<typeof sendInviteWebhook>[0]) {
-  // Await inline to guarantee delivery in bulk invocations where the
-  // function terminates before waitUntil() flushes the request.
-  await sendInviteWebhook(payload);
+/**
+ * Entrega o convite: e-mail transacional (Resend) + webhook opcional.
+ * Await inline para garantir a entrega em convites em lote, onde a função
+ * pode encerrar antes do waitUntil() liberar a requisição.
+ */
+async function deliverInvite(payload: InvitePayload) {
+  const link = buildLink("ativar", payload.token);
+  const sent = await sendTransactionalEmail({
+    kind: payload.event,
+    email: payload.email,
+    link,
+    nome: payload.nome,
+    role: payload.role,
+    expires_at: payload.expires_at,
+  });
+  await sendInviteWebhook(payload, link);
+  return sent;
 }
 
 function json(body: unknown, status = 200) {
@@ -198,11 +210,22 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      let email_sent = false;
+      let email_error: string | undefined;
       if (send_invite) {
-        await fireWebhook({ event: "invite", email, token: invite_token, expires_at: invite_expires_at, role: normalizedRole });
+        const delivery = await deliverInvite({
+          event: "invite",
+          email,
+          token: invite_token,
+          expires_at: invite_expires_at,
+          role: normalizedRole,
+          nome: cleanText(nome),
+        });
+        email_sent = delivery.ok;
+        email_error = delivery.error;
       }
 
-      return json({ user_id: created.user.id, invite_token, invite_sent: !!send_invite });
+      return json({ user_id: created.user.id, invite_token, invite_sent: !!send_invite, email_sent, email_error });
     }
 
     if (req.method === "POST" && action === "reinvite") {
@@ -212,13 +235,24 @@ Deno.serve(async (req: Request) => {
       const { data: updated, error } = await admin.from("profiles")
         .update({ invite_token, invite_expires_at, status: "pending" })
         .eq("id", user_id)
-        .select("email,role")
+        .select("email,role,nome")
         .maybeSingle();
       if (error) return json({ error: error.message }, 400);
+      let email_sent = false;
+      let email_error: string | undefined;
       if (updated?.email) {
-        await fireWebhook({ event: "reinvite", email: updated.email, token: invite_token, expires_at: invite_expires_at, role: updated.role ?? "student" });
+        const delivery = await deliverInvite({
+          event: "reinvite",
+          email: updated.email,
+          token: invite_token,
+          expires_at: invite_expires_at,
+          role: updated.role ?? "student",
+          nome: updated.nome,
+        });
+        email_sent = delivery.ok;
+        email_error = delivery.error;
       }
-      return json({ invite_token });
+      return json({ invite_token, email_sent, email_error });
     }
 
     if (req.method === "POST" && action === "update") {

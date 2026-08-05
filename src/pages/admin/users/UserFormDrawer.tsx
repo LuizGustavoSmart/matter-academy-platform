@@ -40,7 +40,7 @@ export function UserFormDrawer({
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [serverErr, setServerErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ token: string | null; sent: boolean } | null>(null);
+  const [result, setResult] = useState<{ token: string | null; sent: boolean; emailSent: boolean; emailError?: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const isStudent = role === 'student';
@@ -110,7 +110,7 @@ export function UserFormDrawer({
     setLoading(true); setServerErr(null);
     try {
       const r = await callFn('admin-users', 'create', { ...buildPayload(), send_invite: sendInvite });
-      setResult({ token: r.invite_token ?? null, sent: !!r.invite_sent });
+      setResult({ token: r.invite_token ?? null, sent: !!r.invite_sent, emailSent: !!r.email_sent, emailError: r.email_error });
       setPhase('result');
       onSaved();
     } catch (err) {
@@ -292,8 +292,19 @@ export function UserFormDrawer({
           <div className="flex flex-col items-center text-center py-2">
             <span className="w-12 h-12 rounded-full bg-ok/12 text-ok grid place-items-center mb-3"><CheckCircle2 className="w-6 h-6" /></span>
             <p className="text-fg font-medium">{fullName(nome, sobrenome) || 'Usuário'} criado com sucesso</p>
-            <p className="text-fg-3 text-sm mt-1">{result?.sent ? 'Convite de ativação enviado.' : 'Usuário criado como pendente (convite não enviado).'}</p>
+            <p className="text-fg-3 text-sm mt-1">
+              {!result?.sent
+                ? 'Usuário criado como pendente (convite não enviado).'
+                : result.emailSent
+                  ? `Convite de ativação enviado para ${normalizeEmail(email)}.`
+                  : 'Usuário criado, mas o e-mail não pôde ser enviado — compartilhe o link abaixo.'}
+            </p>
           </div>
+          {result?.sent && !result.emailSent && result.emailError && (
+            <p className="rounded-lg border border-warn/30 bg-warn/[0.06] px-3 py-2 text-xs text-warn">
+              Falha no envio: {result.emailError}
+            </p>
+          )}
           {activationLink && (
             <div>
               <label>Link de ativação</label>

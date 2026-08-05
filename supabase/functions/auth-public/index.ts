@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { buildLink, sendTransactionalEmail } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,14 +11,13 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
-const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") ?? "https://matteracademy.lovable.app";
 
-async function sendResetWebhook(email: string, token: string, expires_at: string) {
-  if (!INVITE_WEBHOOK_URL) {
-    console.log("[webhook] INVITE_WEBHOOK_URL not set, skipping reset email");
-    return;
-  }
-  const link = `${PUBLIC_APP_URL.replace(/\/$/, "")}/redefinir-senha?token=${token}`;
+/** Entrega a redefinição: e-mail transacional (Resend) + webhook opcional. */
+async function deliverReset(email: string, nome: string | null, token: string, expires_at: string) {
+  const link = buildLink("redefinir-senha", token);
+  await sendTransactionalEmail({ kind: "reset", email, link, nome, expires_at });
+
+  if (!INVITE_WEBHOOK_URL) return;
   try {
     const res = await fetch(INVITE_WEBHOOK_URL, {
       method: "POST",
@@ -90,13 +90,13 @@ Deno.serve(async (req: Request) => {
     if (action === "forgot") {
       const { email } = body as { email: string };
       const normalizedEmail = (email ?? "").trim().toLowerCase();
-      const { data: profile } = await admin.from("profiles").select("id,email").ilike("email", normalizedEmail).maybeSingle();
+      const { data: profile } = await admin.from("profiles").select("id,email,nome").ilike("email", normalizedEmail).maybeSingle();
       // Always return ok to prevent email enumeration
       if (!profile) return json({ ok: true });
       const reset_token = genToken();
       const reset_expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       await admin.from("profiles").update({ reset_token, reset_expires_at }).eq("id", profile.id);
-      await sendResetWebhook(profile.email, reset_token, reset_expires_at);
+      await deliverReset(profile.email, profile.nome ?? null, reset_token, reset_expires_at);
       return json({ ok: true });
     }
 
