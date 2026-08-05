@@ -22,3 +22,5 @@ dist-ssr
 *.sw?
 .env
 .mcp.json
+
+.preview-emails/
