@@ -487,8 +487,10 @@ export type Database = {
       profiles: {
         Row: {
           activated_at: string | null
+          avatar_url: string | null
           created_at: string | null
           email: string
+          empresa: string | null
           id: string
           invite_expires_at: string | null
           invite_token: string | null
@@ -496,12 +498,16 @@ export type Database = {
           reset_expires_at: string | null
           reset_token: string | null
           role: string
+          sobrenome: string | null
           status: string
+          telefone: string | null
         }
         Insert: {
           activated_at?: string | null
+          avatar_url?: string | null
           created_at?: string | null
           email: string
+          empresa?: string | null
           id: string
           invite_expires_at?: string | null
           invite_token?: string | null
@@ -509,12 +515,16 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sobrenome?: string | null
           status?: string
+          telefone?: string | null
         }
         Update: {
           activated_at?: string | null
+          avatar_url?: string | null
           created_at?: string | null
           email?: string
+          empresa?: string | null
           id?: string
           invite_expires_at?: string | null
           invite_token?: string | null
@@ -522,7 +532,9 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sobrenome?: string | null
           status?: string
+          telefone?: string | null
         }
         Relationships: []
       }
@@ -717,6 +729,7 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_professor_of_turma: { Args: { t_id: string }; Returns: boolean }
+      shares_turma_with: { Args: { _other: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
