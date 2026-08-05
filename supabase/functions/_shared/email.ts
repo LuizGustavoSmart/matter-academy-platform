@@ -188,7 +188,7 @@ function layout(i: LayoutInput): string {
       <p style="margin:0 0 10px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${i.footerNote}</p>
       <p style="margin:0;font-family:${FONT};font-size:11px;line-height:17px;color:#5b626d;text-align:center;">
         Matter Academy · Plataforma de ensino<br />
-        Esta é uma mensagem automática — não responda a este e-mail.
+        Esta é uma mensagem automática. Não responda a este e-mail.
       </p>
     </td></tr>
 
@@ -222,7 +222,7 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
       ? `Por segurança, este link expira em ${prazo}.`
       : "Por segurança, este link expira em 24 horas.";
     return {
-      subject: "Redefinição de senha — Matter Academy",
+      subject: "Redefinição de senha da Matter Academy",
       html: layout({
         preheader: "Use o link abaixo para criar uma nova senha de acesso.",
         eyebrow: "Segurança da conta",
@@ -231,7 +231,7 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
         ctaLabel: "Criar nova senha",
         link: i.link,
         deadlineNote,
-        footerNote: "Se você não solicitou esta alteração, ignore este e-mail — sua senha atual permanece válida.",
+        footerNote: "Se você não solicitou esta alteração, ignore este e-mail: sua senha atual permanece válida.",
       }),
       text: [
         `${nome ? `Olá, ${nome}.` : "Olá."}`,
@@ -259,11 +259,11 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
 
   const lead = isReinvite
     ? `${saudacao}. Geramos um novo link para você ativar seu acesso de <strong style="color:${C.fg};">${escapeHtml(papel)}</strong> na Matter Academy. O link enviado anteriormente deixou de ser válido.`
-    : `${saudacao}. Seu acesso de <strong style="color:${C.fg};">${escapeHtml(papel)}</strong> na plataforma da Matter Academy já está criado. Para começar, defina sua senha — leva menos de um minuto.`;
+    : `${saudacao}. Seu acesso de <strong style="color:${C.fg};">${escapeHtml(papel)}</strong> na plataforma da Matter Academy já está criado. Para começar, defina sua senha: leva menos de um minuto.`;
 
   return {
     subject: isReinvite
-      ? "Seu novo link de acesso — Matter Academy"
+      ? "Seu novo link de acesso à Matter Academy"
       : "Seu acesso à Matter Academy está pronto",
     html: layout({
       preheader: isReinvite
@@ -289,7 +289,7 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
       "",
       deadlineNote,
       "",
-      "Matter Academy — Plataforma de ensino",
+      "Matter Academy · Plataforma de ensino",
     ].join("\n"),
   };
 }
