@@ -54,7 +54,8 @@ type InvitePayload = {
   event: InviteEvent;
   email: string;
   token: string;
-  expires_at: string;
+  /** null = sem expiração; o link só perde a validade quando a senha é definida. */
+  expires_at: string | null;
   role: string;
   nome?: string | null;
 };
@@ -175,7 +176,9 @@ Deno.serve(async (req: Request) => {
       }
 
       const invite_token = genToken();
-      const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Convite sem prazo: o link deixa de valer só quando a senha é definida
+      // (activate zera o token e move o status para "active").
+      const invite_expires_at = null;
 
       const { error: profErr } = await admin.from("profiles").insert({
         id: created.user.id,
@@ -231,7 +234,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === "POST" && action === "reinvite") {
       const { user_id } = body as { user_id: string };
       const invite_token = genToken();
-      const invite_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const invite_expires_at = null; // ver comentário em "create"
       const { data: updated, error } = await admin.from("profiles")
         .update({ invite_token, invite_expires_at, status: "pending" })
         .eq("id", user_id)

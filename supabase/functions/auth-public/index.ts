@@ -57,24 +57,19 @@ Deno.serve(async (req: Request) => {
 
     if (action === "verify-invite") {
       const { token } = body as { token: string };
-      const { data: profile } = await admin.from("profiles").select("id,email,invite_expires_at,status").eq("invite_token", token).maybeSingle();
+      // O convite não expira por tempo: vale enquanto o status for "pending".
+      const { data: profile } = await admin.from("profiles").select("id,email,status").eq("invite_token", token).maybeSingle();
       if (!profile) return json({ error: "Token inválido" }, 400);
       if (profile.status !== "pending") return json({ error: "Conta já ativada" }, 400);
-      if (profile.invite_expires_at && new Date(profile.invite_expires_at) < new Date()) {
-        return json({ error: "Token expirado" }, 400);
-      }
       return json({ email: profile.email });
     }
 
     if (action === "activate") {
       const { token, password } = body as { token: string; password: string };
       if (!password || password.length < 6) return json({ error: "Senha deve ter ao menos 6 caracteres" }, 400);
-      const { data: profile } = await admin.from("profiles").select("id,invite_expires_at,status").eq("invite_token", token).maybeSingle();
+      const { data: profile } = await admin.from("profiles").select("id,status").eq("invite_token", token).maybeSingle();
       if (!profile) return json({ error: "Token inválido" }, 400);
       if (profile.status !== "pending") return json({ error: "Conta já ativada" }, 400);
-      if (profile.invite_expires_at && new Date(profile.invite_expires_at) < new Date()) {
-        return json({ error: "Token expirado" }, 400);
-      }
       const { error: authErr } = await admin.auth.admin.updateUserById(profile.id, { password });
       if (authErr) return json({ error: authErr.message }, 400);
       const { error: updErr } = await admin.from("profiles").update({

@@ -6,15 +6,20 @@
  * Gera preview-invite.html, preview-reinvite.html e preview-reset.html
  * em .preview-emails/ (ignorado pelo git).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '.preview-emails');
+const LOGO = 'matter-academy-email.png';
 
 // Shim mínimo do Deno para conseguir importar o módulo das Edge Functions.
-const ENV = { PUBLIC_APP_URL: 'https://plataforma.matteracademy.ai' };
+// O logo aponta para uma cópia local para o preview funcionar offline.
+const ENV = {
+  PUBLIC_APP_URL: 'https://plataforma.matteracademy.ai',
+  EMAIL_LOGO_URL: `./${LOGO}`,
+};
 globalThis.Deno = { env: { get: (k) => ENV[k] } };
 
 const { buildEmail } = await import(
@@ -29,6 +34,7 @@ const SAMPLE = {
 };
 
 mkdirSync(OUT, { recursive: true });
+copyFileSync(resolve(ROOT, 'public/logos', LOGO), resolve(OUT, LOGO));
 
 for (const kind of ['invite', 'reinvite', 'reset']) {
   const isReset = kind === 'reset';

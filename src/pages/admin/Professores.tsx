@@ -314,7 +314,7 @@ export default function AdminProfessores() {
         title="Link de ativação"
         footer={<Button variant="secondary" onClick={() => setLinkModal(null)}>Fechar</Button>}
       >
-        <p className="mb-3">Copie e envie este link ao membro. Válido por 7 dias.</p>
+        <p className="mb-3">Copie e envie este link ao membro. Ele continua válido até a senha ser definida.</p>
         <div className="border border-[#1c1f26] bg-black rounded-md p-3 text-sm text-[#cbfb00] break-all">
           {linkModal}
         </div>

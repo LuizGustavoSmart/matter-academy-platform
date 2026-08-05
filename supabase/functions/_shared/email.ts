@@ -13,7 +13,9 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Matter Academy <onboarding@resend.dev>";
 const EMAIL_REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "";
 const PUBLIC_APP_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://plataforma.matteracademy.ai").replace(/\/$/, "");
-const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-negative.png`;
+// PNG recortado no bounding box real do lockup — clientes de e-mail (Gmail,
+// Outlook) não renderizam SVG, então o vetor é rasterizado em alta resolução.
+const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email.png`;
 
 /* ───────────────────────────── Tokens visuais ───────────────────────────── */
 const C = {
@@ -133,8 +135,8 @@ function layout(i: LayoutInput): string {
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
 
     <!-- Logo -->
-    <tr><td align="center" style="padding:8px 0 22px 0;">
-      <img src="${LOGO_URL}" alt="Matter Academy" width="240" style="display:block;width:240px;max-width:70%;height:auto;border:0;outline:none;" />
+    <tr><td align="center" style="padding:6px 0 26px 0;">
+      <img src="${LOGO_URL}" alt="Matter Academy" width="236" height="80" style="display:block;width:236px;height:80px;border:0;outline:none;" />
     </td></tr>
 
     <!-- Card -->
@@ -247,9 +249,8 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
   }
 
   const isReinvite = i.kind === "reinvite";
-  const deadlineNote = prazo
-    ? `Este convite é pessoal e expira em ${prazo}.`
-    : "Este convite é pessoal e expira em 7 dias.";
+  // O convite não tem prazo: o link só deixa de valer depois que a senha é criada.
+  const deadlineNote = "Este link é pessoal e continua valendo até você definir sua senha.";
 
   const highlights =
     highlightRow("&#9679;", "Trilhas organizadas por turma", "Seus cursos e aulas já ficam prontos no seu painel.") +

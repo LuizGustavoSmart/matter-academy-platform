@@ -314,7 +314,7 @@ export function UserFormDrawer({
                   {copied ? 'Copiado' : 'Copiar'}
                 </Button>
               </div>
-              <p className="text-fg-3 text-xs mt-1.5">Válido por 7 dias. Você também pode reenviar o convite pela lista de usuários.</p>
+              <p className="text-fg-3 text-xs mt-1.5">O link continua válido até o usuário definir a senha. Você também pode reenviar o convite pela lista de usuários.</p>
             </div>
           )}
         </div>
