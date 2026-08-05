@@ -196,7 +196,7 @@ export default function AppShell({
   return (
     <div className="min-h-screen flex bg-canvas">
       {/* Sidebar desktop */}
-      <aside className={cn('hidden lg:flex flex-shrink-0 transition-[width] duration-200 ease-ma', collapsed ? 'w-[68px]' : 'w-60')}>
+      <aside className={cn('hidden lg:flex flex-shrink-0 sticky top-0 h-screen transition-[width] duration-200 ease-ma', collapsed ? 'w-[68px]' : 'w-60')}>
         <SidebarInner nav={nav} area={area} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       </aside>
 
