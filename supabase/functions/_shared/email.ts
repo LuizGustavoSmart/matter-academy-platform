@@ -78,7 +78,7 @@ function ctaButton(href: string, label: string): string {
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
-    <a href="${href}" target="_blank"
+    <a href="${href}" target="_blank" class="ma-cta"
       style="display:inline-block;background:${C.brand};color:${C.ink};font-family:${FONT};font-size:15px;font-weight:700;line-height:50px;text-align:center;text-decoration:none;width:300px;border-radius:12px;letter-spacing:0.01em;">${label}</a>
     <!--<![endif]-->
   </td></tr>
@@ -93,8 +93,8 @@ function highlightRow(icon: string, title: string, desc: string): string {
       <tr>
         <td width="34" valign="top" style="font-size:18px;line-height:22px;">${icon}</td>
         <td valign="top" style="font-family:${FONT};">
-          <div style="color:${C.fg};font-size:14px;font-weight:600;line-height:20px;">${title}</div>
-          <div style="color:${C.fg3};font-size:13px;line-height:19px;margin-top:2px;">${desc}</div>
+          <div class="ma-fg" style="color:${C.fg};font-size:14px;font-weight:600;line-height:20px;">${title}</div>
+          <div class="ma-fg3" style="color:${C.fg3};font-size:13px;line-height:19px;margin-top:2px;">${desc}</div>
         </td>
       </tr>
     </table>
@@ -125,11 +125,23 @@ function layout(i: LayoutInput): string {
 <meta name="supported-color-schemes" content="dark light" />
 <title>${escapeHtml(i.title)}</title>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<style>
+  /* O design já é dark por padrão. O Outlook (desktop e web) "auto-escurece"
+     fundos que não reconhece como intencionais, trocando-os por um cinza
+     próprio — [data-ogsc]/[data-ogsb] neutraliza isso mantendo nossas cores. */
+  [data-ogsc] body, [data-ogsc] table, [data-ogsc] td,
+  [data-ogsb] body, [data-ogsb] table, [data-ogsb] td { background-color: inherit !important; }
+  [data-ogsc] .ma-fg, [data-ogsb] .ma-fg { color: ${C.fg} !important; }
+  [data-ogsc] .ma-fg2, [data-ogsb] .ma-fg2 { color: ${C.fg2} !important; }
+  [data-ogsc] .ma-fg3, [data-ogsb] .ma-fg3 { color: ${C.fg3} !important; }
+  [data-ogsc] .ma-brand, [data-ogsb] .ma-brand { color: ${C.brand} !important; }
+  [data-ogsc] .ma-cta, [data-ogsb] .ma-cta { background-color: ${C.brand} !important; color: ${C.ink} !important; }
+</style>
 </head>
-<body style="margin:0;padding:0;background:${C.canvas};">
+<body style="margin:0;padding:0;background:${C.canvas};" bgcolor="${C.canvas}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">${escapeHtml(i.preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${C.canvas};">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${C.canvas};" bgcolor="${C.canvas}">
 <tr><td align="center" style="padding:32px 16px 48px 16px;">
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
@@ -142,24 +154,24 @@ function layout(i: LayoutInput): string {
     <!-- Card -->
     <tr><td>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-        style="background:${C.panel};border:1px solid ${C.line};border-radius:16px;overflow:hidden;">
+        style="background:${C.panel};border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
 
-        <tr><td style="height:3px;line-height:3px;font-size:0;background:${C.brand};">&nbsp;</td></tr>
+        <tr><td style="height:3px;line-height:3px;font-size:0;background:${C.brand};" bgcolor="${C.brand}">&nbsp;</td></tr>
 
-        <tr><td style="padding:38px 40px 34px 40px;">
+        <tr><td style="padding:38px 40px 34px 40px;" bgcolor="${C.panel}">
 
-          <p style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.brand};">${escapeHtml(i.eyebrow)}</p>
+          <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.brand};">${escapeHtml(i.eyebrow)}</p>
 
-          <h1 style="margin:0 0 16px 0;font-family:${FONT};font-size:27px;line-height:34px;font-weight:700;color:${C.fg};letter-spacing:-0.01em;">${escapeHtml(i.title)}</h1>
+          <h1 class="ma-fg" style="margin:0 0 16px 0;font-family:${FONT};font-size:27px;line-height:34px;font-weight:700;color:${C.fg};letter-spacing:-0.01em;">${escapeHtml(i.title)}</h1>
 
-          <p style="margin:0 0 30px 0;font-family:${FONT};font-size:15px;line-height:24px;color:${C.fg2};">${i.lead}</p>
+          <p class="ma-fg2" style="margin:0 0 30px 0;font-family:${FONT};font-size:15px;line-height:24px;color:${C.fg2};">${i.lead}</p>
 
           ${ctaButton(i.link, i.ctaLabel)}
 
-          <p style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
+          <p class="ma-fg3" style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
 
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:30px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};">&nbsp;</td></tr>
+            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>
 
           ${i.highlights ? `
@@ -167,15 +179,15 @@ function layout(i: LayoutInput): string {
             ${i.highlights}
           </table>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};">&nbsp;</td></tr>
+            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>` : ""}
 
-          <p style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
+          <p class="ma-fg3" style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
             Se o botão não funcionar, copie e cole este endereço no seu navegador:
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr><td style="background:${C.panel2};border:1px solid ${C.line};border-radius:8px;padding:11px 13px;">
-              <a href="${i.link}" target="_blank" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
+            <tr><td style="background:${C.panel2};border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
+              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
             </td></tr>
           </table>
 
@@ -185,7 +197,7 @@ function layout(i: LayoutInput): string {
 
     <!-- Rodapé -->
     <tr><td style="padding:26px 24px 0 24px;">
-      <p style="margin:0 0 10px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${i.footerNote}</p>
+      <p class="ma-fg3" style="margin:0 0 10px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${i.footerNote}</p>
       <p style="margin:0;font-family:${FONT};font-size:11px;line-height:17px;color:#5b626d;text-align:center;">
         Matter Academy · Plataforma de ensino<br />
         Esta é uma mensagem automática. Não responda a este e-mail.
