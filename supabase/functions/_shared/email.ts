@@ -127,22 +127,40 @@ function layout(i: LayoutInput): string {
 <title>${escapeHtml(i.title)}</title>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <style>
-  /* O design já é dark por padrão. O Outlook (desktop e web) "auto-escurece"
-     fundos que não reconhece como intencionais, trocando-os por um cinza
-     próprio — [data-ogsc]/[data-ogsb] neutraliza isso mantendo nossas cores. */
-  [data-ogsc] body, [data-ogsc] table, [data-ogsc] td,
-  [data-ogsb] body, [data-ogsb] table, [data-ogsb] td { background-color: inherit !important; }
+  /* Outlook.com e o novo Outlook adicionam data-ogsc/data-ogsb ao ativar o
+     modo escuro. Cores explícitas (em vez de inherit) evitam que o cliente
+     substitua o canvas e os painéis pelo cinza automático. O gradiente sólido
+     é um fallback para versões que ainda tentam inverter background-color. */
+  .ma-canvas { background-color: ${C.canvas} !important; background-image: linear-gradient(${C.canvas}, ${C.canvas}) !important; }
+  .ma-panel { background-color: ${C.panel} !important; background-image: linear-gradient(${C.panel}, ${C.panel}) !important; }
+  .ma-panel2 { background-color: ${C.panel2} !important; background-image: linear-gradient(${C.panel2}, ${C.panel2}) !important; }
+  .ma-line { background-color: ${C.line} !important; background-image: linear-gradient(${C.line}, ${C.line}) !important; }
+  [data-ogsc] .ma-canvas, [data-ogsb] .ma-canvas { background-color: ${C.canvas} !important; background-image: linear-gradient(${C.canvas}, ${C.canvas}) !important; }
+  [data-ogsc] .ma-panel, [data-ogsb] .ma-panel { background-color: ${C.panel} !important; background-image: linear-gradient(${C.panel}, ${C.panel}) !important; }
+  [data-ogsc] .ma-panel2, [data-ogsb] .ma-panel2 { background-color: ${C.panel2} !important; background-image: linear-gradient(${C.panel2}, ${C.panel2}) !important; }
+  [data-ogsc] .ma-line, [data-ogsb] .ma-line { background-color: ${C.line} !important; background-image: linear-gradient(${C.line}, ${C.line}) !important; }
   [data-ogsc] .ma-fg, [data-ogsb] .ma-fg { color: ${C.fg} !important; }
   [data-ogsc] .ma-fg2, [data-ogsb] .ma-fg2 { color: ${C.fg2} !important; }
   [data-ogsc] .ma-fg3, [data-ogsb] .ma-fg3 { color: ${C.fg3} !important; }
   [data-ogsc] .ma-brand, [data-ogsb] .ma-brand { color: ${C.brand} !important; }
-  [data-ogsc] .ma-cta, [data-ogsb] .ma-cta { background-color: ${C.brand} !important; color: ${C.ink} !important; }
+  [data-ogsc] .ma-cta, [data-ogsb] .ma-cta { background-color: ${C.brand} !important; background-image: linear-gradient(${C.brand}, ${C.brand}) !important; color: ${C.ink} !important; }
+  @media (prefers-color-scheme: dark) {
+    .ma-canvas { background-color: ${C.canvas} !important; background-image: linear-gradient(${C.canvas}, ${C.canvas}) !important; }
+    .ma-panel { background-color: ${C.panel} !important; background-image: linear-gradient(${C.panel}, ${C.panel}) !important; }
+    .ma-panel2 { background-color: ${C.panel2} !important; background-image: linear-gradient(${C.panel2}, ${C.panel2}) !important; }
+    .ma-line { background-color: ${C.line} !important; background-image: linear-gradient(${C.line}, ${C.line}) !important; }
+    .ma-fg { color: ${C.fg} !important; }
+    .ma-fg2 { color: ${C.fg2} !important; }
+    .ma-fg3 { color: ${C.fg3} !important; }
+    .ma-brand { color: ${C.brand} !important; }
+    .ma-cta { background-color: ${C.brand} !important; background-image: linear-gradient(${C.brand}, ${C.brand}) !important; color: ${C.ink} !important; }
+  }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${C.canvas};" bgcolor="${C.canvas}">
+<body class="ma-canvas" style="margin:0;padding:0;background-color:${C.canvas};background-image:linear-gradient(${C.canvas},${C.canvas});" bgcolor="${C.canvas}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">${escapeHtml(i.preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${C.canvas};" bgcolor="${C.canvas}">
+<table class="ma-canvas" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${C.canvas};background-image:linear-gradient(${C.canvas},${C.canvas});" bgcolor="${C.canvas}">
 <tr><td align="center" style="padding:32px 16px 48px 16px;">
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
@@ -154,12 +172,12 @@ function layout(i: LayoutInput): string {
 
     <!-- Card -->
     <tr><td>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-        style="background:${C.panel};border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
+      <table class="ma-panel" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+        style="background-color:${C.panel};background-image:linear-gradient(${C.panel},${C.panel});border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
 
         <tr><td style="height:3px;line-height:3px;font-size:0;background:${C.brand};" bgcolor="${C.brand}">&nbsp;</td></tr>
 
-        <tr><td style="padding:38px 40px 34px 40px;" bgcolor="${C.panel}">
+        <tr><td class="ma-panel" style="padding:38px 40px 34px 40px;background-color:${C.panel};background-image:linear-gradient(${C.panel},${C.panel});" bgcolor="${C.panel}">
 
           <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.brand};">${escapeHtml(i.eyebrow)}</p>
 
@@ -172,7 +190,7 @@ function layout(i: LayoutInput): string {
           <p class="ma-fg3" style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
 
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:30px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
+            <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;background-color:${C.line};background-image:linear-gradient(${C.line},${C.line});" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>
 
           ${i.highlights ? `
@@ -180,14 +198,14 @@ function layout(i: LayoutInput): string {
             ${i.highlights}
           </table>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
+             <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;background-color:${C.line};background-image:linear-gradient(${C.line},${C.line});" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>` : ""}
 
           <p class="ma-fg3" style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
             Se o botão não funcionar, copie e cole este endereço no seu navegador:
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr><td style="background:${C.panel2};border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
+            <tr><td class="ma-panel2" style="background-color:${C.panel2};background-image:linear-gradient(${C.panel2},${C.panel2});border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
               <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
             </td></tr>
           </table>
