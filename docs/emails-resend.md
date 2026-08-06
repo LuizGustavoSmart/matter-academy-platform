@@ -22,7 +22,7 @@ variável não estiver setada, ele é simplesmente ignorado.
 | `EMAIL_FROM` | sim | `Matter Academy <acesso@matteracademy.ai>` |
 | `PUBLIC_APP_URL` | sim | `https://plataforma.matteracademy.ai` |
 | `EMAIL_REPLY_TO` | não | `contato@matteracademy.ai` |
-| `EMAIL_LOGO_URL` | não | sobrescreve o logo do cabeçalho |
+| `EMAIL_BANNER_URL` | não | sobrescreve o banner do cabeçalho |
 
 > Sem `RESEND_API_KEY` o envio é ignorado com log `[email] RESEND_API_KEY ausente`
 > — o usuário ainda é criado e o link de ativação aparece na tela do admin.
@@ -51,20 +51,30 @@ anterior.
 
 O link de **redefinição de senha** continua expirando em 24 h, de propósito.
 
-### Logo
+### Tema claro + banner do cabeçalho
 
-Clientes de e-mail (Gmail, Outlook) não renderizam SVG, então o vetor é
-rasterizado. `public/logos/matter-academy-email.png` (1080×365) é o lockup
-recortado no bounding box real — sem a moldura transparente do
-`matter-academy-negative.png`, que é usado na aplicação.
+O corpo do e-mail é claro (fundo cinza-claro/branco) — é o formato que nenhum
+cliente tenta converter em dark mode. A marca aparece só na faixa do
+cabeçalho, que é `public/logos/matter-academy-email-banner.png` (1200×340,
+2x retina): fundo preto sólido **opaco** com o logo negativo já centralizado
+dentro do PNG, sem transparência e sem CSS de fundo por trás. Um `<img>`
+opaco não tem "cor de fundo" para o Outlook reescrever, então essa é a
+defesa mais forte contra o auto-dark-mode — mais forte que qualquer CSS.
 
-Para regerar a partir do vetor:
+As defesas de CSS (`bg()`, atributos `bgcolor=`, regras `[data-ogsb]`/
+`[data-ogsc]` e o bloco `@media (prefers-color-scheme: dark)`, tudo gerado
+por `darkModeGuardCss()` a partir das constantes em `C`) continuam no
+template como rede de segurança para o restante do e-mail — painéis, texto,
+botão — que ainda é HTML/CSS de verdade.
+
+Para regerar o banner a partir do vetor:
 
 ```bash
-python scripts/svg-to-png.py public/logos/matter-academy-negative.svg public/logos/matter-academy-email.png 1080 16
+python scripts/svg-to-png.py public/logos/matter-academy-negative.svg public/logos/matter-academy-email-banner.png --banner 1200 340 "#0b0c0e" 0.58
 ```
 
-O arquivo precisa estar publicado em `{PUBLIC_APP_URL}/logos/matter-academy-email.png`.
+O arquivo precisa estar publicado em
+`{PUBLIC_APP_URL}/logos/matter-academy-email-banner.png`.
 
 ## Deploy
 

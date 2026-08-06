@@ -12,13 +12,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, '.preview-emails');
-const LOGO = 'matter-academy-email.png';
+const BANNER = 'matter-academy-email-banner.png';
 
 // Shim mínimo do Deno para conseguir importar o módulo das Edge Functions.
-// O logo aponta para uma cópia local para o preview funcionar offline.
+// O banner aponta para uma cópia local para o preview funcionar offline.
 const ENV = {
   PUBLIC_APP_URL: 'https://plataforma.matteracademy.ai',
-  EMAIL_LOGO_URL: `./${LOGO}`,
+  EMAIL_BANNER_URL: `./${BANNER}`,
 };
 globalThis.Deno = { env: { get: (k) => ENV[k] } };
 
@@ -34,7 +34,7 @@ const SAMPLE = {
 };
 
 mkdirSync(OUT, { recursive: true });
-copyFileSync(resolve(ROOT, 'public/logos', LOGO), resolve(OUT, LOGO));
+copyFileSync(resolve(ROOT, 'public/logos', BANNER), resolve(OUT, BANNER));
 
 for (const kind of ['invite', 'reinvite', 'reset']) {
   const isReset = kind === 'reset';

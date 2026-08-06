@@ -6,7 +6,7 @@
  *   EMAIL_FROM       remetente verificado. Ex: "Matter Academy <acesso@matteracademy.ai>"
  *   EMAIL_REPLY_TO   opcional — endereço de resposta. Ex: "contato@matteracademy.ai"
  *   PUBLIC_APP_URL   base da aplicação. Ex: "https://plataforma.matteracademy.ai"
- *   EMAIL_LOGO_URL   opcional — sobrescreve a URL do logo no cabeçalho
+ *   EMAIL_BANNER_URL opcional — sobrescreve a URL do banner do cabeçalho
  */
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
@@ -14,14 +14,16 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Matter Academy <onboarding@resend.dev>";
 const EMAIL_REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "";
 const PUBLIC_APP_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://plataforma.matteracademy.ai").replace(/\/$/, "");
-// PNG recortado no bounding box real do lockup — clientes de e-mail (Gmail,
-// Outlook) não renderizam SVG, então o vetor é rasterizado em alta resolução.
-const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email.png`;
+// Faixa do cabeçalho já "assada" com fundo preto sólido opaco: é uma imagem
+// raster única, sem transparência e sem CSS de fundo por trás. Um cliente de
+// e-mail não tem "cor de fundo" para reescrever num <img> opaco — a defesa
+// contra o auto-dark-mode do Outlook deixa de depender de CSS aqui.
+const BANNER_URL = Deno.env.get("EMAIL_BANNER_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email-banner.png`;
 
 /* ───────────────────────────── Tokens visuais ─────────────────────────────
  * Base clara (híbrido neutro): o corpo do e-mail é claro, previsível em
- * qualquer cliente, e a marca aparece na faixa escura do cabeçalho, onde o
- * logo negativo e o verde-limão funcionam sem depender de dark mode. */
+ * qualquer cliente. A marca aparece na faixa do cabeçalho, que é a imagem
+ * BANNER_URL (fundo preto + logo já compostos), não CSS. */
 const C = {
   canvas: "#f1f3f5",
   panel: "#ffffff",
@@ -29,11 +31,9 @@ const C = {
   line: "#e2e6ea",
   fg: "#14171c",
   fg2: "#4a515c",
-  fg3: "#767e8b",
+  fg3: "#5f6773",
   brand: "#cbfb00",
   ink: "#0b0c0e",
-  band: "#0b0c0e",
-  bandFg: "#f3f5f7",
   accentInk: "#4d6100",
 };
 const FONT = "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif";
@@ -95,14 +95,12 @@ const BG_CLASSES: [string, string][] = [
   ["ma-panel2", C.panel2],
   ["ma-line", C.line],
   ["ma-accent", C.brand],
-  ["ma-band", C.band],
 ];
 const FG_CLASSES: [string, string][] = [
   ["ma-fg", C.fg],
   ["ma-fg2", C.fg2],
   ["ma-fg3", C.fg3],
   ["ma-brand", C.accentInk],
-  ["ma-bandfg", C.bandFg],
 ];
 
 
@@ -186,8 +184,8 @@ function layout(i: LayoutInput): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="x-apple-disable-message-reformatting" />
-<meta name="color-scheme" content="light only" />
-<meta name="supported-color-schemes" content="light only" />
+<meta name="color-scheme" content="only light" />
+<meta name="supported-color-schemes" content="light" />
 <title>${escapeHtml(i.title)}</title>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <style>
@@ -210,9 +208,10 @@ ${darkModeGuardCss()}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-panel"
         style="${bg(C.panel)}border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
 
-        <!-- Faixa escura da marca, com o logo negativo -->
-        <tr><td align="center" class="ma-band" style="padding:30px 24px 28px 24px;${bg(C.band)}" bgcolor="${C.band}">
-          <img src="${LOGO_URL}" alt="Matter Academy" width="212" height="72" style="display:block;width:212px;height:72px;border:0;outline:none;" />
+        <!-- Faixa da marca: imagem única (fundo preto + logo já compostos),
+             sem CSS de fundo por trás — nada aqui para o cliente reescrever. -->
+        <tr><td style="padding:0;line-height:0;font-size:0;">
+          <img src="${BANNER_URL}" alt="Matter Academy" width="600" height="170" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;" />
         </td></tr>
 
         <tr><td class="ma-accent" style="height:3px;line-height:3px;font-size:0;${bg(C.brand)}" bgcolor="${C.brand}">&nbsp;</td></tr>

@@ -59,17 +59,19 @@ def parse(d):
     return [sp for sp in subpaths if len(sp) >= 3]
 
 
-def render(src, out, target_w, pad=0.0):
+def rasterize(src, target_w_px):
+    """Rasteriza o SVG em `target_w_px` de largura, com supersampling. Devolve
+    (imagem RGBA recortada no bbox real, largura, altura do bbox em unidades SVG)."""
     svg = open(src, encoding="utf-8").read()
     shapes = [(fill, parse(d)) for fill, d in re.findall(r'<path fill="(.*?)" d="(.*?)"', svg)]
 
     pts = [p for _, sps in shapes for sp in sps for p in sp]
-    x0, x1 = min(p[0] for p in pts) - pad, max(p[0] for p in pts) + pad
-    y0, y1 = min(p[1] for p in pts) - pad, max(p[1] for p in pts) + pad
+    x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
+    y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
     w, h = x1 - x0, y1 - y0
 
-    scale = target_w / w
-    W, H = target_w * SS, max(1, round(h * scale * SS))
+    scale = target_w_px / w
+    W, H = target_w_px * SS, max(1, round(h * scale * SS))
     sx = W / w
 
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -88,11 +90,55 @@ def render(src, out, target_w, pad=0.0):
         layer.putalpha(mask)
         canvas = Image.alpha_composite(canvas, layer)
 
-    final = canvas.resize((target_w, max(1, round(h * scale))), Image.LANCZOS)
-    final.save(out, optimize=True)
-    print(f"{out}  {final.width}x{final.height}  (bbox {w:.0f}x{h:.0f})")
+    final = canvas.resize((target_w_px, max(1, round(h * scale))), Image.LANCZOS)
+    return final, w, h
+
+
+def render(src, out, target_w, pad=0.0):
+    """Recorta no bounding box real do desenho (com padding opcional em
+    unidades SVG) e salva com fundo transparente."""
+    logo, w, h = rasterize(src, target_w)
+    if pad:
+        # padding em unidades SVG -> pixels de saída, nas 4 bordas
+        px = round(pad * (target_w / w))
+        padded = Image.new("RGBA", (logo.width + 2 * px, logo.height + 2 * px), (0, 0, 0, 0))
+        padded.paste(logo, (px, px), logo)
+        logo = padded
+    logo.save(out, optimize=True)
+    print(f"{out}  {logo.width}x{logo.height}  (bbox {w:.0f}x{h:.0f})")
+
+
+def render_banner(src, out, canvas_w, canvas_h, bg_hex, logo_ratio=0.58):
+    """Compõe o logo centralizado sobre um fundo sólido opaco, no tamanho
+    exato de canvas_w x canvas_h. `logo_ratio` é a fração da largura do
+    canvas que o logo ocupa."""
+    bg_rgb = tuple(int(bg_hex[i:i + 2], 16) for i in (1, 3, 5))
+    banner = Image.new("RGB", (canvas_w, canvas_h), bg_rgb)
+
+    logo_w_px = round(canvas_w * logo_ratio)
+    logo, _, _ = rasterize(src, logo_w_px)
+
+    # se a altura resultante não couber com folga vertical, reduz pela altura.
+    max_h = round(canvas_h * 0.72)
+    if logo.height > max_h:
+        scale = max_h / logo.height
+        logo = logo.resize((round(logo.width * scale), max_h), Image.LANCZOS)
+
+    x = (canvas_w - logo.width) // 2
+    y = (canvas_h - logo.height) // 2
+    banner.paste(logo, (x, y), logo)
+    banner.save(out, optimize=True)
+    print(f"{out}  {banner.width}x{banner.height}  logo {logo.width}x{logo.height} @ ({x},{y})")
 
 
 if __name__ == "__main__":
-    render(sys.argv[1], sys.argv[2], int(sys.argv[3]),
-           float(sys.argv[4]) if len(sys.argv) > 4 else 0.0)
+    if len(sys.argv) >= 6 and sys.argv[3] == "--banner":
+        # svg-to-png.py <in.svg> <out.png> --banner <largura> <altura> [bg_hex] [logo_ratio]
+        render_banner(
+            sys.argv[1], sys.argv[2], int(sys.argv[4]), int(sys.argv[5]),
+            sys.argv[6] if len(sys.argv) > 6 else "#0b0c0e",
+            float(sys.argv[7]) if len(sys.argv) > 7 else 0.58,
+        )
+    else:
+        render(sys.argv[1], sys.argv[2], int(sys.argv[3]),
+               float(sys.argv[4]) if len(sys.argv) > 4 else 0.0)
