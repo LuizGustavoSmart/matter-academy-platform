@@ -18,19 +18,26 @@ const PUBLIC_APP_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://plataforma.ma
 // Outlook) não renderizam SVG, então o vetor é rasterizado em alta resolução.
 const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email.png`;
 
-/* ───────────────────────────── Tokens visuais ───────────────────────────── */
+/* ───────────────────────────── Tokens visuais ─────────────────────────────
+ * Base clara (híbrido neutro): o corpo do e-mail é claro, previsível em
+ * qualquer cliente, e a marca aparece na faixa escura do cabeçalho, onde o
+ * logo negativo e o verde-limão funcionam sem depender de dark mode. */
 const C = {
-  canvas: "#0b0c0e",
-  panel: "#121317",
-  panel2: "#171a1f",
-  line: "#262a32",
-  fg: "#f3f5f7",
-  fg2: "#b4bcc8",
-  fg3: "#868f9c",
+  canvas: "#f1f3f5",
+  panel: "#ffffff",
+  panel2: "#f6f7f9",
+  line: "#e2e6ea",
+  fg: "#14171c",
+  fg2: "#4a515c",
+  fg3: "#767e8b",
   brand: "#cbfb00",
   ink: "#0b0c0e",
+  band: "#0b0c0e",
+  bandFg: "#f3f5f7",
+  accentInk: "#4d6100",
 };
 const FONT = "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif";
+
 
 export type EmailKind = "invite" | "reinvite" | "reset";
 
