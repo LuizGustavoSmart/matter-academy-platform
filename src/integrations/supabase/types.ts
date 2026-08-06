@@ -730,6 +730,14 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_professor_of_turma: { Args: { t_id: string }; Returns: boolean }
       shares_turma_with: { Args: { _other: string }; Returns: boolean }
+      storage_can_access_atividade_path: {
+        Args: { _path: string }
+        Returns: boolean
+      }
+      storage_can_access_turma_curso: {
+        Args: { _path: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

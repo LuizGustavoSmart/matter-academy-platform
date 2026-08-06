@@ -76,8 +76,48 @@ function formatDeadline(iso?: string | null): string {
  * cima da substituição. O `bgcolor=` no atributo cobre o Outlook desktop
  * (engine do Word), que ignora background via CSS.
  */
-function bg(color: string): string {
-  return `background-color:${color};background-image:linear-gradient(${color},${color});`;
+function bg(color: string, important = false): string {
+  const w = important ? " !important" : "";
+  return `background-color:${color}${w};background-image:linear-gradient(${color},${color})${w};`;
+}
+
+/** Classes de fundo e de texto, usadas no HTML e nas regras de defesa. */
+const BG_CLASSES: [string, string][] = [
+  ["ma-canvas", C.canvas],
+  ["ma-panel", C.panel],
+  ["ma-panel2", C.panel2],
+  ["ma-line", C.line],
+  ["ma-accent", C.brand],
+];
+const FG_CLASSES: [string, string][] = [
+  ["ma-fg", C.fg],
+  ["ma-fg2", C.fg2],
+  ["ma-fg3", C.fg3],
+  ["ma-brand", C.brand],
+];
+
+/**
+ * Regras que devolvem as cores da marca quando o cliente tenta convertê-las.
+ *
+ * O Outlook injeta `data-ogsb`/`data-ogsc` (original get style background/color)
+ * nos elementos cujo background/cor ele trocou. Cobrimos as duas formas — no
+ * próprio elemento e em um ancestral — porque varia conforme a versão. Geradas
+ * a partir das mesmas constantes do HTML para não haver divergência.
+ */
+function darkModeGuardCss(): string {
+  const sel = (c: string) =>
+    `.${c},[data-ogsb] .${c},.${c}[data-ogsb],[data-ogsc] .${c},.${c}[data-ogsc]`;
+  const rules = [
+    ...BG_CLASSES.map(([c, v]) => `  ${sel(c)} { ${bg(v, true)} }`),
+    ...FG_CLASSES.map(([c, v]) => `  ${sel(c)} { color: ${v} !important; }`),
+    `  ${sel("ma-cta")} { ${bg(C.brand, true)} color: ${C.ink} !important; }`,
+  ].join("\n");
+  const media = [
+    ...BG_CLASSES.map(([c, v]) => `    .${c} { ${bg(v, true)} }`),
+    ...FG_CLASSES.map(([c, v]) => `    .${c} { color: ${v} !important; }`),
+    `    .ma-cta { ${bg(C.brand, true)} color: ${C.ink} !important; }`,
+  ].join("\n");
+  return `${rules}\n  @media (prefers-color-scheme: dark) {\n${media}\n  }`;
 }
 
 /** Botão compatível com Outlook (VML) e demais clientes. */
@@ -142,25 +182,9 @@ function layout(i: LayoutInput): string {
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <style>
   /* Este e-mail JÁ é dark. Os meta acima declaram isso para que o cliente não
-     tente converter nada. Onde a conversão acontece mesmo assim (Outlook.com,
-     novo Outlook, Outlook mobile), a defesa é dupla:
-       1) o gradiente de cor única aplicado por bg(), que não é reescrito;
-       2) as regras abaixo — o Outlook injeta data-ogsb/data-ogsc nos elementos
-          cujo background/color ele trocou, então usamos isso como gancho para
-          devolver a cor da marca. Escrito nas duas formas (no próprio elemento
-          e em ancestral) porque varia conforme a versão. */
-  [data-ogsb] .ma-canvas, .ma-canvas[data-ogsb] { background-color: ${C.canvas} !important; }
-  [data-ogsb] .ma-panel,  .ma-panel[data-ogsb]  { background-color: ${C.panel} !important; }
-  [data-ogsb] .ma-panel2, .ma-panel2[data-ogsb] { background-color: ${C.panel2} !important; }
-  [data-ogsb] .ma-rule,   .ma-rule[data-ogsb]   { background-color: ${C.line} !important; }
-  [data-ogsb] .ma-accent, .ma-accent[data-ogsb] { background-color: ${C.brand} !important; }
-  [data-ogsc] .ma-fg,    .ma-fg[data-ogsc]    { color: ${C.fg} !important; }
-  [data-ogsc] .ma-fg2,   .ma-fg2[data-ogsc]   { color: ${C.fg2} !important; }
-  [data-ogsc] .ma-fg3,   .ma-fg3[data-ogsc]   { color: ${C.fg3} !important; }
-  [data-ogsc] .ma-brand, .ma-brand[data-ogsc] { color: ${C.brand} !important; }
-  [data-ogsb] .ma-cta, .ma-cta[data-ogsb], [data-ogsc] .ma-cta, .ma-cta[data-ogsc] {
-    background-color: ${C.brand} !important; color: ${C.ink} !important;
-  }
+     tente converter nada; onde ele converte mesmo assim, valem as regras
+     abaixo somadas ao gradiente aplicado por bg() em cada elemento. */
+${darkModeGuardCss()}
 </style>
 </head>
 <body class="ma-canvas" style="margin:0;padding:0;${bg(C.canvas)}" bgcolor="${C.canvas}">
@@ -196,7 +220,7 @@ function layout(i: LayoutInput): string {
           <p class="ma-fg3" style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
 
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:30px;">
-            <tr><td class="ma-rule" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
+            <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>
 
           ${i.highlights ? `
@@ -204,7 +228,7 @@ function layout(i: LayoutInput): string {
             ${i.highlights}
           </table>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;">
-            <tr><td class="ma-rule" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
+            <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>` : ""}
 
           <p class="ma-fg3" style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
