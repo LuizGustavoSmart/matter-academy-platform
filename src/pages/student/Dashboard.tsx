@@ -379,6 +379,7 @@ export default function StudentDashboard() {
                   <NextAulaCountdown dataHora={nextAula.dataHora} />
                 </div>
               )}
+              <Link to="/cronograma" className="inline-flex items-center gap-1 text-brand text-sm font-medium mt-3 hover:gap-2 transition-all">Ver todas<ArrowRight className="w-3.5 h-3.5" /></Link>
             </Card>
 
             {/* Atividades pendentes */}

@@ -21,7 +21,7 @@ import Financeiro from './pages/admin/Financeiro';
 import StudentDashboard from './pages/student/Dashboard';
 import AulasIndex from './pages/student/AulasIndex';
 import StudentCourse from './pages/student/Course';
-import Cronograma from './pages/student/Cronograma';
+import CronogramaIndex from './pages/student/CronogramaIndex';
 import StudentCommunity from './pages/student/Community';
 import Comunidade from './pages/student/Comunidade';
 import AtividadesIndex from './pages/student/AtividadesIndex';
@@ -106,7 +106,7 @@ export default function App() {
                     <Route path="/dashboard" element={<StudentDashboard />} />
                     <Route path="/aulas" element={<AulasIndex />} />
                     <Route path="/curso/:id" element={<StudentCourse />} />
-                    <Route path="/curso/:id/cronograma" element={<Cronograma />} />
+                    <Route path="/cronograma" element={<CronogramaIndex />} />
                     <Route path="/comunidade" element={<Comunidade />} />
                     <Route path="/turma/:turmaId/comunidade" element={<StudentCommunity />} />
                     <Route path="/atividades" element={<AtividadesIndex />} />

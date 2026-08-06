@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Check, HelpCircle, CalendarDays, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
@@ -128,7 +128,6 @@ export default function StudentCourse() {
       <div className="px-4 sm:px-6 py-5 border-b border-line">
         <div className="flex items-center justify-between mb-4">
           <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-fg-3 hover:text-fg transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</Link>
-          <Link to={`/curso/${id}/cronograma`} className="inline-flex items-center gap-1.5 text-sm text-fg-3 hover:text-brand transition-colors"><CalendarDays className="w-4 h-4" /> Cronograma</Link>
         </div>
 
         <h1 className="mb-3">{curso.titulo}</h1>
