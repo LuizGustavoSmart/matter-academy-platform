@@ -247,7 +247,7 @@ ${darkModeGuardCss()}
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr><td class="ma-panel2" style="${bg(C.panel2)}border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
-              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
+              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.accentInk};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
             </td></tr>
           </table>
 
