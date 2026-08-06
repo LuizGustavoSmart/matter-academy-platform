@@ -75,15 +75,9 @@ export function UserFormDrawer({
 
   const validate = (): boolean => {
     const e: Partial<Record<FieldKey, string>> = {};
-    if (!nome.trim()) e.nome = 'Informe o nome';
-    if (!sobrenome.trim()) e.sobrenome = 'Informe o sobrenome';
     if (!email.trim()) e.email = 'Informe o e-mail';
     else if (!isValidEmail(email)) e.email = 'E-mail inválido';
-    if (!telefone.trim()) e.telefone = 'Informe o telefone';
-    else if (!isValidPhone(telefone)) e.telefone = 'Telefone inválido (10 a 15 dígitos)';
-    if (!empresa.trim()) e.empresa = 'Informe a empresa';
-    if (needsTurmas && selection.length === 0) e.turmas = 'Selecione ao menos uma turma';
-    if (isStudent && selection.some((s) => s.curso_ids.length === 0)) e.turmas = 'Selecione ao menos um curso em cada turma';
+    if (telefone.trim() && !isValidPhone(telefone)) e.telefone = 'Telefone inválido (10 a 15 dígitos)';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -200,10 +194,10 @@ export function UserFormDrawer({
           <section className="space-y-4">
             <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider">Dados pessoais</h3>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Nome" required error={errors.nome} htmlFor="uf-nome">
+              <Field label="Nome" error={errors.nome} htmlFor="uf-nome">
                 <Input id="uf-nome" value={nome} onChange={(e) => { setNome(e.target.value); clearErr('nome'); }} invalid={!!errors.nome} placeholder="Maria" data-autofocus />
               </Field>
-              <Field label="Sobrenome" required error={errors.sobrenome} htmlFor="uf-sob">
+              <Field label="Sobrenome" error={errors.sobrenome} htmlFor="uf-sob">
                 <Input id="uf-sob" value={sobrenome} onChange={(e) => { setSobrenome(e.target.value); clearErr('sobrenome'); }} invalid={!!errors.sobrenome} placeholder="Souza" />
               </Field>
             </div>
@@ -211,10 +205,10 @@ export function UserFormDrawer({
               <Input id="uf-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clearErr('email'); }} invalid={!!errors.email} placeholder="maria@empresa.com" />
             </Field>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Telefone" required error={errors.telefone} htmlFor="uf-tel">
+              <Field label="Telefone" error={errors.telefone} htmlFor="uf-tel">
                 <Input id="uf-tel" value={telefone} onChange={(e) => { setTelefone(e.target.value); clearErr('telefone'); }} invalid={!!errors.telefone} placeholder="(11) 98888-0000" inputMode="tel" />
               </Field>
-              <Field label="Empresa" required error={errors.empresa} htmlFor="uf-emp">
+              <Field label="Empresa" error={errors.empresa} htmlFor="uf-emp">
                 <Input id="uf-emp" value={empresa} onChange={(e) => { setEmpresa(e.target.value); clearErr('empresa'); }} invalid={!!errors.empresa} placeholder="Acme Ltda" />
               </Field>
             </div>
@@ -228,7 +222,7 @@ export function UserFormDrawer({
               </Select>
             </Field>
             {needsTurmas ? (
-              <Field label={isStudent ? 'Turmas e cursos' : 'Turmas'} required error={errors.turmas}
+              <Field label={isStudent ? 'Turmas e cursos' : 'Turmas'} error={errors.turmas}
                 hint={isStudent ? 'O aluno terá acesso somente aos cursos selecionados.' : 'Vínculo de acompanhamento das turmas.'}>
                 <TurmaCoursePicker turmas={turmas} coursesByTurma={coursesByTurma} value={selection} onChange={(v) => { setSelection(v); clearErr('turmas'); }} showCourses={isStudent} />
               </Field>
