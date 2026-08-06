@@ -210,9 +210,10 @@ ${darkModeGuardCss()}
 
         <!-- Faixa da marca: imagem única (fundo preto + logo já compostos),
              sem CSS de fundo por trás — nada aqui para o cliente reescrever. -->
-        <tr><td style="padding:0;line-height:0;font-size:0;">
-          <img src="${BANNER_URL}" alt="Matter Academy" width="600" height="170" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;" />
+        <tr><td class="ma-band" style="padding:0;line-height:0;font-size:0;${bg(C.band)}" bgcolor="${C.band}">
+          <img src="${BANNER_URL}" alt="Matter Academy" width="600" height="170" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;font-family:${FONT};font-size:20px;font-weight:700;color:${C.bandFg};" />
         </td></tr>
+
 
         <tr><td class="ma-accent" style="height:3px;line-height:3px;font-size:0;${bg(C.brand)}" bgcolor="${C.brand}">&nbsp;</td></tr>
 
