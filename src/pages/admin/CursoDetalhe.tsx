@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, Calendar, Clock, GraduationCap, MoreHorizontal } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
-  Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs,
+  Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
   Field, Input, Textarea, Alert, DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
@@ -11,7 +11,7 @@ import { getYouTubeId } from '../../lib/youtube';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
-type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
+type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
 type Tab = 'dashboard' | 'aulas' | 'alunos';
@@ -66,11 +66,12 @@ export default function CursoDetalhe() {
 
   const loadAulas = async () => {
     setAulasLoading(true);
+    // publicada ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
     const [{ data }, { data: hs }] = await Promise.all([
-      supabase.from('aulas').select('*').eq('curso_id', cursoId!).order('ordem'),
-      // aula_horarios ainda não está no schema gerado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
+      sb.from('aulas').select('*').eq('curso_id', cursoId!).order('ordem'),
+      sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
     ]);
     setAulas(data ?? []);
     setHorarios(Object.fromEntries(((hs ?? []) as Horario[]).map((h) => [h.aula_id, h.data_hora])));
@@ -107,6 +108,15 @@ export default function CursoDetalhe() {
     if (!ok) return;
     const { error } = await supabase.from('aulas').delete().eq('id', a.id);
     if (error) toast.error(error.message); else { toast.success('Aula excluída.'); loadAulas(); loadDashboard(); }
+  };
+
+  const togglePublicada = async (a: Aula) => {
+    setAulas((prev) => prev.map((x) => (x.id === a.id ? { ...x, publicada: !a.publicada } : x)));
+    // publicada ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('aulas').update({ publicada: !a.publicada }).eq('id', a.id);
+    if (error) { toast.error(error.message); loadAulas(); }
+    else toast.success(a.publicada ? 'Aula ocultada dos alunos.' : 'Aula liberada para os alunos.');
   };
 
   const moveAula = async (a: Aula, dir: -1 | 1) => {
@@ -189,7 +199,8 @@ export default function CursoDetalhe() {
                             {horarios[a.id] ? new Date(horarios[a.id]).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem data/horário agendado'}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-3">
+                          <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
                           <IconButton label="Mover para cima" onClick={() => moveAula(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
                           <IconButton label="Mover para baixo" onClick={() => moveAula(a, 1)} disabled={i === aulas.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
                           <DropdownMenu

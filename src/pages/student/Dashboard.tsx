@@ -106,7 +106,7 @@ export default function StudentDashboard() {
           let started: any = null, next: any = null;
           relevant.forEach((h: { data_hora: string }) => {
             const t = new Date(h.data_hora).getTime();
-            if (t <= now && now - t < 2 * 60 * 60 * 1000) {
+            if (t <= now && now - t < 60 * 60 * 1000) {
               if (!started || t > new Date(started.data_hora).getTime()) started = h;
             } else if (t > now) {
               if (!next || t < new Date(next.data_hora).getTime()) next = h;
