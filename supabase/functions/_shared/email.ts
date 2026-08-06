@@ -95,13 +95,16 @@ const BG_CLASSES: [string, string][] = [
   ["ma-panel2", C.panel2],
   ["ma-line", C.line],
   ["ma-accent", C.brand],
+  ["ma-band", C.band],
 ];
 const FG_CLASSES: [string, string][] = [
   ["ma-fg", C.fg],
   ["ma-fg2", C.fg2],
   ["ma-fg3", C.fg3],
-  ["ma-brand", C.brand],
+  ["ma-brand", C.accentInk],
+  ["ma-bandfg", C.bandFg],
 ];
+
 
 /**
  * Regras que devolvem as cores da marca quando o cliente tenta convertê-las.
