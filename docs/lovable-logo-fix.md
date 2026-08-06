@@ -1,22 +1,34 @@
-Os e-mails transacionais (convite, reconvite e redefinição de senha) continuam com dois problemas visuais: o logo não aparece (ícone de imagem quebrada) e o fundo aparece cinza em vez do dark theme da marca quando o cliente de e-mail está em modo escuro (Outlook).
+Falta republicar as Edge Functions de e-mail com o código mais recente do branch `Marcos`.
 
-Causa raiz dos dois problemas: **o branch `Marcos` ainda não foi publicado (deploy/sync) em produção.** As correções já estão no código desse branch há alguns commits, mas nunca foram sincronizadas. Confirmei agora mesmo que os dois arquivos de logo continuam retornando 404 em produção:
+Situação atual, verificada agora:
 
-- `https://plataforma.matteracademy.ai/logos/matter-academy-email.png` → 404
-- `https://plataforma.matteracademy.ai/logos/matter-academy-negative.svg` → 404
+- Os arquivos estáticos JÁ foram publicados com sucesso. `https://plataforma.matteracademy.ai/logos/matter-academy-email.png` retorna HTTP 200 e é byte a byte idêntico ao arquivo do repositório. O problema do logo quebrado está resolvido do lado dos assets.
+- Falta o deploy das Edge Functions. O template de e-mail recebeu uma correção adicional de dark mode depois do último deploy, no commit de merge `d935177`. Enquanto as functions não forem republicadas, os e-mails enviados continuam usando a versão anterior do template.
 
-Enquanto esses arquivos não existirem no domínio de produção, o logo vai continuar quebrado, e enquanto as Edge Functions (`admin-users`, `auth-public`, `_shared/email.ts`) não forem republicadas com o código atual do branch `Marcos`, o e-mail enviado continua sendo a versão antiga do template, sem a correção de dark mode do Outlook.
+Sobre a correção de dark mode: as alterações feitas no repositório e as feitas por você foram fundidas em `supabase/functions/_shared/email.ts`. A versão final combina as duas abordagens e não deve ser sobrescrita por uma das versões isoladas. Ela cobre três camadas:
+
+1. `background-image: linear-gradient(cor, cor)` em todos os elementos com fundo, aplicado pelo helper `bg()`. O Outlook reescreve `background-color` no modo escuro, mas não reescreve `background-image`, então o gradiente pinta a cor real por cima da substituição.
+2. Atributo `bgcolor=` em todos os elementos de tabela, para o Outlook desktop (engine do Word), que ignora fundo definido via CSS.
+3. Regras `[data-ogsb]` / `[data-ogsc]` com cores explícitas, mais um bloco `@media (prefers-color-scheme: dark)`. Essas regras são geradas programaticamente a partir das mesmas constantes usadas no HTML, para que as classes e as cores não possam divergir.
+
+Também foi alterado o `<meta name="color-scheme">` de `"dark light"` para `"dark"`, e o mesmo em `supported-color-schemes`. Declarar suporte aos dois temas convida o cliente a converter o e-mail; declarar apenas `dark` sinaliza que ele já está no tema correto e deve ser deixado como está.
 
 Pedido:
 
-1. Fazer o deploy/sync completo do branch `Marcos` para produção — isso inclui tanto os arquivos estáticos em `public/logos/` quanto as Edge Functions em `supabase/functions/`.
+1. Republicar as duas Edge Functions a partir do código atual do branch `Marcos`:
 
-2. Depois do deploy, confirmar que estas URLs retornam HTTP 200:
-   - `https://plataforma.matteracademy.ai/logos/matter-academy-email.png`
-   - `https://plataforma.matteracademy.ai/logos/matter-academy-negative.svg`
+   ```
+   supabase functions deploy admin-users
+   supabase functions deploy auth-public
+   ```
 
-3. Confirmar que as Edge Functions publicadas são a versão atual: `supabase functions deploy admin-users` e `supabase functions deploy auth-public` (ou o equivalente do fluxo de deploy do Lovable), garantindo que `supabase/functions/_shared/email.ts` também vá junto (é um módulo compartilhado importado pelas duas funções).
+   Garantir que `supabase/functions/_shared/email.ts` vá junto, pois é um módulo compartilhado importado pelas duas.
 
-4. Reenviar um convite de teste (criar um usuário no admin com um e-mail real) e confirmar visualmente: logo aparecendo no topo, e fundo escuro mantido mesmo com o Outlook em modo escuro.
+2. Confirmar que o deploy pegou o commit `d935177` (ou posterior) do branch `Marcos`.
 
-Anexo o vetor oficial do logo (`matter-academy-negative.svg`) para conferência, embora ele já esteja versionado no repositório — o problema não é o arquivo em si, é ele não estar publicado.
+3. Enviar um convite de teste (criar um usuário no admin com um e-mail real) e verificar, abrindo no Outlook com tema escuro ativo:
+   - o logo aparece no topo;
+   - o fundo permanece no preto da marca (`#0b0c0e`), sem virar cinza;
+   - o botão continua verde-limão com texto escuro.
+
+4. Se após esse deploy o fundo ainda aparecer cinza em alguma versão do Outlook, favor reportar em qual cliente e versão exatos, em vez de aplicar uma nova correção por cima. As três camadas acima já são a defesa mais forte disponível para e-mail dark; se ainda assim falhar, a decisão seguinte seria migrar o template para fundo claro, e essa é uma escolha de design que precisa ser validada antes.
