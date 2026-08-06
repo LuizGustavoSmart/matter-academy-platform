@@ -18,19 +18,26 @@ const PUBLIC_APP_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://plataforma.ma
 // Outlook) não renderizam SVG, então o vetor é rasterizado em alta resolução.
 const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email.png`;
 
-/* ───────────────────────────── Tokens visuais ───────────────────────────── */
+/* ───────────────────────────── Tokens visuais ─────────────────────────────
+ * Base clara (híbrido neutro): o corpo do e-mail é claro, previsível em
+ * qualquer cliente, e a marca aparece na faixa escura do cabeçalho, onde o
+ * logo negativo e o verde-limão funcionam sem depender de dark mode. */
 const C = {
-  canvas: "#0b0c0e",
-  panel: "#121317",
-  panel2: "#171a1f",
-  line: "#262a32",
-  fg: "#f3f5f7",
-  fg2: "#b4bcc8",
-  fg3: "#868f9c",
+  canvas: "#f1f3f5",
+  panel: "#ffffff",
+  panel2: "#f6f7f9",
+  line: "#e2e6ea",
+  fg: "#14171c",
+  fg2: "#4a515c",
+  fg3: "#767e8b",
   brand: "#cbfb00",
   ink: "#0b0c0e",
+  band: "#0b0c0e",
+  bandFg: "#f3f5f7",
+  accentInk: "#4d6100",
 };
 const FONT = "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif";
+
 
 export type EmailKind = "invite" | "reinvite" | "reset";
 
@@ -88,13 +95,16 @@ const BG_CLASSES: [string, string][] = [
   ["ma-panel2", C.panel2],
   ["ma-line", C.line],
   ["ma-accent", C.brand],
+  ["ma-band", C.band],
 ];
 const FG_CLASSES: [string, string][] = [
   ["ma-fg", C.fg],
   ["ma-fg2", C.fg2],
   ["ma-fg3", C.fg3],
-  ["ma-brand", C.brand],
+  ["ma-brand", C.accentInk],
+  ["ma-bandfg", C.bandFg],
 ];
+
 
 /**
  * Regras que devolvem as cores da marca quando o cliente tenta convertê-las.
@@ -176,14 +186,14 @@ function layout(i: LayoutInput): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="x-apple-disable-message-reformatting" />
-<meta name="color-scheme" content="dark" />
-<meta name="supported-color-schemes" content="dark" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light only" />
 <title>${escapeHtml(i.title)}</title>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <style>
-  /* Este e-mail JÁ é dark. Os meta acima declaram isso para que o cliente não
-     tente converter nada; onde ele converte mesmo assim, valem as regras
-     abaixo somadas ao gradiente aplicado por bg() em cada elemento. */
+  /* Base clara declarada como "light only": nenhum cliente precisa converter
+     nada. Onde converte mesmo assim, valem as regras abaixo somadas ao
+     gradiente aplicado por bg() em cada elemento. */
 ${darkModeGuardCss()}
 </style>
 </head>
@@ -195,21 +205,22 @@ ${darkModeGuardCss()}
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
 
-    <!-- Logo -->
-    <tr><td align="center" style="padding:6px 0 26px 0;">
-      <img src="${LOGO_URL}" alt="Matter Academy" width="236" height="80" style="display:block;width:236px;height:80px;border:0;outline:none;" />
-    </td></tr>
-
     <!-- Card -->
     <tr><td>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-panel"
         style="${bg(C.panel)}border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
 
+        <!-- Faixa escura da marca, com o logo negativo -->
+        <tr><td align="center" class="ma-band" style="padding:30px 24px 28px 24px;${bg(C.band)}" bgcolor="${C.band}">
+          <img src="${LOGO_URL}" alt="Matter Academy" width="212" height="72" style="display:block;width:212px;height:72px;border:0;outline:none;" />
+        </td></tr>
+
         <tr><td class="ma-accent" style="height:3px;line-height:3px;font-size:0;${bg(C.brand)}" bgcolor="${C.brand}">&nbsp;</td></tr>
 
-        <tr><td class="ma-panel" style="padding:38px 40px 34px 40px;${bg(C.panel)}" bgcolor="${C.panel}">
+        <tr><td class="ma-panel" style="padding:36px 40px 34px 40px;${bg(C.panel)}" bgcolor="${C.panel}">
 
-          <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.brand};">${escapeHtml(i.eyebrow)}</p>
+          <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.accentInk};">${escapeHtml(i.eyebrow)}</p>
+
 
           <h1 class="ma-fg" style="margin:0 0 16px 0;font-family:${FONT};font-size:27px;line-height:34px;font-weight:700;color:${C.fg};letter-spacing:-0.01em;">${escapeHtml(i.title)}</h1>
 
@@ -236,7 +247,7 @@ ${darkModeGuardCss()}
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr><td class="ma-panel2" style="${bg(C.panel2)}border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
-              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
+              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.accentInk};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
             </td></tr>
           </table>
 
