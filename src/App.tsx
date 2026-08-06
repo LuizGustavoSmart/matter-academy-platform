@@ -19,6 +19,7 @@ import AdminAulas from './pages/admin/Aulas';
 import MapaProfessores from './pages/admin/MapaProfessores';
 import Financeiro from './pages/admin/Financeiro';
 import StudentDashboard from './pages/student/Dashboard';
+import AulasIndex from './pages/student/AulasIndex';
 import StudentCourse from './pages/student/Course';
 import Cronograma from './pages/student/Cronograma';
 import StudentCommunity from './pages/student/Community';
@@ -103,6 +104,7 @@ export default function App() {
                 <Route element={<RequireAuth roles={["student", "professor", "monitor"]} />}>
                   <Route element={<StudentLayout />}>
                     <Route path="/dashboard" element={<StudentDashboard />} />
+                    <Route path="/aulas" element={<AulasIndex />} />
                     <Route path="/curso/:id" element={<StudentCourse />} />
                     <Route path="/curso/:id/cronograma" element={<Cronograma />} />
                     <Route path="/comunidade" element={<Comunidade />} />
