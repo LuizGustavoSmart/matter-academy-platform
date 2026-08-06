@@ -225,6 +225,7 @@ export type Database = {
           descricao: string | null
           id: string
           ordem: number
+          publicada: boolean
           titulo: string
           youtube_url: string
         }
@@ -234,6 +235,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           ordem?: number
+          publicada?: boolean
           titulo: string
           youtube_url?: string
         }
@@ -243,6 +245,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           ordem?: number
+          publicada?: boolean
           titulo?: string
           youtube_url?: string
         }
@@ -752,6 +755,7 @@ export type Database = {
           descricao: string | null
           id: string | null
           ordem: number | null
+          publicada: boolean | null
           titulo: string | null
         }
         Insert: {
@@ -760,6 +764,7 @@ export type Database = {
           descricao?: string | null
           id?: string | null
           ordem?: number | null
+          publicada?: boolean | null
           titulo?: string | null
         }
         Update: {
@@ -768,6 +773,7 @@ export type Database = {
           descricao?: string | null
           id?: string | null
           ordem?: number | null
+          publicada?: boolean | null
           titulo?: string | null
         }
         Relationships: [
