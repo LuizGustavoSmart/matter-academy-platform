@@ -66,6 +66,20 @@ function formatDeadline(iso?: string | null): string {
 
 /* ────────────────────────────── Blocos de HTML ───────────────────────────── */
 
+/**
+ * Fundo à prova do "auto dark mode" dos clientes de e-mail.
+ *
+ * Outlook.com, novo Outlook e Outlook mobile reescrevem `background-color`
+ * quando o usuário está em tema escuro — inclusive clareando preto para um
+ * cinza próprio, que é exatamente o bug relatado. Eles NÃO reescrevem
+ * `background-image`, então um gradiente de cor única pinta a cor real por
+ * cima da substituição. O `bgcolor=` no atributo cobre o Outlook desktop
+ * (engine do Word), que ignora background via CSS.
+ */
+function bg(color: string): string {
+  return `background-color:${color};background-image:linear-gradient(${color},${color});`;
+}
+
 /** Botão compatível com Outlook (VML) e demais clientes. */
 function ctaButton(href: string, label: string): string {
   return `
@@ -80,7 +94,7 @@ function ctaButton(href: string, label: string): string {
     <![endif]-->
     <!--[if !mso]><!-- -->
     <a href="${href}" target="_blank" class="ma-cta"
-      style="display:inline-block;background:${C.brand};color:${C.ink};font-family:${FONT};font-size:15px;font-weight:700;line-height:50px;text-align:center;text-decoration:none;width:300px;border-radius:12px;letter-spacing:0.01em;">${label}</a>
+      style="display:inline-block;${bg(C.brand)}color:${C.ink};font-family:${FONT};font-size:15px;font-weight:700;line-height:50px;text-align:center;text-decoration:none;width:300px;border-radius:12px;letter-spacing:0.01em;">${label}</a>
     <!--<![endif]-->
   </td></tr>
 </table>`;
@@ -122,28 +136,38 @@ function layout(i: LayoutInput): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="x-apple-disable-message-reformatting" />
-<meta name="color-scheme" content="dark light" />
-<meta name="supported-color-schemes" content="dark light" />
+<meta name="color-scheme" content="dark" />
+<meta name="supported-color-schemes" content="dark" />
 <title>${escapeHtml(i.title)}</title>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <style>
-  /* O design já é dark por padrão. O Outlook (desktop e web) "auto-escurece"
-     fundos que não reconhece como intencionais, trocando-os por um cinza
-     próprio — [data-ogsc]/[data-ogsb] neutraliza isso mantendo nossas cores. */
-  [data-ogsc] body, [data-ogsc] table, [data-ogsc] td,
-  [data-ogsb] body, [data-ogsb] table, [data-ogsb] td { background-color: inherit !important; }
-  [data-ogsc] .ma-fg, [data-ogsb] .ma-fg { color: ${C.fg} !important; }
-  [data-ogsc] .ma-fg2, [data-ogsb] .ma-fg2 { color: ${C.fg2} !important; }
-  [data-ogsc] .ma-fg3, [data-ogsb] .ma-fg3 { color: ${C.fg3} !important; }
-  [data-ogsc] .ma-brand, [data-ogsb] .ma-brand { color: ${C.brand} !important; }
-  [data-ogsc] .ma-cta, [data-ogsb] .ma-cta { background-color: ${C.brand} !important; color: ${C.ink} !important; }
+  /* Este e-mail JÁ é dark. Os meta acima declaram isso para que o cliente não
+     tente converter nada. Onde a conversão acontece mesmo assim (Outlook.com,
+     novo Outlook, Outlook mobile), a defesa é dupla:
+       1) o gradiente de cor única aplicado por bg(), que não é reescrito;
+       2) as regras abaixo — o Outlook injeta data-ogsb/data-ogsc nos elementos
+          cujo background/color ele trocou, então usamos isso como gancho para
+          devolver a cor da marca. Escrito nas duas formas (no próprio elemento
+          e em ancestral) porque varia conforme a versão. */
+  [data-ogsb] .ma-canvas, .ma-canvas[data-ogsb] { background-color: ${C.canvas} !important; }
+  [data-ogsb] .ma-panel,  .ma-panel[data-ogsb]  { background-color: ${C.panel} !important; }
+  [data-ogsb] .ma-panel2, .ma-panel2[data-ogsb] { background-color: ${C.panel2} !important; }
+  [data-ogsb] .ma-rule,   .ma-rule[data-ogsb]   { background-color: ${C.line} !important; }
+  [data-ogsb] .ma-accent, .ma-accent[data-ogsb] { background-color: ${C.brand} !important; }
+  [data-ogsc] .ma-fg,    .ma-fg[data-ogsc]    { color: ${C.fg} !important; }
+  [data-ogsc] .ma-fg2,   .ma-fg2[data-ogsc]   { color: ${C.fg2} !important; }
+  [data-ogsc] .ma-fg3,   .ma-fg3[data-ogsc]   { color: ${C.fg3} !important; }
+  [data-ogsc] .ma-brand, .ma-brand[data-ogsc] { color: ${C.brand} !important; }
+  [data-ogsb] .ma-cta, .ma-cta[data-ogsb], [data-ogsc] .ma-cta, .ma-cta[data-ogsc] {
+    background-color: ${C.brand} !important; color: ${C.ink} !important;
+  }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${C.canvas};" bgcolor="${C.canvas}">
+<body class="ma-canvas" style="margin:0;padding:0;${bg(C.canvas)}" bgcolor="${C.canvas}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">${escapeHtml(i.preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${C.canvas};" bgcolor="${C.canvas}">
-<tr><td align="center" style="padding:32px 16px 48px 16px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-canvas" style="${bg(C.canvas)}" bgcolor="${C.canvas}">
+<tr><td align="center" class="ma-canvas" style="padding:32px 16px 48px 16px;${bg(C.canvas)}" bgcolor="${C.canvas}">
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
 
@@ -154,12 +178,12 @@ function layout(i: LayoutInput): string {
 
     <!-- Card -->
     <tr><td>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-        style="background:${C.panel};border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-panel"
+        style="${bg(C.panel)}border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
 
-        <tr><td style="height:3px;line-height:3px;font-size:0;background:${C.brand};" bgcolor="${C.brand}">&nbsp;</td></tr>
+        <tr><td class="ma-accent" style="height:3px;line-height:3px;font-size:0;${bg(C.brand)}" bgcolor="${C.brand}">&nbsp;</td></tr>
 
-        <tr><td style="padding:38px 40px 34px 40px;" bgcolor="${C.panel}">
+        <tr><td class="ma-panel" style="padding:38px 40px 34px 40px;${bg(C.panel)}" bgcolor="${C.panel}">
 
           <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.brand};">${escapeHtml(i.eyebrow)}</p>
 
@@ -172,7 +196,7 @@ function layout(i: LayoutInput): string {
           <p class="ma-fg3" style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
 
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:30px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
+            <tr><td class="ma-rule" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>
 
           ${i.highlights ? `
@@ -180,14 +204,14 @@ function layout(i: LayoutInput): string {
             ${i.highlights}
           </table>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;">
-            <tr><td style="height:1px;line-height:1px;font-size:0;background:${C.line};" bgcolor="${C.line}">&nbsp;</td></tr>
+            <tr><td class="ma-rule" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
           </table>` : ""}
 
           <p class="ma-fg3" style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
             Se o botão não funcionar, copie e cole este endereço no seu navegador:
           </p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr><td style="background:${C.panel2};border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
+            <tr><td class="ma-panel2" style="${bg(C.panel2)}border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
               <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.brand};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
             </td></tr>
           </table>
