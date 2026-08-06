@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, CalendarClock, PlayCircle, Target } from 'lucide-react';
+import { BookOpen, ArrowRight, Users, MessageSquare, HelpCircle, ClipboardList, PlayCircle, Target, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AvatarUpload from '../../components/AvatarUpload';
@@ -10,7 +10,8 @@ import { staggerContainer, staggerItem } from '../../components/ui/motion';
 
 type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number };
 type Turma = { id: string; nome: string; descricao: string | null };
-type Upcoming = { id: string; titulo: string; prazo: string; turmaId: string; turmaNome: string; cursoId: string | null };
+type Pendente = { id: string; titulo: string; prazo: string | null; cursoId: string | null; turmaId: string; overdue: boolean };
+type NextAula = { titulo: string; cursoTitulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
 
 export default function StudentDashboard() {
   const { profile } = useAuth();
@@ -19,7 +20,8 @@ export default function StudentDashboard() {
 
   const [courses, setCourses] = useState<CourseCard[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
-  const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
+  const [pendentes, setPendentes] = useState<Pendente[]>([]);
+  const [nextAula, setNextAula] = useState<NextAula | null>(null);
   const [duvidasAbertas, setDuvidasAbertas] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +42,6 @@ export default function StudentDashboard() {
       const { data: ts } = turmaIds.length
         ? await supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
         : { data: [] };
-      const turmaMap = new Map((ts ?? []).map((t) => [t.id, t]));
 
       if (isMonitor && turmaIds.length > 0) {
         const { data: duvs } = await supabase.from('community_posts').select('turma_id').eq('tipo', 'duvida').eq('status', 'aberta').in('turma_id', turmaIds);
@@ -67,17 +68,62 @@ export default function StudentDashboard() {
           setCourses((cs ?? []).map((c) => ({ ...c, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 })));
         }
 
-        // Próximas atividades (com prazo futuro) nas turmas do aluno
         if (turmaIds.length) {
-          const nowIso = new Date().toISOString();
-          const { data: ats } = await supabase
-            .from('atividades').select('id,titulo,prazo,turma_id,curso_id')
-            .in('turma_id', turmaIds).not('prazo', 'is', null).gte('prazo', nowIso)
-            .order('prazo', { ascending: true }).limit(5);
-          setUpcoming((ats ?? []).map((a) => ({
-            id: a.id, titulo: a.titulo, prazo: a.prazo as string,
-            turmaId: a.turma_id, turmaNome: turmaMap.get(a.turma_id)?.nome ?? 'Turma', cursoId: a.curso_id,
-          })));
+          // Atividades ainda não enviadas (independente do prazo já ter passado ou não)
+          const [{ data: ats }, { data: envios }] = await Promise.all([
+            supabase.from('atividades').select('id,titulo,prazo,turma_id,curso_id').in('turma_id', turmaIds),
+            supabase.from('atividade_envios').select('atividade_id,enviado_em').eq('aluno_id', profile.id),
+          ]);
+          const enviadoSet = new Set((envios ?? []).filter((e) => e.enviado_em).map((e) => e.atividade_id));
+          const now = Date.now();
+          const pend = (ats ?? [])
+            .filter((a) => !enviadoSet.has(a.id))
+            .map((a) => ({
+              id: a.id, titulo: a.titulo, prazo: a.prazo, turmaId: a.turma_id, cursoId: a.curso_id,
+              overdue: !!a.prazo && new Date(a.prazo).getTime() < now,
+            }))
+            .sort((a, b) => {
+              if (!a.prazo && !b.prazo) return 0;
+              if (!a.prazo) return 1;
+              if (!b.prazo) return -1;
+              return new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
+            });
+          setPendentes(pend);
+
+          // Próxima aula ao vivo (ou a que está em andamento) dentre as turmas/cursos do aluno
+          const { data: ctFull } = await supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds);
+          const pairSet = new Set<string>([
+            ...(ut ?? []).filter((r) => r.curso_id).map((r) => `${r.turma_id}:${r.curso_id}`),
+            ...(ctFull ?? []).map((r) => `${r.turma_id}:${r.curso_id}`),
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: hs } = await (supabase as any)
+            .from('aula_horarios')
+            .select('turma_id,curso_id,data_hora,aulas(titulo),cursos(titulo,link_ao_vivo)')
+            .in('turma_id', turmaIds);
+          const relevant = (hs ?? []).filter((h: { turma_id: string; curso_id: string }) => pairSet.has(`${h.turma_id}:${h.curso_id}`));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let started: any = null, next: any = null;
+          relevant.forEach((h: { data_hora: string }) => {
+            const t = new Date(h.data_hora).getTime();
+            if (t <= now && now - t < 2 * 60 * 60 * 1000) {
+              if (!started || t > new Date(started.data_hora).getTime()) started = h;
+            } else if (t > now) {
+              if (!next || t < new Date(next.data_hora).getTime()) next = h;
+            }
+          });
+          const chosen = started ?? next;
+          if (chosen) {
+            setNextAula({
+              titulo: chosen.aulas?.titulo ?? 'Aula',
+              cursoTitulo: chosen.cursos?.titulo ?? '',
+              dataHora: chosen.data_hora,
+              linkAoVivo: chosen.cursos?.link_ao_vivo ?? null,
+              started: !!started,
+            });
+          } else {
+            setNextAula(null);
+          }
         }
       }
 
@@ -314,60 +360,66 @@ export default function StudentDashboard() {
 
           {/* Coluna lateral */}
           <div className="space-y-6">
-            {/* Próximas atividades */}
+            {/* Próxima aula ao vivo */}
             <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4"><CalendarClock className="w-4 h-4 text-fg-2" /><h2 className="text-base">Próximas atividades</h2></div>
-              {upcoming.length === 0 ? (
-                <p className="text-fg-3 text-sm py-2">Nenhuma atividade com prazo próximo.</p>
+              <div className="flex items-center gap-2 mb-4"><Video className="w-4 h-4 text-fg-2" /><h2 className="text-base">Próxima aula</h2></div>
+              {!nextAula ? (
+                <p className="text-fg-3 text-sm py-2">Nenhuma aula agendada por enquanto.</p>
+              ) : nextAula.started ? (
+                <div className="space-y-3">
+                  <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{nextAula.cursoTitulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{nextAula.titulo}</p></div>
+                  <p className="text-danger text-sm font-medium">A aula já começou!</p>
+                  {nextAula.linkAoVivo && (
+                    <a href={nextAula.linkAoVivo} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-2 w-full h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">Acesse aqui</a>
+                  )}
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {upcoming.map((a) => {
-                    const d = new Date(a.prazo);
-                    const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
-                    return (
-                      <Link key={a.id} to={a.cursoId ? `/atividades/${a.turmaId}/${a.cursoId}` : '/atividades'} className="block rounded-lg border border-line p-3 hover:border-line-strong hover:bg-panel-2/40 transition-colors">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{a.titulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{a.turmaNome}</p></div>
-                          <Badge tone={days <= 2 ? 'danger' : days <= 5 ? 'warn' : 'default'}>{days <= 0 ? 'hoje' : `${days}d`}</Badge>
-                        </div>
-                        <p className="text-fg-3 text-[11px] mt-1.5">Prazo: {d.toLocaleDateString('pt-BR')}</p>
-                      </Link>
-                    );
-                  })}
-                  <Link to="/atividades" className="inline-flex items-center gap-1 text-brand text-sm font-medium mt-1 hover:gap-2 transition-all">Ver todas<ArrowRight className="w-3.5 h-3.5" /></Link>
+                <div className="space-y-3">
+                  <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{nextAula.cursoTitulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{nextAula.titulo}</p></div>
+                  <NextAulaCountdown dataHora={nextAula.dataHora} />
                 </div>
               )}
             </Card>
 
-            {/* Minhas turmas */}
+            {/* Atividades pendentes */}
             <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4"><Users className="w-4 h-4 text-fg-2" /><h2 className="text-base">Minhas turmas</h2></div>
-              {turmas.length === 0 ? (
-                <p className="text-fg-3 text-sm py-2">Você ainda não está em nenhuma turma.</p>
+              <div className="flex items-center gap-2 mb-4"><ClipboardList className="w-4 h-4 text-fg-2" /><h2 className="text-base">Atividades</h2></div>
+              {pendentes.length === 0 ? (
+                <p className="text-fg-3 text-sm py-2">Nenhuma atividade pendente. 🎉</p>
               ) : (
-                <div className="space-y-1.5">
-                  {turmas.map((t) => (
-                    <Link key={t.id} to={`/turma/${t.id}/comunidade`} className="flex items-center gap-3 rounded-lg p-2 hover:bg-panel-2/50 transition-colors">
-                      <span className="w-8 h-8 rounded-md bg-panel-3 grid place-items-center flex-shrink-0"><MessageSquare className="w-4 h-4 text-fg-3" /></span>
-                      <span className="min-w-0"><span className="block text-fg text-sm font-medium truncate">{t.nome}</span>{t.descricao && <span className="block text-fg-3 text-xs truncate">{t.descricao}</span>}</span>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {pendentes.map((a) => (
+                    <Link key={a.id} to={a.cursoId ? `/atividades/${a.turmaId}/${a.cursoId}` : '/atividades'} className={cn('block rounded-lg border p-3 transition-colors', a.overdue ? 'border-danger/30 bg-danger/[0.04] hover:bg-danger/[0.08]' : 'border-line hover:border-line-strong hover:bg-panel-2/40')}>
+                      <p className={cn('text-sm font-medium truncate', a.overdue ? 'text-danger' : 'text-fg')}>{a.titulo}</p>
+                      <p className={cn('text-xs mt-0.5', a.overdue ? 'text-danger/80' : 'text-fg-3')}>
+                        {a.prazo ? `Vencimento: ${new Date(a.prazo).toLocaleDateString('pt-BR')}` : 'Sem prazo definido'}
+                      </p>
                     </Link>
                   ))}
                 </div>
               )}
-            </Card>
-
-            {/* Atalhos */}
-            <Card className="p-5">
-              <h2 className="text-base mb-3">Atalhos</h2>
-              <div className="grid grid-cols-2 gap-2">
-                <Link to="/atividades" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2"><ClipboardList className="w-4 h-4 text-fg-3" />Atividades</Link>
-                <Link to="/duvidas" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2"><HelpCircle className="w-4 h-4 text-fg-3" />Dúvidas</Link>
-                <Link to="/comunidade" className="flex items-center gap-2 rounded-lg border border-line p-3 hover:border-line-strong transition-colors text-sm text-fg-2 col-span-2"><MessageSquare className="w-4 h-4 text-fg-3" />Comunidade</Link>
-              </div>
+              <Link to="/atividades" className="inline-flex items-center gap-1 text-brand text-sm font-medium mt-3 hover:gap-2 transition-all">Ver todas<ArrowRight className="w-3.5 h-3.5" /></Link>
             </Card>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function NextAulaCountdown({ dataHora }: { dataHora: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, new Date(dataHora).getTime() - now);
+  const days = Math.floor(diff / 86_400_000);
+  const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+  const minutes = Math.floor((diff % 3_600_000) / 60_000);
+  return (
+    <p className="text-fg text-sm">
+      Próxima aula acontece em: <span className="font-semibold tabular-nums">{days}d {hours}h {minutes}m</span>
+    </p>
   );
 }

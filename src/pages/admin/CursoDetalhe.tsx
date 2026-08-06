@@ -10,8 +10,9 @@ import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 
 type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
 type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
+type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
 type Tab = 'dashboard' | 'aulas' | 'alunos';
 
@@ -30,6 +31,7 @@ export default function CursoDetalhe() {
   const [alunosCount, setAlunosCount] = useState(0);
 
   const [aulas, setAulas] = useState<Aula[]>([]);
+  const [horarios, setHorarios] = useState<Record<string, string>>({});
   const [aulasLoading, setAulasLoading] = useState(false);
   const [createAulaOpen, setCreateAulaOpen] = useState(false);
   const [editAula, setEditAula] = useState<Aula | null>(null);
@@ -40,7 +42,9 @@ export default function CursoDetalhe() {
   const loadBase = async () => {
     const [{ data: t }, { data: c }] = await Promise.all([
       supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
-      supabase.from('cursos').select('*').eq('id', cursoId!).maybeSingle(),
+      // link_ao_vivo ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).from('cursos').select('*').eq('id', cursoId!).maybeSingle(),
     ]);
     setTurma(t); setCurso(c);
   };
@@ -62,8 +66,14 @@ export default function CursoDetalhe() {
 
   const loadAulas = async () => {
     setAulasLoading(true);
-    const { data } = await supabase.from('aulas').select('*').eq('curso_id', cursoId!).order('ordem');
+    const [{ data }, { data: hs }] = await Promise.all([
+      supabase.from('aulas').select('*').eq('curso_id', cursoId!).order('ordem'),
+      // aula_horarios ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
+    ]);
     setAulas(data ?? []);
+    setHorarios(Object.fromEntries(((hs ?? []) as Horario[]).map((h) => [h.aula_id, h.data_hora])));
     setAulasLoading(false);
   };
 
@@ -175,7 +185,9 @@ export default function CursoDetalhe() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-fg text-sm font-medium truncate">{a.ordem}. {a.titulo}</p>
-                          <p className="text-fg-3 text-xs truncate">{a.descricao || 'Sem descrição'}</p>
+                          <p className="text-fg-3 text-xs truncate">
+                            {horarios[a.id] ? new Date(horarios[a.id]).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem data/horário agendado'}
+                          </p>
                         </div>
                         <div className="flex items-center gap-1">
                           <IconButton label="Mover para cima" onClick={() => moveAula(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
@@ -227,8 +239,8 @@ export default function CursoDetalhe() {
       )}
 
       <CursoEditModal open={editCursoOpen} curso={curso} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
-      <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
-      <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+      <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
+      <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
     </div>
   );
 }
@@ -246,16 +258,23 @@ function CursoEditModal({ open, curso, onClose, onDone }: { open: boolean; curso
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [linkAoVivo, setLinkAoVivo] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setErr(null); }, [curso, open]);
+  useEffect(() => {
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setErr(null);
+  }, [curso, open]);
 
   const submit = async () => {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
-    const { error } = await supabase.from('cursos').update({ titulo: titulo.trim(), descricao: descricao.trim() }).eq('id', curso!.id);
+    // link_ao_vivo ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('cursos').update({
+      titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null,
+    }).eq('id', curso!.id);
     setLoading(false);
     if (error) setErr(error.message); else { toast.success('Curso atualizado.'); onDone(); }
   };
@@ -267,26 +286,36 @@ function CursoEditModal({ open, curso, onClose, onDone }: { open: boolean; curso
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cd-tit"><Input id="cd-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cd-desc"><Textarea id="cd-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Link da aula ao vivo" hint="Reutilizado em todas as aulas deste curso" htmlFor="cd-link"><Input id="cd-link" value={linkAoVivo} onChange={(e) => setLinkAoVivo(e.target.value)} placeholder="https://meet.google.com/..." /></Field>
       </div>
     </Modal>
   );
 }
 
-function AulaModal({ open, aula, cursoId, nextOrdem, onClose, onDone }: {
-  open: boolean; aula: Aula | null; cursoId: string; nextOrdem: number; onClose: () => void; onDone: () => void;
+/** Converte um timestamptz ISO para o formato aceito por <input type="datetime-local">, no horário local. */
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onClose, onDone }: {
+  open: boolean; aula: Aula | null; cursoId: string; turmaId: string; dataHoraAtual: string | null; nextOrdem: number; onClose: () => void; onDone: () => void;
 }) {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [url, setUrl] = useState('');
   const [ordem, setOrdem] = useState(1);
+  const [dataHora, setDataHora] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setTitulo(aula?.titulo ?? ''); setDescricao(aula?.descricao ?? ''); setUrl(aula?.youtube_url ?? '');
-    setOrdem(aula?.ordem ?? nextOrdem); setErr(null);
-  }, [aula, nextOrdem, open]);
+    setOrdem(aula?.ordem ?? nextOrdem); setDataHora(toDatetimeLocal(dataHoraAtual)); setErr(null);
+  }, [aula, nextOrdem, dataHoraAtual, open]);
 
   const submit = async () => {
     setErr(null);
@@ -294,9 +323,27 @@ function AulaModal({ open, aula, cursoId, nextOrdem, onClose, onDone }: {
     if (url && !getYouTubeId(url)) { setErr('URL do YouTube inválida.'); return; }
     setLoading(true);
     const payload = { titulo: titulo.trim(), descricao: descricao.trim(), youtube_url: url.trim(), ordem, curso_id: cursoId };
-    const { error } = aula ? await supabase.from('aulas').update(payload).eq('id', aula.id) : await supabase.from('aulas').insert(payload);
+    const { data: savedAula, error } = aula
+      ? await supabase.from('aulas').update(payload).eq('id', aula.id).select().single()
+      : await supabase.from('aulas').insert(payload).select().single();
+    if (error || !savedAula) { setLoading(false); setErr(error?.message ?? 'Erro ao salvar aula.'); return; }
+
+    // aula_horarios ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    if (dataHora) {
+      const { error: hErr } = await sb.from('aula_horarios').upsert(
+        { turma_id: turmaId, curso_id: cursoId, aula_id: savedAula.id, data_hora: new Date(dataHora).toISOString() },
+        { onConflict: 'turma_id,aula_id' }
+      );
+      if (hErr) { setLoading(false); setErr(hErr.message); return; }
+    } else if (aula) {
+      await sb.from('aula_horarios').delete().eq('turma_id', turmaId).eq('aula_id', aula.id);
+    }
+
     setLoading(false);
-    if (error) setErr(error.message); else { toast.success(aula ? 'Aula atualizada.' : 'Aula criada.'); onDone(); }
+    toast.success(aula ? 'Aula atualizada.' : 'Aula criada.');
+    onDone();
   };
 
   return (
@@ -306,7 +353,10 @@ function AulaModal({ open, aula, cursoId, nextOrdem, onClose, onDone }: {
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cda-tit"><Input id="cda-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="URL do YouTube" htmlFor="cda-url"><Input id="cda-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." /></Field>
-        <Field label="Ordem" htmlFor="cda-ord"><Input id="cda-ord" type="number" value={ordem} onChange={(e) => setOrdem(parseInt(e.target.value) || 1)} min={1} className="max-w-[120px]" /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Ordem" htmlFor="cda-ord"><Input id="cda-ord" type="number" value={ordem} onChange={(e) => setOrdem(parseInt(e.target.value) || 1)} min={1} /></Field>
+          <Field label="Data e horário" hint="Desta turma" htmlFor="cda-dh"><Input id="cda-dh" type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)} /></Field>
+        </div>
         <Field label="Descrição" htmlFor="cda-desc"><Textarea id="cda-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
       </div>
     </Modal>
