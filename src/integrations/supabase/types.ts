@@ -84,6 +84,7 @@ export type Database = {
           nota_maxima: number
           prazo: string | null
           professor_id: string | null
+          publicada: boolean
           titulo: string
           turma_id: string
         }
@@ -99,6 +100,7 @@ export type Database = {
           nota_maxima?: number
           prazo?: string | null
           professor_id?: string | null
+          publicada?: boolean
           titulo: string
           turma_id: string
         }
@@ -114,6 +116,7 @@ export type Database = {
           nota_maxima?: number
           prazo?: string | null
           professor_id?: string | null
+          publicada?: boolean
           titulo?: string
           turma_id?: string
         }
@@ -220,6 +223,7 @@ export type Database = {
       }
       aulas: {
         Row: {
+          capa_url: string | null
           created_at: string | null
           curso_id: string
           descricao: string | null
@@ -230,6 +234,7 @@ export type Database = {
           youtube_url: string
         }
         Insert: {
+          capa_url?: string | null
           created_at?: string | null
           curso_id: string
           descricao?: string | null
@@ -240,6 +245,7 @@ export type Database = {
           youtube_url?: string
         }
         Update: {
+          capa_url?: string | null
           created_at?: string | null
           curso_id?: string
           descricao?: string | null
@@ -750,6 +756,7 @@ export type Database = {
     Views: {
       lessons_public: {
         Row: {
+          capa_url: string | null
           created_at: string | null
           curso_id: string | null
           descricao: string | null
@@ -759,6 +766,7 @@ export type Database = {
           titulo: string | null
         }
         Insert: {
+          capa_url?: string | null
           created_at?: string | null
           curso_id?: string | null
           descricao?: string | null
@@ -768,6 +776,7 @@ export type Database = {
           titulo?: string | null
         }
         Update: {
+          capa_url?: string | null
           created_at?: string | null
           curso_id?: string | null
           descricao?: string | null
