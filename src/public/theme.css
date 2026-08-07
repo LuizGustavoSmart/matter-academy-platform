@@ -140,6 +140,14 @@
   color: var(--pub-fg-muted);
 }
 
+/* O menu nativo do <select> ignora o background translúcido do input e usa
+   fundo branco por padrão — como o texto é claro (--pub-fg), ficava
+   ilegível. Fixamos fundo e texto explícitos nas opções. */
+.public-theme select option {
+  background-color: #14161c;
+  color: var(--pub-fg);
+}
+
 .public-theme label {
   display: block;
   font-size: 12px;
