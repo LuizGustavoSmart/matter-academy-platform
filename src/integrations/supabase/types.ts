@@ -556,7 +556,9 @@ export type Database = {
         Row: {
           activated_at: string | null
           avatar_url: string | null
+          cargo: string | null
           created_at: string | null
+          data_nascimento: string | null
           email: string
           empresa: string | null
           id: string
@@ -566,6 +568,7 @@ export type Database = {
           reset_expires_at: string | null
           reset_token: string | null
           role: string
+          sexo: string | null
           sobrenome: string | null
           status: string
           telefone: string | null
@@ -573,7 +576,9 @@ export type Database = {
         Insert: {
           activated_at?: string | null
           avatar_url?: string | null
+          cargo?: string | null
           created_at?: string | null
+          data_nascimento?: string | null
           email: string
           empresa?: string | null
           id: string
@@ -583,6 +588,7 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sexo?: string | null
           sobrenome?: string | null
           status?: string
           telefone?: string | null
@@ -590,7 +596,9 @@ export type Database = {
         Update: {
           activated_at?: string | null
           avatar_url?: string | null
+          cargo?: string | null
           created_at?: string | null
+          data_nascimento?: string | null
           email?: string
           empresa?: string | null
           id?: string
@@ -600,6 +608,7 @@ export type Database = {
           reset_expires_at?: string | null
           reset_token?: string | null
           role?: string
+          sexo?: string | null
           sobrenome?: string | null
           status?: string
           telefone?: string | null
