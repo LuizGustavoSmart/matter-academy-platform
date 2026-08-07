@@ -6,9 +6,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
 import LessonVideoPlayer from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
+import { SignedImage } from '../../components/SignedImage';
 
 
-type Aula = { id: string; titulo: string; descricao: string | null; ordem: number };
+type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null };
 
 export default function StudentCourse() {
@@ -32,7 +33,7 @@ export default function StudentCourse() {
       if (!c) { nav('/dashboard'); return; }
       setCurso(c);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: as } = await (supabase as any).from('lessons_public').select('id,titulo,descricao,ordem').eq('curso_id', id).order('ordem');
+      const { data: as } = await (supabase as any).from('lessons_public').select('id,titulo,descricao,ordem,capa_url').eq('curso_id', id).order('ordem');
       setAulas((as ?? []) as Aula[]);
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id);
       setDone(new Set((ps ?? []).filter((p) => p.concluido).map((p) => p.aula_id)));
@@ -156,6 +157,9 @@ export default function StudentCourse() {
                   return (
                     <li key={a.id}>
                       <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border', isCurrent ? 'bg-brand/10 border-brand/30 shadow-sm' : 'hover:bg-panel-2 hover:border-line border-transparent')}>
+                        {a.capa_url && (
+                          <SignedImage bucket="aulas" path={a.capa_url} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
+                        )}
                         <span className={cn('w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums transition-colors', isDoneA ? 'bg-brand/15 text-brand' : isCurrent ? 'bg-brand text-brand-ink' : 'bg-panel-2 text-fg-3')}>
                           {isDoneA ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <PlayCircle className="w-4 h-4" /> : a.ordem}
                         </span>

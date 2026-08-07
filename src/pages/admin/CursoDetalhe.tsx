@@ -8,10 +8,12 @@ import {
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
+import { uploadAulaCapa } from '../../lib/storage';
+import { SignedImage } from '../../components/SignedImage';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
-type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean };
+type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
 type Tab = 'dashboard' | 'aulas' | 'alunos';
@@ -191,7 +193,11 @@ export default function CursoDetalhe() {
                     return (
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
                         <div className="w-20 h-11 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                          {ytId && <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" loading="lazy" />}
+                          {a.capa_url ? (
+                            <SignedImage bucket="aulas" path={a.capa_url} className="w-full h-full object-cover" alt="" />
+                          ) : ytId ? (
+                            <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" loading="lazy" />
+                          ) : null}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-fg text-sm font-medium truncate">{a.ordem}. {a.titulo}</p>
@@ -320,12 +326,13 @@ function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onC
   const [url, setUrl] = useState('');
   const [ordem, setOrdem] = useState(1);
   const [dataHora, setDataHora] = useState('');
+  const [capaFile, setCapaFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setTitulo(aula?.titulo ?? ''); setDescricao(aula?.descricao ?? ''); setUrl(aula?.youtube_url ?? '');
-    setOrdem(aula?.ordem ?? nextOrdem); setDataHora(toDatetimeLocal(dataHoraAtual)); setErr(null);
+    setOrdem(aula?.ordem ?? nextOrdem); setDataHora(toDatetimeLocal(dataHoraAtual)); setCapaFile(null); setErr(null);
   }, [aula, nextOrdem, dataHoraAtual, open]);
 
   const submit = async () => {
@@ -333,10 +340,19 @@ function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onC
     if (!titulo.trim()) { setErr('Informe o título da aula.'); return; }
     if (url && !getYouTubeId(url)) { setErr('URL do YouTube inválida.'); return; }
     setLoading(true);
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), youtube_url: url.trim(), ordem, curso_id: cursoId };
+    let capa_url = aula?.capa_url ?? null;
+    if (capaFile) {
+      try {
+        const up = await uploadAulaCapa(capaFile, `${cursoId}`);
+        capa_url = up.path;
+      } catch (e) { setLoading(false); setErr((e as Error).message); return; }
+    }
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), youtube_url: url.trim(), ordem, curso_id: cursoId, capa_url };
+    // capa_url ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: savedAula, error } = aula
-      ? await supabase.from('aulas').update(payload).eq('id', aula.id).select().single()
-      : await supabase.from('aulas').insert(payload).select().single();
+      ? await (supabase as any).from('aulas').update(payload).eq('id', aula.id).select().single()
+      : await (supabase as any).from('aulas').insert(payload).select().single();
     if (error || !savedAula) { setLoading(false); setErr(error?.message ?? 'Erro ao salvar aula.'); return; }
 
     // aula_horarios ainda não está no schema gerado
@@ -369,6 +385,16 @@ function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onC
           <Field label="Data e horário" hint="Desta turma" htmlFor="cda-dh"><Input id="cda-dh" type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)} /></Field>
         </div>
         <Field label="Descrição" htmlFor="cda-desc"><Textarea id="cda-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Capa da aula" hint="Opcional — usada nas listas" htmlFor="cda-capa">
+          <div className="flex items-center gap-3">
+            {(capaFile || aula?.capa_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="aulas" path={aula!.capa_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="cda-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
       </div>
     </Modal>
   );

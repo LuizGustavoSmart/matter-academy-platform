@@ -70,6 +70,8 @@ export default function AtividadeDetalhe() {
     })();
   }, [atividadeId, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isOverdue = !!atividade?.prazo && new Date(atividade.prazo) < new Date();
+
   const status = (() => {
     if (!atividade) return { label: '', tone: 'default' as const };
     if (envio?.corrigido_em) return { label: 'Corrigida', tone: 'success' as const };
@@ -132,6 +134,12 @@ export default function AtividadeDetalhe() {
               {envio.comentario_professor && <div><p className="text-fg-3 text-xs mb-1">Comentário do professor</p><p className="text-fg-2 whitespace-pre-line">{envio.comentario_professor}</p></div>}
               {envio.texto && <div><p className="text-fg-3 text-xs mb-1">Sua resposta</p><p className="text-fg-2 whitespace-pre-line">{envio.texto}</p></div>}
               {envio.arquivo_url && <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-brand hover:underline"><Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'}</FileLink>}
+            </div>
+          ) : isOverdue ? (
+            <div className="space-y-4">
+              {envio?.texto && <div><p className="text-fg-3 text-xs mb-1">Sua resposta</p><p className="text-fg-2 whitespace-pre-line">{envio.texto}</p></div>}
+              {envio?.arquivo_url && <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-brand hover:underline"><Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'}</FileLink>}
+              <p className="text-danger text-sm font-medium">O prazo desta atividade encerrou. Não é mais possível enviar ou alterar sua resposta.</p>
             </div>
           ) : (
             <div className="space-y-4">

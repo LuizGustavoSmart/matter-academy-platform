@@ -366,17 +366,20 @@ export default function StudentDashboard() {
               {!nextAula ? (
                 <p className="text-fg-3 text-sm py-2">Nenhuma aula agendada por enquanto.</p>
               ) : nextAula.started ? (
-                <div className="space-y-3">
-                  <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{nextAula.cursoTitulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{nextAula.titulo}</p></div>
-                  <p className="text-danger text-sm font-medium">A aula já começou!</p>
+                <div className="flex flex-col items-center text-center py-2">
+                  <p className="text-danger text-lg font-display font-semibold">A aula já começou!</p>
                   {nextAula.linkAoVivo && (
-                    <a href={nextAula.linkAoVivo} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-2 w-full h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">Acesse aqui</a>
+                    <a href={nextAula.linkAoVivo} target="_blank" rel="noopener" className="mt-4 inline-flex items-center justify-center gap-2 w-full h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">Acesse aqui</a>
                   )}
+                  <p className="text-fg-3 text-xs font-medium mt-4 truncate max-w-full">{nextAula.cursoTitulo}</p>
+                  <p className="text-fg-3 text-xs mt-0.5 truncate max-w-full">{nextAula.titulo}</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="min-w-0"><p className="text-fg text-sm font-medium truncate">{nextAula.cursoTitulo}</p><p className="text-fg-3 text-xs mt-0.5 truncate">{nextAula.titulo}</p></div>
+                <div className="flex flex-col items-center text-center py-2">
+                  <p className="text-fg-3 text-xs">Próxima aula acontece em:</p>
                   <NextAulaCountdown dataHora={nextAula.dataHora} />
+                  <p className="text-fg-3 text-xs font-medium mt-3 truncate max-w-full">{nextAula.cursoTitulo}</p>
+                  <p className="text-fg-3 text-xs mt-0.5 truncate max-w-full">{nextAula.titulo}</p>
                 </div>
               )}
               <Link to="/cronograma" className="inline-flex items-center gap-1 text-brand text-sm font-medium mt-3 hover:gap-2 transition-all">Ver todas<ArrowRight className="w-3.5 h-3.5" /></Link>
@@ -419,8 +422,6 @@ function NextAulaCountdown({ dataHora }: { dataHora: string }) {
   const hours = Math.floor((diff % 86_400_000) / 3_600_000);
   const minutes = Math.floor((diff % 3_600_000) / 60_000);
   return (
-    <p className="text-fg text-sm">
-      Próxima aula acontece em: <span className="font-semibold tabular-nums">{days}d {hours}h {minutes}m</span>
-    </p>
+    <p className="text-fg text-3xl font-display font-semibold tabular-nums mt-1">{days}d {hours}h {minutes}m</p>
   );
 }

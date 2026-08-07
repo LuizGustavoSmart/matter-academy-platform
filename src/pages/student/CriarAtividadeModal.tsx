@@ -5,11 +5,15 @@ import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Modal, Field, Input, Textarea, Select, Alert } from '../../components/ui';
 
 type Aula = { id: string; titulo: string };
+export type AtividadeEditavel = {
+  id: string; titulo: string; descricao: string | null; aula_id: string | null;
+  nota_maxima: number; prazo: string | null; anexo_url: string | null; anexo_nome: string | null;
+};
 
 export default function CriarAtividadeModal({
-  open, turmaId, cursoId, onClose, onDone,
+  open, turmaId, cursoId, atividade, onClose, onDone,
 }: {
-  open: boolean; turmaId: string; cursoId: string; onClose: () => void; onDone: () => void;
+  open: boolean; turmaId: string; cursoId: string; atividade?: AtividadeEditavel | null; onClose: () => void; onDone: () => void;
 }) {
   const { profile } = useAuth();
   const [titulo, setTitulo] = useState('');
@@ -22,11 +26,16 @@ export default function CriarAtividadeModal({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const isEdit = !!atividade;
+
   useEffect(() => {
     if (!open) return;
-    setTitulo(''); setDescricao(''); setAulaId(''); setNotaMaxima(10); setPrazo(''); setFile(null); setErr(null);
+    setTitulo(atividade?.titulo ?? ''); setDescricao(atividade?.descricao ?? ''); setAulaId(atividade?.aula_id ?? '');
+    setNotaMaxima(atividade?.nota_maxima ?? 10);
+    setPrazo(atividade?.prazo ? toDatetimeLocal(atividade.prazo) : '');
+    setFile(null); setErr(null);
     supabase.from('aulas').select('id,titulo').eq('curso_id', cursoId).order('ordem').then(({ data }) => setAulas(data ?? []));
-  }, [open, cursoId]);
+  }, [open, cursoId, atividade]);
 
   const submit = async () => {
     setErr(null);
@@ -34,13 +43,16 @@ export default function CriarAtividadeModal({
     if (!profile) return;
     setLoading(true);
     try {
-      let anexo_url: string | null = null;
-      let anexo_nome: string | null = null;
+      let anexo_url = atividade?.anexo_url ?? null;
+      let anexo_nome = atividade?.anexo_nome ?? null;
       if (file) { const up = await uploadAtividadeFile(file, `atividades/${turmaId}/${cursoId}`); anexo_url = up.path; anexo_nome = up.nome; }
-      const { error } = await supabase.from('atividades').insert({
-        turma_id: turmaId, curso_id: cursoId, aula_id: aulaId || null, titulo: titulo.trim(), descricao: descricao.trim(),
-        anexo_url, anexo_nome, nota_maxima: notaMaxima, prazo: prazo ? new Date(prazo).toISOString() : null, professor_id: profile.id,
-      });
+      const payload = {
+        aula_id: aulaId || null, titulo: titulo.trim(), descricao: descricao.trim(),
+        anexo_url, anexo_nome, nota_maxima: notaMaxima, prazo: prazo ? new Date(prazo).toISOString() : null,
+      };
+      const { error } = isEdit
+        ? await supabase.from('atividades').update(payload).eq('id', atividade!.id)
+        : await supabase.from('atividades').insert({ ...payload, turma_id: turmaId, curso_id: cursoId, professor_id: profile.id });
       if (error) throw error;
       onDone();
     } catch (e) {
@@ -49,8 +61,8 @@ export default function CriarAtividadeModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Criar atividade"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Criar</Button></>}>
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Editar atividade' : 'Criar atividade'}
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>{isEdit ? 'Salvar' : 'Criar'}</Button></>}>
       <div className="space-y-4">
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="ca-tit"><Input id="ca-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
@@ -65,8 +77,16 @@ export default function CriarAtividadeModal({
           <Field label="Nota máxima" htmlFor="ca-nota"><Input id="ca-nota" type="number" value={notaMaxima} onChange={(e) => setNotaMaxima(parseFloat(e.target.value) || 10)} min={1} /></Field>
           <Field label="Prazo" hint="Opcional" htmlFor="ca-prazo"><Input id="ca-prazo" type="datetime-local" value={prazo} onChange={(e) => setPrazo(e.target.value)} /></Field>
         </div>
-        <Field label="Anexo" hint="Opcional — PDF, imagem" htmlFor="ca-file"><Input id="ca-file" type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="!py-2" /></Field>
+        <Field label="Anexo" hint={isEdit && atividade?.anexo_nome ? `Atual: ${atividade.anexo_nome} — selecione outro para substituir` : 'Opcional — PDF, imagem'} htmlFor="ca-file">
+          <Input id="ca-file" type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="!py-2" />
+        </Field>
       </div>
     </Modal>
   );
+}
+
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
