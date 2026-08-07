@@ -572,6 +572,7 @@ export type Database = {
           sobrenome: string | null
           status: string
           telefone: string | null
+          tour_visto: boolean
         }
         Insert: {
           activated_at?: string | null
@@ -592,6 +593,7 @@ export type Database = {
           sobrenome?: string | null
           status?: string
           telefone?: string | null
+          tour_visto?: boolean
         }
         Update: {
           activated_at?: string | null
@@ -612,6 +614,7 @@ export type Database = {
           sobrenome?: string | null
           status?: string
           telefone?: string | null
+          tour_visto?: boolean
         }
         Relationships: []
       }
