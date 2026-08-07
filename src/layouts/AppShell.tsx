@@ -44,6 +44,7 @@ function NavList({ nav, collapsed, onNavigate }: { nav: NavGroup[]; collapsed: b
                 <NavLink
                   key={it.to}
                   to={it.to}
+                  data-tour={it.to}
                   onClick={onNavigate}
                   title={collapsed ? it.label : undefined}
                   className={cn(

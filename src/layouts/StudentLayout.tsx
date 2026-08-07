@@ -1,6 +1,7 @@
 import { Home, BookOpen, Layers, ClipboardList, HelpCircle, MessageSquare, CalendarDays } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import AppShell, { type NavGroup } from './AppShell';
+import OnboardingTour from '../pages/student/OnboardingTour';
 
 export default function StudentLayout() {
   const { profile } = useAuth();
@@ -23,5 +24,10 @@ export default function StudentLayout() {
     },
   ];
 
-  return <AppShell nav={nav} area={area} contentPadded={false} />;
+  return (
+    <>
+      <AppShell nav={nav} area={area} contentPadded={false} />
+      {profile?.role === 'student' && <OnboardingTour />}
+    </>
+  );
 }

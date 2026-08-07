@@ -9,6 +9,7 @@ export type Profile = {
   avatar_url?: string | null;
   role: 'admin' | 'student' | 'professor' | 'monitor';
   status: 'pending' | 'active' | 'blocked';
+  tour_visto?: boolean;
 };
 
 
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id,email,nome,avatar_url,role,status')
+      .select('id,email,nome,avatar_url,role,status,tour_visto')
       .eq('id', userId)
       .maybeSingle();
     setProfile(data as Profile | null);
