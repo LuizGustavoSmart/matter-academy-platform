@@ -58,10 +58,15 @@ Deno.serve(async (req: Request) => {
     if (action === "verify-invite") {
       const { token } = body as { token: string };
       // O convite não expira por tempo: vale enquanto o status for "pending".
-      const { data: profile } = await admin.from("profiles").select("id,email,status").eq("invite_token", token).maybeSingle();
+      const { data: profile } = await admin.from("profiles")
+        .select("id,email,status,role,nome,sobrenome,telefone,empresa")
+        .eq("invite_token", token).maybeSingle();
       if (!profile) return json({ error: "Token inválido" }, 400);
       if (profile.status !== "pending") return json({ error: "Conta já ativada" }, 400);
-      return json({ email: profile.email });
+      return json({
+        email: profile.email, role: profile.role,
+        nome: profile.nome, sobrenome: profile.sobrenome, telefone: profile.telefone, empresa: profile.empresa,
+      });
     }
 
     if (action === "activate") {
