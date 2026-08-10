@@ -17,7 +17,6 @@ import CursoDetalhe from './pages/admin/CursoDetalhe';
 import AdminCursos from './pages/admin/Cursos';
 import AdminAulas from './pages/admin/Aulas';
 import MapaProfessores from './pages/admin/MapaProfessores';
-import Financeiro from './pages/admin/Financeiro';
 import StudentDashboard from './pages/student/Dashboard';
 import AulasIndex from './pages/student/AulasIndex';
 import StudentCourse from './pages/student/Course';
@@ -97,7 +96,6 @@ export default function App() {
                     <Route path="/admin/cursos" element={<AdminCursos />} />
                     <Route path="/admin/aulas" element={<AdminAulas />} />
                     <Route path="/admin/mapa-professores" element={<MapaProfessores />} />
-                    <Route path="/admin/financeiro" element={<Financeiro />} />
                   </Route>
                 </Route>
 

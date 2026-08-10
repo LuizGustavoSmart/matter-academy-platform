@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, GraduationCap, Layers, DollarSign,
+  LayoutDashboard, Users, GraduationCap, Layers,
 } from 'lucide-react';
 import AppShell, { type NavGroup } from './AppShell';
 
@@ -20,12 +20,6 @@ const nav: NavGroup[] = [
     title: 'Acompanhamento',
     items: [
       { to: '/admin/mapa-professores', label: 'Mapa de professores', icon: GraduationCap },
-    ],
-  },
-  {
-    title: 'Operação',
-    items: [
-      { to: '/admin/financeiro', label: 'Financeiro', icon: DollarSign },
     ],
   },
 ];
