@@ -76,6 +76,7 @@ export type Database = {
           anexo_nome: string | null
           anexo_url: string | null
           aula_id: string | null
+          avaliada_com_nota: boolean
           created_at: string
           criado_por: string | null
           curso_id: string | null
@@ -93,6 +94,7 @@ export type Database = {
           anexo_nome?: string | null
           anexo_url?: string | null
           aula_id?: string | null
+          avaliada_com_nota?: boolean
           created_at?: string
           criado_por?: string | null
           curso_id?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           anexo_nome?: string | null
           anexo_url?: string | null
           aula_id?: string | null
+          avaliada_com_nota?: boolean
           created_at?: string
           criado_por?: string | null
           curso_id?: string | null
@@ -410,17 +413,35 @@ export type Database = {
       curso_turmas: {
         Row: {
           curso_id: string
+          data_fim: string | null
+          data_inicio: string | null
+          dia_semana: string | null
+          horario_fim: string | null
+          horario_inicio: string | null
           ordem: number
+          professor_id: string | null
           turma_id: string
         }
         Insert: {
           curso_id: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          dia_semana?: string | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
           ordem?: number
+          professor_id?: string | null
           turma_id: string
         }
         Update: {
           curso_id?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          dia_semana?: string | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
           ordem?: number
+          professor_id?: string | null
           turma_id?: string
         }
         Relationships: [
@@ -429,6 +450,13 @@ export type Database = {
             columns: ["curso_id"]
             isOneToOne: false
             referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curso_turmas_professor_id_fkey"
+            columns: ["professor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
