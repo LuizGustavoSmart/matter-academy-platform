@@ -4,19 +4,42 @@ import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Use
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
-  Field, Input, Textarea, Alert, DropdownMenu, useToast, useConfirm,
+  Field, Input, Textarea, Select, Alert, DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { uploadAulaCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
+import CursoAtividadesTab from './CursoAtividadesTab';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
 type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
-type Tab = 'dashboard' | 'aulas' | 'alunos';
+type Tab = 'dashboard' | 'aulas' | 'atividades' | 'alunos';
+type Professor = { id: string; nome: string | null; email: string };
+type CursoTurmaInfo = {
+  data_inicio: string | null; data_fim: string | null; professor_id: string | null;
+  horario_inicio: string | null; horario_fim: string | null; dia_semana: string | null;
+};
+
+export const DIA_SEMANA_OPTIONS = [
+  { value: 'segunda', label: 'Segunda-feira' },
+  { value: 'terca', label: 'Terça-feira' },
+  { value: 'quarta', label: 'Quarta-feira' },
+  { value: 'quinta', label: 'Quinta-feira' },
+  { value: 'sexta', label: 'Sexta-feira' },
+  { value: 'sabado', label: 'Sábado' },
+  { value: 'domingo', label: 'Domingo' },
+];
+const DIA_SEMANA_LABEL: Record<string, string> = Object.fromEntries(DIA_SEMANA_OPTIONS.map((o) => [o.value, o.label]));
+
+function dateOnlyBR(iso: string | null): string {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+}
 
 export default function CursoDetalhe() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
@@ -26,6 +49,8 @@ export default function CursoDetalhe() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [turma, setTurma] = useState<Turma | null>(null);
   const [curso, setCurso] = useState<Curso | null>(null);
+  const [cursoTurmaInfo, setCursoTurmaInfo] = useState<CursoTurmaInfo | null>(null);
+  const [professores, setProfessores] = useState<Professor[]>([]);
   const [editCursoOpen, setEditCursoOpen] = useState(false);
 
   const [dashLoading, setDashLoading] = useState(true);
@@ -42,13 +67,16 @@ export default function CursoDetalhe() {
   const [alunosLoading, setAlunosLoading] = useState(false);
 
   const loadBase = async () => {
-    const [{ data: t }, { data: c }] = await Promise.all([
+    // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const [{ data: t }, { data: c }, { data: ct }, { data: profs }] = await Promise.all([
       supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
-      // link_ao_vivo ainda não está no schema gerado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('cursos').select('*').eq('id', cursoId!).maybeSingle(),
+      sb.from('cursos').select('*').eq('id', cursoId!).maybeSingle(),
+      sb.from('curso_turmas').select('data_inicio,data_fim,professor_id,horario_inicio,horario_fim,dia_semana').eq('turma_id', turmaId!).eq('curso_id', cursoId!).maybeSingle(),
+      supabase.from('profiles').select('id,nome,email').eq('role', 'professor').order('nome'),
     ]);
-    setTurma(t); setCurso(c);
+    setTurma(t); setCurso(c); setCursoTurmaInfo(ct ?? null); setProfessores(profs ?? []);
   };
 
   const loadDashboard = async () => {
@@ -156,7 +184,7 @@ export default function CursoDetalhe() {
       />
 
       <Tabs className="mb-6" value={tab} onChange={setTab}
-        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'alunos', label: 'Alunos' }]} />
+        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'atividades', label: 'Atividades' }, { value: 'alunos', label: 'Alunos' }]} />
 
       {/* DASHBOARD */}
       {tab === 'dashboard' && (dashLoading ? (
@@ -166,13 +194,19 @@ export default function CursoDetalhe() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Aulas" value={aulaCount} icon={<PlayCircle className="w-4 h-4" />} />
             <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
-            <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de início" />
-            <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de fim" />
+            <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de início" value={dateOnlyBR(cursoTurmaInfo?.data_inicio ?? null)} placeholder={!cursoTurmaInfo?.data_inicio} />
+            <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de fim" value={dateOnlyBR(cursoTurmaInfo?.data_fim ?? null)} placeholder={!cursoTurmaInfo?.data_fim} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <InfoCard icon={<GraduationCap className="w-4 h-4" />} label="Professor responsável" />
-            <InfoCard icon={<Clock className="w-4 h-4" />} label="Horário das aulas" />
-            <InfoCard icon={<Clock className="w-4 h-4" />} label="Dia da semana" />
+            <InfoCard icon={<GraduationCap className="w-4 h-4" />} label="Professor responsável"
+              value={(() => { const p = professores.find((x) => x.id === cursoTurmaInfo?.professor_id); return p ? (p.nome || p.email) : '—'; })()}
+              placeholder={!cursoTurmaInfo?.professor_id} />
+            <InfoCard icon={<Clock className="w-4 h-4" />} label="Horário das aulas"
+              value={cursoTurmaInfo?.horario_inicio ? `${cursoTurmaInfo.horario_inicio.slice(0, 5)} às ${cursoTurmaInfo.horario_fim?.slice(0, 5) ?? '—'}` : '—'}
+              placeholder={!cursoTurmaInfo?.horario_inicio} />
+            <InfoCard icon={<Clock className="w-4 h-4" />} label="Dia da semana"
+              value={cursoTurmaInfo?.dia_semana ? DIA_SEMANA_LABEL[cursoTurmaInfo.dia_semana] ?? cursoTurmaInfo.dia_semana : '—'}
+              placeholder={!cursoTurmaInfo?.dia_semana} />
           </div>
         </div>
       ))}
@@ -228,6 +262,9 @@ export default function CursoDetalhe() {
         </div>
       )}
 
+      {/* ATIVIDADES */}
+      {tab === 'atividades' && <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} />}
+
       {/* ALUNOS */}
       {tab === 'alunos' && (
         <div>
@@ -255,7 +292,7 @@ export default function CursoDetalhe() {
         </div>
       )}
 
-      <CursoEditModal open={editCursoOpen} curso={curso} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
+      <CursoEditModal open={editCursoOpen} curso={curso} turmaId={turmaId!} info={cursoTurmaInfo} professores={professores} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
       <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
       <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
     </div>
@@ -271,29 +308,48 @@ function InfoCard({ icon, label, value, placeholder = true }: { icon: React.Reac
   );
 }
 
-function CursoEditModal({ open, curso, onClose, onDone }: { open: boolean; curso: Curso | null; onClose: () => void; onDone: () => void }) {
+function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDone }: {
+  open: boolean; curso: Curso | null; turmaId: string; info: CursoTurmaInfo | null; professores: Professor[]; onClose: () => void; onDone: () => void;
+}) {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [linkAoVivo, setLinkAoVivo] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const [professorId, setProfessorId] = useState('');
+  const [horarioInicio, setHorarioInicio] = useState('');
+  const [horarioFim, setHorarioFim] = useState('');
+  const [diaSemana, setDiaSemana] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setErr(null);
-  }, [curso, open]);
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? '');
+    setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
+    setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
+    setDiaSemana(info?.dia_semana ?? ''); setErr(null);
+  }, [curso, info, open]);
 
   const submit = async () => {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
-    // link_ao_vivo ainda não está no schema gerado
+    // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from('cursos').update({
+    const sb = supabase as any;
+    const { error } = await sb.from('cursos').update({
       titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null,
     }).eq('id', curso!.id);
+    if (error) { setLoading(false); setErr(error.message); return; }
+
+    const { error: ctErr } = await sb.from('curso_turmas').upsert({
+      turma_id: turmaId, curso_id: curso!.id,
+      data_inicio: dataInicio || null, data_fim: dataFim || null, professor_id: professorId || null,
+      horario_inicio: horarioInicio || null, horario_fim: horarioFim || null, dia_semana: diaSemana || null,
+    }, { onConflict: 'turma_id,curso_id' });
     setLoading(false);
-    if (error) setErr(error.message); else { toast.success('Curso atualizado.'); onDone(); }
+    if (ctErr) setErr(ctErr.message); else { toast.success('Curso atualizado.'); onDone(); }
   };
 
   return (
@@ -304,6 +360,27 @@ function CursoEditModal({ open, curso, onClose, onDone }: { open: boolean; curso
         <Field label="Título" required htmlFor="cd-tit"><Input id="cd-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cd-desc"><Textarea id="cd-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
         <Field label="Link da aula ao vivo" hint="Reutilizado em todas as aulas deste curso" htmlFor="cd-link"><Input id="cd-link" value={linkAoVivo} onChange={(e) => setLinkAoVivo(e.target.value)} placeholder="https://meet.google.com/..." /></Field>
+
+        <div className="border-t border-line pt-4 grid grid-cols-2 gap-4">
+          <Field label="Data de início" htmlFor="cd-dini"><Input id="cd-dini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></Field>
+          <Field label="Data de fim" htmlFor="cd-dfim"><Input id="cd-dfim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} /></Field>
+        </div>
+        <Field label="Professor responsável" htmlFor="cd-prof">
+          <Select id="cd-prof" value={professorId} onChange={(e) => setProfessorId(e.target.value)}>
+            <option value="">Não definido</option>
+            {professores.map((p) => <option key={p.id} value={p.id}>{p.nome || p.email}</option>)}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Horário — início" htmlFor="cd-hini"><Input id="cd-hini" type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} /></Field>
+          <Field label="Horário — fim" htmlFor="cd-hfim"><Input id="cd-hfim" type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} /></Field>
+        </div>
+        <Field label="Dia da semana" htmlFor="cd-dia">
+          <Select id="cd-dia" value={diaSemana} onChange={(e) => setDiaSemana(e.target.value)}>
+            <option value="">Não definido</option>
+            {DIA_SEMANA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </Field>
       </div>
     </Modal>
   );

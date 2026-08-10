@@ -39,9 +39,9 @@ export default function AtividadesLista() {
     const [{ data: t }, { data: c }, { data: as }] = await Promise.all([
       supabase.from('turmas').select('nome').eq('id', turmaId!).maybeSingle(),
       supabase.from('cursos').select('titulo').eq('id', cursoId!).maybeSingle(),
-      // publicada/ordem ainda não estão no schema gerado
+      // publicada/ordem/avaliada_com_nota ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('ordem').order('created_at', { ascending: false }),
+      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem,avaliada_com_nota').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('ordem').order('created_at', { ascending: false }),
     ]);
     setTurmaNome(t?.nome ?? ''); setCursoTitulo(c?.titulo ?? ''); setAtividades(as ?? []);
     const atividadeIds = (as ?? []).map((a: Atividade) => a.id);
@@ -112,7 +112,7 @@ export default function AtividadesLista() {
               {atividades.map((a, i) => {
                 const envio = envios[a.id];
                 const s = statusOf(a, envio);
-                const notaLabel = envio?.corrigido_em ? `${envio.nota}/${a.nota_maxima}` : `–/${a.nota_maxima}`;
+                const notaLabel = a.avaliada_com_nota === false ? 'Sem nota' : envio?.corrigido_em ? `${envio.nota}/${a.nota_maxima}` : `–/${a.nota_maxima}`;
                 const prazoLabel = a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : '–';
                 const pend = pendMap[a.id] ?? 0;
                 return (

@@ -11,7 +11,7 @@ import { FileLink } from '../../components/FileLink';
 type Atividade = {
   id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
   titulo: string; descricao: string | null; anexo_url: string | null; anexo_nome: string | null;
-  nota_maxima: number; prazo: string | null;
+  nota_maxima: number; prazo: string | null; avaliada_com_nota?: boolean;
 };
 type Envio = { id?: string; arquivo_url: string | null; arquivo_nome: string | null; texto: string | null; enviado_em: string | null; nota: number | null; comentario_professor: string | null; corrigido_em: string | null };
 type AlunoRow = { id: string; email: string; nome: string | null; envio: Envio | null };
@@ -113,7 +113,7 @@ export default function AtividadeDetalhe() {
       <PageHeader
         breadcrumbs={[{ label: 'Atividades', to: '/atividades' }, { label: 'Lista', to: `/atividades/${atividade.turma_id}/${atividade.curso_id}` }, { label: atividade.titulo }]}
         title={atividade.titulo}
-        subtitle={`Prazo: ${atividade.prazo ? new Date(atividade.prazo).toLocaleString('pt-BR') : '–'} · Nota máxima: ${atividade.nota_maxima}`}
+        subtitle={`Prazo: ${atividade.prazo ? new Date(atividade.prazo).toLocaleString('pt-BR') : '–'}${atividade.avaliada_com_nota === false ? ' · Sem nota' : ` · Nota máxima: ${atividade.nota_maxima}`}`}
         actions={!isProfessor ? <Badge tone={status.tone} dot>{status.label}</Badge> : undefined}
       />
 
@@ -130,7 +130,11 @@ export default function AtividadeDetalhe() {
         <Card className="p-6">
           {envio?.corrigido_em ? (
             <div className="space-y-4">
-              <div><p className="text-fg-3 text-xs mb-1">Sua nota</p><p className="text-2xl font-display font-semibold text-brand tabular-nums">{envio.nota}/{atividade.nota_maxima}</p></div>
+              {atividade.avaliada_com_nota !== false ? (
+                <div><p className="text-fg-3 text-xs mb-1">Sua nota</p><p className="text-2xl font-display font-semibold text-brand tabular-nums">{envio.nota}/{atividade.nota_maxima}</p></div>
+              ) : (
+                <Badge tone="success" dot>Revisada</Badge>
+              )}
               {envio.comentario_professor && <div><p className="text-fg-3 text-xs mb-1">Comentário do professor</p><p className="text-fg-2 whitespace-pre-line">{envio.comentario_professor}</p></div>}
               {envio.texto && <div><p className="text-fg-3 text-xs mb-1">Sua resposta</p><p className="text-fg-2 whitespace-pre-line">{envio.texto}</p></div>}
               {envio.arquivo_url && <FileLink bucket="atividades" path={envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-brand hover:underline"><Paperclip className="w-4 h-4" /> {envio.arquivo_nome ?? 'Arquivo enviado'}</FileLink>}
@@ -168,7 +172,7 @@ export default function AtividadeDetalhe() {
                         <p className="text-fg text-sm font-medium truncate">{row.nome || row.email.split('@')[0]}</p>
                         <p className="text-fg-3 text-xs truncate">{[row.nome ? row.email : null, row.envio?.enviado_em ? `Enviado em ${new Date(row.envio.enviado_em).toLocaleString('pt-BR')}` : null].filter(Boolean).join(' · ')}</p>
                       </div>
-                      {row.envio?.corrigido_em && <span className="hidden sm:inline text-sm font-medium text-brand flex-shrink-0 tabular-nums">{row.envio.nota}/{atividade.nota_maxima}</span>}
+                      {row.envio?.corrigido_em && atividade.avaliada_com_nota !== false && <span className="hidden sm:inline text-sm font-medium text-brand flex-shrink-0 tabular-nums">{row.envio.nota}/{atividade.nota_maxima}</span>}
                       <Badge tone={respStatus.tone} dot className="flex-shrink-0">{respStatus.label}</Badge>
                       <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0 hidden sm:block" />
                     </li>
@@ -183,7 +187,7 @@ export default function AtividadeDetalhe() {
       {/* Correção */}
       {selectedAluno && (
         <Modal open={!!selectedAluno} onClose={() => setSelectedAluno(null)} title={selectedAluno.nome || selectedAluno.email}
-          footer={<><Button variant="secondary" onClick={() => setSelectedAluno(null)}>Fechar</Button><Button variant="primary" loading={saving === selectedAluno.id} onClick={() => salvarNota(selectedAluno.id)}>Salvar correção</Button></>}>
+          footer={<><Button variant="secondary" onClick={() => setSelectedAluno(null)}>Fechar</Button><Button variant="primary" loading={saving === selectedAluno.id} onClick={() => salvarNota(selectedAluno.id)}>{atividade.avaliada_com_nota === false ? 'Marcar como revisada' : 'Salvar correção'}</Button></>}>
           <div className="space-y-4">
             {selectedAluno.nome && <p className="text-fg-3 text-sm -mt-1">{selectedAluno.email}</p>}
             <p className="text-fg-3 text-sm">{selectedAluno.envio?.enviado_em ? `Enviado em ${new Date(selectedAluno.envio.enviado_em).toLocaleString('pt-BR')}` : 'Ainda não enviado'}</p>
@@ -194,7 +198,9 @@ export default function AtividadeDetalhe() {
               <div><p className="text-fg-3 text-xs mb-1">Arquivo anexado</p><FileLink bucket="atividades" path={selectedAluno.envio.arquivo_url} className="inline-flex items-center gap-2 text-sm text-brand hover:underline"><Paperclip className="w-4 h-4" /> {selectedAluno.envio.arquivo_nome ?? 'Arquivo enviado'}</FileLink></div>
             ) : <p className="text-fg-3 text-sm">Nenhum arquivo anexado.</p>}
             <div className="border-t border-line pt-4 space-y-3">
-              <Field label={`Nota (máx. ${atividade.nota_maxima})`} htmlFor="ad-nota"><Input id="ad-nota" type="number" value={drafts[selectedAluno.id]?.nota ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], nota: e.target.value } }))} max={atividade.nota_maxima} min={0} className="max-w-[140px]" /></Field>
+              {atividade.avaliada_com_nota !== false && (
+                <Field label={`Nota (máx. ${atividade.nota_maxima})`} htmlFor="ad-nota"><Input id="ad-nota" type="number" value={drafts[selectedAluno.id]?.nota ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], nota: e.target.value } }))} max={atividade.nota_maxima} min={0} className="max-w-[140px]" /></Field>
+              )}
               <Field label="Comentário" hint="Opcional" htmlFor="ad-com"><Textarea id="ad-com" rows={4} value={drafts[selectedAluno.id]?.comentario ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], comentario: e.target.value } }))} placeholder="Escreva um comentário para o aluno…" /></Field>
             </div>
           </div>
