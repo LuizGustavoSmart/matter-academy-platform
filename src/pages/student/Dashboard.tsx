@@ -7,8 +7,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import AvatarUpload from '../../components/AvatarUpload';
 import { Card, EmptyState, ProgressBar, Badge, Skeleton, SkeletonText, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
+import { SignedImage } from '../../components/SignedImage';
 
-type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number };
+type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null };
 type Turma = { id: string; nome: string; descricao: string | null };
 type Pendente = { id: string; titulo: string; prazo: string | null; cursoId: string | null; turmaId: string; overdue: boolean };
 type NextAula = { titulo: string; cursoTitulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
@@ -31,13 +32,19 @@ export default function StudentDashboard() {
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
       const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
       // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
+      // ordem ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: ctRows } = turmaIds.length
-        ? await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds)
+        ? await (supabase as any).from('curso_turmas').select('curso_id,ordem').in('turma_id', turmaIds)
         : { data: [] };
       const cursoIds = [...new Set([
         ...(ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string),
-        ...(ctRows ?? []).map((r) => r.curso_id),
+        ...(ctRows ?? []).map((r: { curso_id: string }) => r.curso_id),
       ])];
+      const ordemMap: Record<string, number> = {};
+      (ctRows ?? []).forEach((r: { curso_id: string; ordem: number }) => {
+        if (ordemMap[r.curso_id] === undefined) ordemMap[r.curso_id] = r.ordem ?? 0;
+      });
 
       const { data: ts } = turmaIds.length
         ? await supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
@@ -51,9 +58,11 @@ export default function StudentDashboard() {
       }
 
       if (!isMonitor) {
-        const { data: cs } = cursoIds.length ? await supabase.from('cursos').select('id,titulo,descricao').in('id', cursoIds) : { data: [] };
+        // capa_url ainda não está no schema gerado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: cs } = cursoIds.length ? await (supabase as any).from('cursos').select('id,titulo,descricao,capa_url').in('id', cursoIds) : { data: [] };
         if ((cs ?? []).length > 0) {
-          const ids = (cs ?? []).map((c) => c.id);
+          const ids = (cs ?? []).map((c: { id: string }) => c.id);
           // lessons_public é uma view não tipada no schema gerado
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', ids);
@@ -65,7 +74,9 @@ export default function StudentDashboard() {
             counts[a.curso_id].total++;
             if (doneSet.has(a.id)) counts[a.curso_id].done++;
           });
-          setCourses((cs ?? []).map((c) => ({ ...c, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 })));
+          setCourses((cs ?? [])
+            .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null }) => ({ ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 }))
+            .sort((a: CourseCard, b: CourseCard) => (ordemMap[a.id] ?? 999) - (ordemMap[b.id] ?? 999)));
         }
 
         if (turmaIds.length) {
@@ -303,7 +314,13 @@ export default function StudentDashboard() {
                 <span className="absolute -right-16 -top-16 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(closest-side, rgba(203,251,0,0.10), transparent 70%)' }} />
                 <p className="text-brand text-[11px] font-semibold uppercase tracking-wider mb-3">Continuar estudando</p>
                 <div className="flex items-start gap-4">
-                  <span className="w-12 h-12 rounded-xl bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><PlayCircle className="w-6 h-6 text-brand" /></span>
+                  {featured.capaUrl ? (
+                    <div className="w-12 h-12 rounded-xl bg-panel-2 border border-line grid place-items-center flex-shrink-0 overflow-hidden">
+                      <SignedImage bucket="capas" path={featured.capaUrl} className="w-full h-full object-contain" alt="" />
+                    </div>
+                  ) : (
+                    <span className="w-12 h-12 rounded-xl bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><PlayCircle className="w-6 h-6 text-brand" /></span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <h2 className="mb-1 truncate">{featured.titulo}</h2>
                     <p className="text-fg-3 text-sm line-clamp-2">{featured.descricao || 'Retome sua próxima aula.'}</p>
@@ -336,16 +353,23 @@ export default function StudentDashboard() {
               ) : (
                 <motion.div className="grid sm:grid-cols-2 gap-4" variants={staggerContainer} initial="hidden" animate="visible">
                   {courses.map((c) => {
-                    const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
+                    const total = Math.max(AULAS_POR_FAIXA, c.total);
+                    const pct = total ? Math.round((c.done / total) * 100) : 0;
                     return (
                       <motion.div key={c.id} variants={staggerItem}>
                         <Link to={`/curso/${c.id}`} className="group">
                           <Card hoverable className="p-5 h-full flex flex-col hover:border-brand/40 transition-colors">
-                            <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                            {c.capaUrl ? (
+                              <div className="w-full h-24 rounded-lg bg-panel-2 border border-line mb-3 overflow-hidden grid place-items-center">
+                                <SignedImage bucket="capas" path={c.capaUrl} className="w-full h-full object-contain" alt="" />
+                              </div>
+                            ) : (
+                              <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                            )}
                             <h3 className="mb-1.5 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
                             <p className="text-fg-3 text-sm mb-4 line-clamp-2 flex-1">{c.descricao || 'Sem descrição'}</p>
                             <div className="space-y-2">
-                              <div className="flex justify-between text-xs"><span className="text-fg-2">{c.done}/{c.total} aulas</span><span className="text-brand font-medium">{pct}%</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-fg-2">{c.done}/{total} aulas</span><span className="text-brand font-medium">{pct}%</span></div>
                               <ProgressBar value={pct} />
                             </div>
                           </Card>
