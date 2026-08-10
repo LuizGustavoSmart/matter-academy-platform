@@ -407,14 +407,17 @@ export type Database = {
       curso_turmas: {
         Row: {
           curso_id: string
+          ordem: number
           turma_id: string
         }
         Insert: {
           curso_id: string
+          ordem?: number
           turma_id: string
         }
         Update: {
           curso_id?: string
+          ordem?: number
           turma_id?: string
         }
         Relationships: [
@@ -436,6 +439,7 @@ export type Database = {
       }
       cursos: {
         Row: {
+          capa_url: string | null
           created_at: string | null
           descricao: string | null
           id: string
@@ -443,6 +447,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
           id?: string
@@ -450,6 +455,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
           id?: string
@@ -666,6 +672,8 @@ export type Database = {
       }
       turmas: {
         Row: {
+          capa_url: string | null
+          codigo: string | null
           created_at: string | null
           data_inicio: string | null
           descricao: string | null
@@ -675,6 +683,8 @@ export type Database = {
           valor: number | null
         }
         Insert: {
+          capa_url?: string | null
+          codigo?: string | null
           created_at?: string | null
           data_inicio?: string | null
           descricao?: string | null
@@ -684,6 +694,8 @@ export type Database = {
           valor?: number | null
         }
         Update: {
+          capa_url?: string | null
+          codigo?: string | null
           created_at?: string | null
           data_inicio?: string | null
           descricao?: string | null
