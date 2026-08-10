@@ -13,9 +13,12 @@ import {
 import { PageHeader } from '../../layouts/AppShell';
 import { statusLabel } from '../../lib/users';
 import { TipoCobranca, TIPO_COBRANCA_LABEL, describeCobranca } from '../../lib/financeiro';
+import { uploadCapa } from '../../lib/storage';
+import { SignedImage } from '../../components/SignedImage';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 
-type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
-type Curso = { id: string; titulo: string; descricao: string | null };
+type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
+type Curso = { id: string; titulo: string; descricao: string | null; capa_url: string | null };
 type Tab = 'dashboard' | 'cursos' | 'participantes';
 type ParticipanteRole = 'student' | 'professor' | 'monitor' | 'admin';
 type Participante = { id: string; email: string; nome: string | null; role: ParticipanteRole; status: string; cursoTitulo: string | null };
@@ -58,7 +61,9 @@ export default function TurmaDetalhe() {
 
   const loadDashboard = async () => {
     setDashLoading(true);
-    const { data: t } = await supabase.from('turmas').select('*').eq('id', turmaId!).maybeSingle();
+    // codigo/capa_url ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: t } = await (supabase as any).from('turmas').select('*').eq('id', turmaId!).maybeSingle();
     setTurma(t as Turma | null);
     const { data: utData } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!);
     const userIds = (utData ?? []).map((r) => r.user_id);
@@ -84,19 +89,40 @@ export default function TurmaDetalhe() {
 
   const loadCursos = async () => {
     setCursosLoading(true);
-    const { data: cts } = await supabase.from('curso_turmas').select('curso_id').eq('turma_id', turmaId!);
-    const cursoIds = (cts ?? []).map((r) => r.curso_id);
+    // ordem ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: cts } = await (supabase as any).from('curso_turmas').select('curso_id,ordem').eq('turma_id', turmaId!);
+    const cursoIds = ((cts ?? []) as { curso_id: string; ordem: number }[]).map((r) => r.curso_id);
+    const ordens: Record<string, number> = {};
+    (cts ?? []).forEach((r: { curso_id: string; ordem: number }) => { ordens[r.curso_id] = r.ordem ?? 0; });
     if (cursoIds.length > 0) {
+      // capa_url ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const [{ data: cs }, { data: as }] = await Promise.all([
-        supabase.from('cursos').select('*').in('id', cursoIds).order('created_at', { ascending: false }),
+        (supabase as any).from('cursos').select('*').in('id', cursoIds),
         supabase.from('aulas').select('curso_id').in('curso_id', cursoIds),
       ]);
-      setCursos(cs ?? []);
+      setCursos(((cs ?? []) as Curso[]).sort((a, b) => (ordens[a.id] ?? 0) - (ordens[b.id] ?? 0)));
       const counts: Record<string, number> = {};
       (as ?? []).forEach((a) => { counts[a.curso_id] = (counts[a.curso_id] ?? 0) + 1; });
       setAulaCounts(counts);
     } else { setCursos([]); setAulaCounts({}); }
     setCursosLoading(false);
+  };
+
+  const moveCurso = async (c: Curso, dir: -1 | 1) => {
+    const idx = cursos.findIndex((x) => x.id === c.id);
+    const other = cursos[idx + dir];
+    if (!other) return;
+    // Grava a ordem com base na posição visual atual (não no valor salvo),
+    // assim funciona mesmo que todos ainda estejam com ordem padrão (0).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    await Promise.all([
+      sb.from('curso_turmas').update({ ordem: idx + dir }).eq('turma_id', turmaId!).eq('curso_id', c.id),
+      sb.from('curso_turmas').update({ ordem: idx }).eq('turma_id', turmaId!).eq('curso_id', other.id),
+    ]);
+    loadCursos();
   };
 
   const loadParticipantes = async () => {
@@ -212,16 +238,22 @@ export default function TurmaDetalhe() {
           {cursosLoading ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
             cursos.length === 0 ? <EmptyState icon={<BookOpen className="w-8 h-8" />} title="Nenhum curso nesta turma" description="Crie o primeiro curso para esta turma." action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateCursoOpen(true)}>Novo curso</Button>} /> : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {cursos.map((c) => (
+                {cursos.map((c, i) => (
                   <Card key={c.id} className="p-5 cursor-pointer hover:border-line-strong transition-colors relative" onClick={() => nav(`/admin/turmas/${turmaId}/cursos/${c.id}`)}>
-                    <div className="absolute top-3.5 right-3.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="absolute top-3.5 right-3.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <IconButton label="Mover para cima" onClick={() => moveCurso(c, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
+                      <IconButton label="Mover para baixo" onClick={() => moveCurso(c, 1)} disabled={i === cursos.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
                       <DropdownMenu
                         items={[{ label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditCurso(c) }, { type: 'separator' }, { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger', onClick: () => delCurso(c) }]}
                         trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações do curso" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
                       />
                     </div>
-                    <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
-                    <h3 className="mb-1 pr-10 line-clamp-1">{c.titulo}</h3>
+                    {c.capa_url ? (
+                      <SignedImage bucket="capas" path={c.capa_url} className="w-full h-24 rounded-lg object-cover mb-3 border border-line" alt="" />
+                    ) : (
+                      <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                    )}
+                    <h3 className="mb-1 pr-24 line-clamp-1">{c.titulo}</h3>
                     <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>
                     <div className="flex items-center gap-1.5 text-sm text-fg-2"><PlayCircle className="w-4 h-4 text-fg-3" /> {aulaCounts[c.id] ?? 0} aulas</div>
                   </Card>
@@ -299,15 +331,18 @@ function InfoCard({ icon, label, value, sub, placeholder, placeholderText = 'Em 
 function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [nome, setNome] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
+  const [capaFile, setCapaFile] = useState<File | null>(null);
   const [tipoCobranca, setTipoCobranca] = useState<'' | TipoCobranca>('');
   const [valor, setValor] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setNome(turma?.nome ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? '');
+    setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? '');
+    setCapaFile(null);
     setTipoCobranca(turma?.tipo_cobranca ?? ''); setValor(turma?.valor != null ? String(turma.valor) : ''); setErr(null);
   }, [turma, open]);
 
@@ -318,9 +353,16 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
     if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
     if (tipoCobranca && (valor === '' || isNaN(parseFloat(valor)))) { setErr('Informe um valor válido para a cobrança.'); return; }
     setLoading(true);
-    const { error } = await supabase.from('turmas').update({
-      nome: nome.trim(), descricao: descricao.trim(), data_inicio: dataInicio || null,
-      tipo_cobranca: tipoCobranca || null, valor: tipoCobranca ? parseFloat(valor) : null,
+    let capa_url = turma?.capa_url ?? null;
+    if (capaFile) {
+      try { const up = await uploadCapa(capaFile, 'turmas'); capa_url = up.path; }
+      catch (e) { setLoading(false); setErr((e as Error).message); return; }
+    }
+    // codigo/capa_url ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('turmas').update({
+      nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), data_inicio: dataInicio || null,
+      capa_url, tipo_cobranca: tipoCobranca || null, valor: tipoCobranca ? parseFloat(valor) : null,
     }).eq('id', turma!.id);
     setLoading(false);
     if (error) setErr(error.message); else { toast.success('Turma atualizada.'); onDone(); }
@@ -331,9 +373,22 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
       footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Salvar</Button></>}>
       <div className="space-y-4">
         {err && <Alert tone="danger">{err}</Alert>}
-        <Field label="Nome" required htmlFor="td-nome"><Input id="td-nome" value={nome} onChange={(e) => setNome(e.target.value)} data-autofocus /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Nome" required htmlFor="td-nome"><Input id="td-nome" value={nome} onChange={(e) => setNome(e.target.value)} data-autofocus /></Field>
+          <Field label="Código" hint="Ex.: T002" htmlFor="td-codigo"><Input id="td-codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="T002" /></Field>
+        </div>
         <Field label="Descrição" htmlFor="td-desc"><Textarea id="td-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
         <Field label="Data de início" htmlFor="td-data"><Input id="td-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
+        <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="td-capa">
+          <div className="flex items-center gap-3">
+            {(capaFile || turma?.capa_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={turma!.capa_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="td-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
         <div className="border-t border-line pt-4">
           <Field label="Tipo de cobrança" htmlFor="td-tipo">
             <Select id="td-tipo" value={tipoCobranca} onChange={(e) => setTipoCobranca(e.target.value as '' | TipoCobranca)}>
@@ -354,21 +409,30 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; 
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [capaFile, setCapaFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setErr(null); }, [curso, open]);
+  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setCapaFile(null); setErr(null); }, [curso, open]);
 
   const submit = async () => {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim() };
+    let capa_url = curso?.capa_url ?? null;
+    if (capaFile) {
+      try { const up = await uploadCapa(capaFile, 'cursos'); capa_url = up.path; }
+      catch (e) { setLoading(false); setErr((e as Error).message); return; }
+    }
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), capa_url };
+    // capa_url ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
     if (curso) {
-      const { error } = await supabase.from('cursos').update(payload).eq('id', curso.id);
+      const { error } = await sb.from('cursos').update(payload).eq('id', curso.id);
       if (error) { setErr(error.message); setLoading(false); return; }
     } else {
-      const { data, error } = await supabase.from('cursos').insert(payload).select('id').maybeSingle();
+      const { data, error } = await sb.from('cursos').insert(payload).select('id').maybeSingle();
       if (error || !data) { setErr(error?.message ?? 'Erro ao criar curso'); setLoading(false); return; }
       await supabase.from('curso_turmas').insert({ curso_id: data.id, turma_id: turmaId });
     }
@@ -384,6 +448,16 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; 
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="tdc-tit"><Input id="tdc-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="tdc-desc"><Textarea id="tdc-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="tdc-capa">
+          <div className="flex items-center gap-3">
+            {(capaFile || curso?.capa_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="tdc-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
       </div>
     </Modal>
   );

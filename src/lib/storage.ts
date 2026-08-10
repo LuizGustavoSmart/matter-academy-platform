@@ -24,6 +24,10 @@ export async function uploadAulaCapa(file: File, folder: string) {
   return uploadToBucket('aulas', file, folder);
 }
 
+export async function uploadCapa(file: File, folder: string) {
+  return uploadToBucket('capas', file, folder);
+}
+
 export async function getSignedUrl(bucket: string, path: string, expiresIn = 3600) {
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
   if (error) throw error;

@@ -9,8 +9,10 @@ import {
 } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { PageHeader } from '../../layouts/AppShell';
+import { uploadCapa } from '../../lib/storage';
+import { SignedImage } from '../../components/SignedImage';
 
-type Turma = { id: string; nome: string; descricao: string | null; data_inicio: string | null; created_at: string | null };
+type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null };
 
 export default function AdminTurmas() {
   const nav = useNavigate();
@@ -24,14 +26,17 @@ export default function AdminTurmas() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('turmas').select('*').order('created_at', { ascending: false });
-    setTurmas(data ?? []);
+    // codigo/capa_url ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any).from('turmas').select('*').order('created_at', { ascending: false });
+    const rows = (data ?? []) as Turma[];
+    setTurmas(rows);
     const [{ data: uts }, { data: cts }] = await Promise.all([
       supabase.from('user_turmas').select('turma_id'),
       supabase.from('curso_turmas').select('turma_id'),
     ]);
     const c: Record<string, { alunos: number; cursos: number }> = {};
-    (data ?? []).forEach((t) => (c[t.id] = { alunos: 0, cursos: 0 }));
+    rows.forEach((t) => (c[t.id] = { alunos: 0, cursos: 0 }));
     (uts ?? []).forEach((r) => { if (c[r.turma_id]) c[r.turma_id].alunos++; });
     (cts ?? []).forEach((r) => { if (c[r.turma_id]) c[r.turma_id].cursos++; });
     setCounts(c);
@@ -71,9 +76,13 @@ export default function AdminTurmas() {
                     trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da turma" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
                   />
                 </div>
-                <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><Layers className="w-5 h-5 text-brand" /></span>
+                {t.capa_url ? (
+                  <SignedImage bucket="capas" path={t.capa_url} className="w-full h-24 rounded-lg object-cover mb-3 border border-line" alt="" />
+                ) : (
+                  <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><Layers className="w-5 h-5 text-brand" /></span>
+                )}
                 <h3 className="mb-1 pr-10 line-clamp-1">{t.nome}</h3>
-                <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{t.descricao || 'Sem descrição'}</p>
+                <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{t.codigo || 'Sem código'}</p>
                 <div className="flex items-center gap-4 text-sm text-fg-2">
                   <span className="flex items-center gap-1.5"><UsersIcon className="w-4 h-4 text-fg-3" /> {counts[t.id]?.alunos ?? 0} alunos</span>
                   <span className="flex items-center gap-1.5"><BookOpen className="w-4 h-4 text-fg-3" /> {counts[t.id]?.cursos ?? 0} cursos</span>
@@ -93,21 +102,32 @@ export default function AdminTurmas() {
 function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Turma | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [nome, setNome] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
+  const [capaFile, setCapaFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setNome(turma?.nome ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? ''); setErr(null);
+    setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? '');
+    setDataInicio(turma?.data_inicio ?? ''); setCapaFile(null); setErr(null);
   }, [turma, open]);
 
   const submit = async () => {
     setErr(null);
     if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
     setLoading(true);
-    const payload = { nome: nome.trim(), descricao: descricao.trim(), data_inicio: dataInicio || null };
-    const { error } = turma ? await supabase.from('turmas').update(payload).eq('id', turma.id) : await supabase.from('turmas').insert(payload);
+    let capa_url = turma?.capa_url ?? null;
+    if (capaFile) {
+      try { const up = await uploadCapa(capaFile, 'turmas'); capa_url = up.path; }
+      catch (e) { setLoading(false); setErr((e as Error).message); return; }
+    }
+    const payload = { nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), data_inicio: dataInicio || null, capa_url };
+    // codigo/capa_url ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = turma ? await sb.from('turmas').update(payload).eq('id', turma.id) : await sb.from('turmas').insert(payload);
     setLoading(false);
     if (error) setErr(error.message); else { toast.success(turma ? 'Turma atualizada.' : 'Turma criada.'); onDone(); }
   };
@@ -117,9 +137,22 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
       footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Salvar</Button></>}>
       <div className="space-y-4">
         {err && <Alert tone="danger">{err}</Alert>}
-        <Field label="Nome" required htmlFor="turma-nome"><Input id="turma-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Turma 2026.1" data-autofocus /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Nome" required htmlFor="turma-nome"><Input id="turma-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Turma 2026.1" data-autofocus /></Field>
+          <Field label="Código" hint="Ex.: T002" htmlFor="turma-codigo"><Input id="turma-codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="T002" /></Field>
+        </div>
         <Field label="Descrição" htmlFor="turma-desc"><Textarea id="turma-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Objetivo ou observações da turma" /></Field>
         <Field label="Data de início" htmlFor="turma-data"><Input id="turma-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
+        <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="turma-capa">
+          <div className="flex items-center gap-3">
+            {(capaFile || turma?.capa_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={turma!.capa_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="turma-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
       </div>
     </Modal>
   );
