@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, ClipboardList, Pencil, Trash2, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, Plus, ClipboardList, Pencil, Trash2, MoreHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, IconButton, Card, Badge, EmptyState, Skeleton, Switch, DropdownMenu, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import CriarAtividadeModal, { type AtividadeEditavel } from './CriarAtividadeModal';
 
-type Atividade = AtividadeEditavel & { publicada: boolean };
+type Atividade = AtividadeEditavel & { publicada: boolean; ordem: number };
 type Envio = { atividade_id: string; enviado_em: string | null; nota: number | null; corrigido_em: string | null };
 
 function statusOf(a: Atividade, envio: Envio | undefined): { label: string; tone: 'default' | 'success' | 'info' | 'warn' | 'danger' } {
@@ -39,9 +39,9 @@ export default function AtividadesLista() {
     const [{ data: t }, { data: c }, { data: as }] = await Promise.all([
       supabase.from('turmas').select('nome').eq('id', turmaId!).maybeSingle(),
       supabase.from('cursos').select('titulo').eq('id', cursoId!).maybeSingle(),
-      // publicada ainda não está no schema gerado
+      // publicada/ordem ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('created_at', { ascending: false }),
+      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('ordem').order('created_at', { ascending: false }),
     ]);
     setTurmaNome(t?.nome ?? ''); setCursoTitulo(c?.titulo ?? ''); setAtividades(as ?? []);
     const atividadeIds = (as ?? []).map((a: Atividade) => a.id);
@@ -71,6 +71,21 @@ export default function AtividadesLista() {
     else toast.success(a.publicada ? 'Atividade ocultada dos alunos.' : 'Atividade liberada para os alunos.');
   };
 
+  const moveAtividade = async (a: Atividade, dir: -1 | 1) => {
+    const idx = atividades.findIndex((x) => x.id === a.id);
+    const other = atividades[idx + dir];
+    if (!other) return;
+    // Grava a ordem com base na posição visual atual (não no valor salvo),
+    // assim funciona mesmo que todas ainda estejam com ordem padrão (0).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    await Promise.all([
+      sb.from('atividades').update({ ordem: idx + dir }).eq('id', a.id),
+      sb.from('atividades').update({ ordem: idx }).eq('id', other.id),
+    ]);
+    load();
+  };
+
   const delAtividade = async (a: Atividade) => {
     const ok = await confirm({ title: 'Excluir atividade', tone: 'danger', confirmLabel: 'Excluir', message: <>Excluir <strong className="text-fg">{a.titulo}</strong>? Os envios dos alunos também serão removidos.</> });
     if (!ok) return;
@@ -94,7 +109,7 @@ export default function AtividadesLista() {
         ) : (
           <Card className="overflow-hidden">
             <ul>
-              {atividades.map((a) => {
+              {atividades.map((a, i) => {
                 const envio = envios[a.id];
                 const s = statusOf(a, envio);
                 const notaLabel = envio?.corrigido_em ? `${envio.nota}/${a.nota_maxima}` : `–/${a.nota_maxima}`;
@@ -110,7 +125,9 @@ export default function AtividadesLista() {
                     {!isProfessor && <span className="hidden sm:inline text-sm text-brand font-medium w-16 text-right tabular-nums">{notaLabel}</span>}
                     {isProfessor && pend > 0 && <Badge tone="warn" className="flex-shrink-0">{pend} pend.</Badge>}
                     {isProfessor ? (
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <IconButton label="Mover para cima" onClick={() => moveAtividade(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
+                        <IconButton label="Mover para baixo" onClick={() => moveAtividade(a, 1)} disabled={i === atividades.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
                         <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap hidden sm:inline">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
                         <DropdownMenu
                           items={[
