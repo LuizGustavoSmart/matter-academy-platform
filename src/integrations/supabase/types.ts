@@ -82,6 +82,7 @@ export type Database = {
           descricao: string | null
           id: string
           nota_maxima: number
+          ordem: number
           prazo: string | null
           professor_id: string | null
           publicada: boolean
@@ -98,6 +99,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nota_maxima?: number
+          ordem?: number
           prazo?: string | null
           professor_id?: string | null
           publicada?: boolean
@@ -114,6 +116,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nota_maxima?: number
+          ordem?: number
           prazo?: string | null
           professor_id?: string | null
           publicada?: boolean
