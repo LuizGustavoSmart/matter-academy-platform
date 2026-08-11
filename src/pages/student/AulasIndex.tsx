@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { BookOpen } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, ProgressBar, Skeleton } from '../../components/ui';
+import { Card, EmptyState, Skeleton } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
 
@@ -84,19 +84,22 @@ export default function AulasIndex() {
             return (
               <motion.div key={c.id} variants={staggerItem}>
                 <Link to={`/curso/${c.id}`} className="group">
-                  <Card hoverable className="p-5 h-full flex flex-col hover:border-brand/40 transition-colors">
+                  <Card hoverable className="p-0 h-48 relative overflow-hidden hover:border-brand/40 transition-colors">
                     {c.capaUrl ? (
-                      <div className="w-full h-24 rounded-lg bg-panel-2 border border-line mb-3 overflow-hidden grid place-items-center">
-                        <SignedImage bucket="capas" path={c.capaUrl} className="w-full h-full object-contain" alt="" />
-                      </div>
+                      <>
+                        <SignedImage bucket="capas" path={c.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" />
+                      </>
                     ) : (
-                      <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center mb-3"><BookOpen className="w-5 h-5 text-brand" /></span>
+                      <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
                     )}
-                    <h3 className="mb-1.5 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
-                    <p className="text-fg-3 text-sm mb-4 line-clamp-2 flex-1">{c.descricao || 'Sem descrição'}</p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs"><span className="text-fg-2">{c.done}/{total} aulas</span><span className="text-brand font-medium">{pct}%</span></div>
-                      <ProgressBar value={pct} />
+                    <div className="absolute inset-x-0 bottom-0 p-4 pb-5">
+                      <h3 className="mb-1 text-white group-hover:text-white transition-colors line-clamp-1">{c.titulo}</h3>
+                      <p className="text-white/70 text-sm mb-2 line-clamp-1">{c.descricao || 'Sem descrição'}</p>
+                      <div className="flex justify-between text-xs"><span className="text-white/85">{c.done}/{total} aulas</span><span className="text-white font-medium">{pct}%</span></div>
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
+                      <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                   </Card>
                 </Link>
