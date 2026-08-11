@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, Calendar, Clock, GraduationCap, MoreHorizontal } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, Calendar, Clock, GraduationCap, MoreHorizontal, ClipboardCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
@@ -11,13 +11,14 @@ import { getYouTubeId } from '../../lib/youtube';
 import { uploadAulaCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from './CursoAtividadesTab';
+import CursoPresencaTab, { PresencaAulaModal } from './CursoPresencaTab';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
 type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
-type Tab = 'dashboard' | 'aulas' | 'atividades' | 'alunos';
+type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca' | 'alunos';
 type Professor = { id: string; nome: string | null; email: string };
 type CursoTurmaInfo = {
   data_inicio: string | null; data_fim: string | null; professor_id: string | null;
@@ -62,6 +63,7 @@ export default function CursoDetalhe() {
   const [aulasLoading, setAulasLoading] = useState(false);
   const [createAulaOpen, setCreateAulaOpen] = useState(false);
   const [editAula, setEditAula] = useState<Aula | null>(null);
+  const [presencaAula, setPresencaAula] = useState<Aula | null>(null);
 
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [alunosLoading, setAlunosLoading] = useState(false);
@@ -184,7 +186,7 @@ export default function CursoDetalhe() {
       />
 
       <Tabs className="mb-6" value={tab} onChange={setTab}
-        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'atividades', label: 'Atividades' }, { value: 'alunos', label: 'Alunos' }]} />
+        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'atividades', label: 'Atividades' }, { value: 'presenca', label: 'Presença' }, { value: 'alunos', label: 'Alunos' }]} />
 
       {/* DASHBOARD */}
       {tab === 'dashboard' && (dashLoading ? (
@@ -241,11 +243,13 @@ export default function CursoDetalhe() {
                         </div>
                         <div className="flex items-center gap-3">
                           <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
+                          <IconButton label="Lançar presença" onClick={() => setPresencaAula(a)}><ClipboardCheck className="w-4 h-4" /></IconButton>
                           <IconButton label="Mover para cima" onClick={() => moveAula(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
                           <IconButton label="Mover para baixo" onClick={() => moveAula(a, 1)} disabled={i === aulas.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
                           <DropdownMenu
                             items={[
                               ...(a.youtube_url ? [{ label: 'Abrir no YouTube', icon: <ExternalLink className="w-4 h-4" />, onClick: () => window.open(a.youtube_url, '_blank', 'noopener') }] : []),
+                              { label: 'Lançar presença', icon: <ClipboardCheck className="w-4 h-4" />, onClick: () => setPresencaAula(a) },
                               { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditAula(a) },
                               { type: 'separator' as const },
                               { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger' as const, onClick: () => delAula(a) },
@@ -264,6 +268,9 @@ export default function CursoDetalhe() {
 
       {/* ATIVIDADES */}
       {tab === 'atividades' && <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} />}
+
+      {/* PRESENÇA */}
+      {tab === 'presenca' && <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} />}
 
       {/* ALUNOS */}
       {tab === 'alunos' && (
@@ -295,6 +302,9 @@ export default function CursoDetalhe() {
       <CursoEditModal open={editCursoOpen} curso={curso} turmaId={turmaId!} info={cursoTurmaInfo} professores={professores} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
       <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
       <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+      {presencaAula && (
+        <PresencaAulaModal turmaId={turmaId!} cursoId={cursoId!} aula={presencaAula} onClose={() => setPresencaAula(null)} />
+      )}
     </div>
   );
 }

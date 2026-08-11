@@ -30,6 +30,7 @@ import DuvidasIndex from './pages/student/DuvidasIndex';
 import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
 import MinhasTurmas from './pages/student/MinhasTurmas';
 import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
+import PresencaCurso from './pages/student/PresencaCurso';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -110,6 +111,7 @@ export default function App() {
                     <Route path="/atividades" element={<AtividadesIndex />} />
                     <Route path="/atividades/:turmaId/:cursoId" element={<AtividadesLista />} />
                     <Route path="/atividade/:atividadeId" element={<AtividadeDetalhe />} />
+                    <Route path="/presenca/:turmaId/:cursoId" element={<PresencaCurso />} />
                     <Route path="/duvidas" element={<DuvidasIndex />} />
                     <Route path="/duvidas/:duvidaId" element={<DuvidaDetalhe />} />
                     <Route path="/turmas" element={<MinhasTurmas />} />
