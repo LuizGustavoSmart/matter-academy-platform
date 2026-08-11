@@ -473,6 +473,7 @@ export type Database = {
           capa_url: string | null
           created_at: string | null
           descricao: string | null
+          faixa: string | null
           id: string
           link_ao_vivo: string | null
           titulo: string
@@ -481,6 +482,7 @@ export type Database = {
           capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
+          faixa?: string | null
           id?: string
           link_ao_vivo?: string | null
           titulo: string
@@ -489,6 +491,7 @@ export type Database = {
           capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
+          faixa?: string | null
           id?: string
           link_ao_vivo?: string | null
           titulo?: string
