@@ -500,7 +500,7 @@ export type Database = {
           aluno_id: string
           anexo_nome: string | null
           anexo_url: string | null
-          aula_id: string
+          aula_id: string | null
           created_at: string
           curso_id: string
           descricao: string | null
@@ -516,7 +516,7 @@ export type Database = {
           aluno_id: string
           anexo_nome?: string | null
           anexo_url?: string | null
-          aula_id: string
+          aula_id?: string | null
           created_at?: string
           curso_id: string
           descricao?: string | null
@@ -532,7 +532,7 @@ export type Database = {
           aluno_id?: string
           anexo_nome?: string | null
           anexo_url?: string | null
-          aula_id?: string
+          aula_id?: string | null
           created_at?: string
           curso_id?: string
           descricao?: string | null
