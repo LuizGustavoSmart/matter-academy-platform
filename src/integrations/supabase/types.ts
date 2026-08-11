@@ -589,6 +589,81 @@ export type Database = {
           },
         ]
       }
+      presencas: {
+        Row: {
+          atualizado_em: string
+          aula_id: string
+          criado_em: string
+          editado_por: string | null
+          id: string
+          origem: string
+          percentual_assistido: number | null
+          presente: boolean
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          aula_id: string
+          criado_em?: string
+          editado_por?: string | null
+          id?: string
+          origem: string
+          percentual_assistido?: number | null
+          presente?: boolean
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          aula_id?: string
+          criado_em?: string
+          editado_por?: string | null
+          id?: string
+          origem?: string
+          percentual_assistido?: number | null
+          presente?: boolean
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presencas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "lessons_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_editado_por_fkey"
+            columns: ["editado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           activated_at: string | null
@@ -660,6 +735,8 @@ export type Database = {
           aula_id: string
           concluido: boolean | null
           id: string
+          percentual_assistido: number
+          segundos_assistidos: number
           updated_at: string | null
           user_id: string
         }
@@ -667,6 +744,8 @@ export type Database = {
           aula_id: string
           concluido?: boolean | null
           id?: string
+          percentual_assistido?: number
+          segundos_assistidos?: number
           updated_at?: string | null
           user_id: string
         }
@@ -674,6 +753,8 @@ export type Database = {
           aula_id?: string
           concluido?: boolean | null
           id?: string
+          percentual_assistido?: number
+          segundos_assistidos?: number
           updated_at?: string | null
           user_id?: string
         }
@@ -852,6 +933,11 @@ export type Database = {
       }
     }
     Functions: {
+      aula_curso_id: { Args: { a_id: string }; Returns: string }
+      can_manage_presenca: {
+        Args: { a_id: string; t_id: string }
+        Returns: boolean
+      }
       has_access_to_turma_curso: {
         Args: { c_id: string; t_id: string }
         Returns: boolean
