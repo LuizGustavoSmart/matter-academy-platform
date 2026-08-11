@@ -2,40 +2,63 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadDuvidaFile } from '../../lib/storage';
-import { Button, Modal, Field, Input, Textarea, Alert } from '../../components/ui';
+import { Button, Modal, Field, Input, Textarea, Select, Alert } from '../../components/ui';
+
+type Curso = { id: string; titulo: string };
 
 export default function DuvidaModal({
-  open, aulaId, cursoId, onClose, onDone,
+  open, aulaId = null, cursoId: cursoIdProp, onClose, onDone,
 }: {
-  open: boolean; aulaId: string; cursoId: string; onClose: () => void; onDone: () => void;
+  open: boolean; aulaId?: string | null; cursoId?: string; onClose: () => void; onDone: () => void;
 }) {
   const { profile } = useAuth();
+  const needsCursoPicker = !cursoIdProp;
+  const [cursoId, setCursoId] = useState(cursoIdProp ?? '');
+  const [cursos, setCursos] = useState<Curso[]>([]);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { if (open) { setTitulo(''); setDescricao(''); setFile(null); setErr(null); } }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    setTitulo(''); setDescricao(''); setFile(null); setErr(null);
+    setCursoId(cursoIdProp ?? '');
+    if (needsCursoPicker && profile) {
+      (async () => {
+        const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
+        const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
+        const { data: cts } = turmaIds.length ? await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds) : { data: [] };
+        const cursoIds = [...new Set([
+          ...(ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string),
+          ...(cts ?? []).map((r) => r.curso_id),
+        ])];
+        const { data: cs } = cursoIds.length ? await supabase.from('cursos').select('id,titulo').in('id', cursoIds).order('titulo') : { data: [] };
+        setCursos(cs ?? []);
+      })();
+    }
+  }, [open, cursoIdProp, needsCursoPicker, profile]);
 
-  const resolveTurmaId = async (): Promise<string | null> => {
+  const resolveTurmaId = async (forCursoId: string): Promise<string | null> => {
     if (!profile) return null;
-    const { data: own } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('curso_id', cursoId).limit(1).maybeSingle();
+    const { data: own } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('curso_id', forCursoId).limit(1).maybeSingle();
     if (own?.turma_id) return own.turma_id;
     const { data: minhasTurmas } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id);
     const turmaIds = [...new Set((minhasTurmas ?? []).map((r) => r.turma_id))];
     if (!turmaIds.length) return null;
-    const { data: cts } = await supabase.from('curso_turmas').select('turma_id').eq('curso_id', cursoId).in('turma_id', turmaIds);
+    const { data: cts } = await supabase.from('curso_turmas').select('turma_id').eq('curso_id', forCursoId).in('turma_id', turmaIds);
     return cts?.[0]?.turma_id ?? null;
   };
 
   const submit = async () => {
     setErr(null);
+    if (needsCursoPicker && !cursoId) { setErr('Selecione o curso relacionado à sua dúvida.'); return; }
     if (!titulo.trim()) { setErr('Informe um título para a dúvida.'); return; }
     if (!profile) return;
     setLoading(true);
     try {
-      const turmaId = await resolveTurmaId();
+      const turmaId = await resolveTurmaId(cursoId);
       if (!turmaId) { setErr('Não foi possível identificar sua turma para este curso.'); setLoading(false); return; }
       let anexo_url: string | null = null;
       let anexo_nome: string | null = null;
@@ -43,7 +66,9 @@ export default function DuvidaModal({
         const up = await uploadDuvidaFile(file, `${turmaId}/${cursoId}/${profile.id}`);
         anexo_url = up.path; anexo_nome = up.nome;
       }
-      const { error } = await supabase.from('duvidas').insert({
+      // aula_id agora é opcional (dúvida pode ser aberta sem vínculo a uma aula específica)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('duvidas').insert({
         aula_id: aulaId, curso_id: cursoId, turma_id: turmaId, aluno_id: profile.id,
         titulo: titulo.trim(), descricao: descricao.trim(), anexo_url, anexo_nome,
       });
@@ -59,6 +84,14 @@ export default function DuvidaModal({
       footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="primary" loading={loading} onClick={submit}>Enviar dúvida</Button></>}>
       <div className="space-y-4">
         {err && <Alert tone="danger">{err}</Alert>}
+        {needsCursoPicker && (
+          <Field label="Curso" required htmlFor="dv-curso">
+            <Select id="dv-curso" value={cursoId} onChange={(e) => setCursoId(e.target.value)}>
+              <option value="">Selecione o curso</option>
+              {cursos.map((c) => <option key={c.id} value={c.id}>{c.titulo}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Título" required htmlFor="dv-tit"><Input id="dv-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Resumo da sua dúvida" data-autofocus /></Field>
         <Field label="Descrição" htmlFor="dv-desc"><Textarea id="dv-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} placeholder="Explique com mais detalhes…" /></Field>
         <Field label="Anexo" hint="Opcional — PDF, print, etc." htmlFor="dv-file"><Input id="dv-file" type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="!py-2" /></Field>

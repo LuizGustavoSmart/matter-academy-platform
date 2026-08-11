@@ -51,15 +51,23 @@ export default function AtividadesIndex() {
         if (!pairs.length) { setBlocks([]); setLoading(false); return; }
         const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
         const cursoIds = [...new Set(pairs.map((p) => p.curso_id))];
-        const [{ data: turmas }, { data: cursos }] = await Promise.all([
+        // ordem ainda não está no schema gerado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const [{ data: turmas }, { data: cursos }, { data: cts }] = await Promise.all([
           supabase.from('turmas').select('id,nome').in('id', turmaIds),
           supabase.from('cursos').select('id,titulo').in('id', cursoIds),
+          (supabase as any).from('curso_turmas').select('curso_id,ordem').in('turma_id', turmaIds),
         ]);
         const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
         const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c]));
+        const ordemMap: Record<string, number> = {};
+        (cts ?? []).forEach((r: { curso_id: string; ordem: number }) => {
+          if (ordemMap[r.curso_id] === undefined) ordemMap[r.curso_id] = r.ordem ?? 0;
+        });
         const list: Block[] = pairs
           .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-          .map((p) => ({ turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id, cursoTitulo: cursoMap.get(p.curso_id)!.titulo, pendencias: 0 }));
+          .map((p) => ({ turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id, cursoTitulo: cursoMap.get(p.curso_id)!.titulo, pendencias: 0 }))
+          .sort((a, b) => (ordemMap[a.cursoId] ?? 999) - (ordemMap[b.cursoId] ?? 999));
         setBlocks(list);
       }
       setLoading(false);

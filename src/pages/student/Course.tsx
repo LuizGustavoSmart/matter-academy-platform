@@ -14,6 +14,7 @@ import {
 
 type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null };
+const AULAS_POR_FAIXA = 12;
 
 export default function StudentCourse() {
   const { id } = useParams();
@@ -80,6 +81,13 @@ export default function StudentCourse() {
 
   const current = useMemo(() => aulas.find((a) => a.id === currentId) ?? null, [aulas, currentId]);
   const currentIdx = useMemo(() => aulas.findIndex((a) => a.id === currentId), [aulas, currentId]);
+
+  /** Lista de exibição preenchida até 12 aulas — as ainda não lançadas aparecem como placeholder. */
+  const slots = useMemo(() => {
+    const porOrdem = new Map(aulas.map((a) => [a.ordem, a]));
+    const total = Math.max(AULAS_POR_FAIXA, aulas.length);
+    return Array.from({ length: total }, (_, i) => porOrdem.get(i + 1) ?? { placeholder: true as const, ordem: i + 1 });
+  }, [aulas]);
 
   const selectAula = async (aulaId: string) => {
     setCurrentId(aulaId);
@@ -203,11 +211,25 @@ export default function StudentCourse() {
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider">Conteúdo</p>
-              <span className="text-fg-3 text-[11px] tabular-nums">{done.size}/{aulas.length}</span>
+              <span className="text-fg-3 text-[11px] tabular-nums">{done.size}/{slots.length}</span>
             </div>
             {aulas.length === 0 ? <p className="text-fg-3 text-sm">Sem aulas</p> : (
               <ul className="space-y-1">
-                {aulas.map((a) => {
+                {slots.map((slot) => {
+                  if ('placeholder' in slot) {
+                    return (
+                      <li key={`placeholder-${slot.ordem}`}>
+                        <div className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent cursor-default">
+                          <span className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums bg-white/10 text-white/40">{slot.ordem}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white/30 text-[11px]">Aula {slot.ordem}</p>
+                            <p className="text-white/40 text-sm truncate">Em breve</p>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  }
+                  const a = slot;
                   const isCurrent = a.id === currentId;
                   const isDoneA = done.has(a.id);
                   return (
