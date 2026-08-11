@@ -13,6 +13,9 @@ export type Profile = {
 };
 
 
+type ViewAsRole = 'student' | 'professor' | 'monitor';
+const VIEW_AS_KEY = 'ma_view_as_role';
+
 type AuthCtx = {
   session: Session | null;
   profile: Profile | null;
@@ -20,14 +23,21 @@ type AuthCtx = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  isImpersonating: boolean;
+  startViewAs: (role: ViewAsRole) => void;
+  stopViewAs: () => void;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [realProfile, setRealProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewAsRole, setViewAsRole] = useState<ViewAsRole | null>(() => {
+    const v = sessionStorage.getItem(VIEW_AS_KEY);
+    return v === 'student' || v === 'professor' || v === 'monitor' ? v : null;
+  });
 
   const loadProfile = async (userId: string) => {
     const { data } = await supabase
@@ -35,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('id,email,nome,avatar_url,role,status,tour_visto')
       .eq('id', userId)
       .maybeSingle();
-    setProfile(data as Profile | null);
+    setRealProfile(data as Profile | null);
   };
 
   useEffect(() => {
@@ -55,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await loadProfile(newSession.user.id);
         })();
       } else {
-        setProfile(null);
+        setRealProfile(null);
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -68,15 +78,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null);
+    setRealProfile(null);
+    sessionStorage.removeItem(VIEW_AS_KEY);
+    setViewAsRole(null);
   };
 
   const refresh = async () => {
     if (session?.user) await loadProfile(session.user.id);
   };
 
+  const startViewAs = (role: ViewAsRole) => {
+    if (realProfile?.role !== 'admin') return;
+    sessionStorage.setItem(VIEW_AS_KEY, role);
+    setViewAsRole(role);
+  };
+  const stopViewAs = () => {
+    sessionStorage.removeItem(VIEW_AS_KEY);
+    setViewAsRole(null);
+  };
+
+  const profile = viewAsRole && realProfile?.role === 'admin' ? { ...realProfile, role: viewAsRole } : realProfile;
+
   return (
-    <Ctx.Provider value={{ session, profile, loading, signIn, signOut, refresh }}>
+    <Ctx.Provider value={{ session, profile, loading, signIn, signOut, refresh, isImpersonating: !!viewAsRole, startViewAs, stopViewAs }}>
       {children}
     </Ctx.Provider>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X, LogOut, ChevronRight, PanelLeftClose } from 'lucide-react';
+import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 import { Avatar, Breadcrumbs, cn } from '../components/ui';
@@ -132,6 +132,45 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
   );
 }
 
+/* ══════════════════════════ ViewAsSwitcher ═════════════════════════════ */
+function ViewAsSwitcher({ collapsed }: { collapsed: boolean }) {
+  const { profile, isImpersonating, startViewAs, stopViewAs } = useAuth();
+
+  if (isImpersonating) {
+    return (
+      <div className={cn('flex-shrink-0 px-2.5 pt-2.5', collapsed && 'px-1.5')}>
+        <button
+          onClick={stopViewAs}
+          title="Retornar para admin"
+          className={cn(
+            'w-full flex items-center gap-2 rounded-md bg-brand text-brand-ink text-sm font-semibold transition-colors hover:bg-brand-hover',
+            collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
+          )}
+        >
+          <Undo2 className="w-4 h-4 flex-shrink-0" />
+          {!collapsed && <span className="truncate">Retornar para admin</span>}
+        </button>
+      </div>
+    );
+  }
+
+  if (profile?.role !== 'admin' || collapsed) return null;
+
+  return (
+    <div className="flex-shrink-0 px-2.5 pt-2.5">
+      <p className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-fg-3/80">Visualizar como</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button onClick={() => startViewAs('student')} className="flex items-center justify-center gap-1.5 rounded-md border border-line px-2 py-2 text-xs font-medium text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors">
+          <GraduationCap className="w-3.5 h-3.5" /> Aluno
+        </button>
+        <button onClick={() => startViewAs('professor')} className="flex items-center justify-center gap-1.5 rounded-md border border-line px-2 py-2 text-xs font-medium text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors">
+          <UserCog className="w-3.5 h-3.5" /> Professor
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════ Sidebar ═══════════════════════════════ */
 function SidebarInner({
   nav, area, collapsed, onToggleCollapse, onNavigate, showClose, onClose,
@@ -165,6 +204,8 @@ function SidebarInner({
           </button>
         ) : null}
       </div>
+
+      <ViewAsSwitcher collapsed={collapsed} />
 
       {!collapsed && (
         <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-3/70">{area}</p>
