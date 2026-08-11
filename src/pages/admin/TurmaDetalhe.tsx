@@ -227,17 +227,17 @@ export default function TurmaDetalhe() {
                         trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações do curso" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
                       />
                     </div>
-                    <div className="relative h-24">
+                    <div className="relative h-40">
                       {c.capa_url ? (
                         <>
                           <SignedImage bucket="capas" path={c.capa_url} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                         </>
                       ) : (
                         <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-6 h-6 text-brand" /></div>
                       )}
                     </div>
-                    <div className="p-4">
+                    <div className="p-4 pt-3">
                       {labelDaFaixa(c.faixa) && <Badge tone="outline" className="mb-2">{labelDaFaixa(c.faixa)}</Badge>}
                       <h3 className="mb-1 pr-8 line-clamp-1">{c.titulo}</h3>
                       <p className="text-fg-3 text-sm mb-3 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>

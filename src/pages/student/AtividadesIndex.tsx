@@ -116,18 +116,18 @@ export default function AtividadesIndex() {
 function BlockCard({ b, label, showPend, nav }: { b: Block; label: string; showPend?: boolean; nav: (path: string) => void }) {
   return (
     <Card className="p-0 overflow-hidden cursor-pointer hover:border-brand/40 transition-colors" onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}>
-      <div className="relative h-24">
+      <div className="relative h-40">
         {b.capaUrl ? (
           <>
             <SignedImage bucket="capas" path={b.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
           </>
         ) : (
           <div className="absolute inset-0 bg-brand/10 grid place-items-center"><ClipboardList className="w-6 h-6 text-brand" /></div>
         )}
         {showPend && b.pendencias > 0 && <Badge tone="warn" className="absolute top-2 right-2">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>}
       </div>
-      <div className="p-4"><p className="text-fg font-medium truncate">{label}</p></div>
+      <div className="p-4 pt-3"><p className="text-fg font-medium truncate">{label}</p></div>
     </Card>
   );
 }

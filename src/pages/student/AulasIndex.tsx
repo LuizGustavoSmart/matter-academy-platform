@@ -80,11 +80,11 @@ export default function AulasIndex() {
               <motion.div key={c.id} variants={staggerItem}>
                 <Link to={`/curso/${c.id}`} className="group">
                   <Card hoverable className="p-0 overflow-hidden hover:border-brand/40 transition-colors">
-                    <div className="relative h-28">
+                    <div className="relative h-44">
                       {c.capaUrl ? (
                         <>
                           <SignedImage bucket="capas" path={c.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
                         </>
                       ) : (
                         <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
@@ -96,7 +96,7 @@ export default function AulasIndex() {
                         <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-4 pt-3">
                       <h3 className="mb-1 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
                       <p className="text-fg-3 text-sm line-clamp-1">{c.descricao || 'Sem descrição'}</p>
                     </div>
