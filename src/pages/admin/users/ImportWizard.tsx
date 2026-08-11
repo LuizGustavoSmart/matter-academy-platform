@@ -71,6 +71,13 @@ export function ImportWizard({
     error: validated.filter((r) => r.status === 'error').length,
   }), [validated]);
 
+  const DAILY_EMAIL_LIMIT = 100;
+  const inviteCount = useMemo(
+    () => validated.filter((r) => r.status !== 'error' && !r.existing && r.resolved?.sendInvite).length,
+    [validated],
+  );
+  const overDailyLimit = inviteCount > DAILY_EMAIL_LIMIT;
+
   /* ─────────── Upload ─────────── */
   const onFile = async (file: File) => {
     setParseErr(null);
@@ -279,6 +286,12 @@ export function ImportWizard({
                 <Switch checked={defSendInvite} onChange={setDefSendInvite} label="Enviar convite por padrão" />
               </div>
             </div>
+            <Alert tone={overDailyLimit ? 'warn' : 'info'}>
+              O envio de e-mails tem limite de <strong>{DAILY_EMAIL_LIMIT} por dia</strong>.
+              {overDailyLimit
+                ? ` Esta importação vai gerar ${inviteCount} convites por e-mail — acima do limite diário. Os excedentes falharão; divida o envio em lotes de até ${DAILY_EMAIL_LIMIT} ou desative o convite para parte das linhas.`
+                : ' Se for importar mais de 100 usuários com convite, divida em lotes para não ultrapassar o limite diário do provedor de e-mail.'}
+            </Alert>
             {(defRole === 'student' || defRole === 'professor' || defRole === 'monitor') && (
               <div>
                 <label>{defRole === 'student' ? 'Turmas e cursos padrão' : 'Turmas padrão'}</label>
@@ -393,6 +406,12 @@ export function ImportWizard({
             Serão processadas <strong className="text-fg">{processable.length}</strong> linha(s):
             {' '}criar novos usuários{dupPolicy !== 'skip' ? ' e atualizar existentes' : ' (existentes ignorados)'}.
           </Alert>
+          {overDailyLimit && (
+            <Alert tone="warn">
+              Esta importação enviará <strong>{inviteCount} convites por e-mail</strong>, acima do limite de {DAILY_EMAIL_LIMIT} por dia do provedor.
+              Os convites excedentes provavelmente falharão. Recomendamos importar em lotes de até {DAILY_EMAIL_LIMIT} usuários com convite.
+            </Alert>
+          )}
         </div>
       )}
 
