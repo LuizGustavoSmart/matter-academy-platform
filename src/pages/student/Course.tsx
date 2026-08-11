@@ -1,12 +1,15 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
-import LessonVideoPlayer from '../../components/LessonVideoPlayer';
+import LessonVideoPlayer, { type WatchProgress } from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
+import {
+  LIMITE_PRESENCA_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
+} from '../../lib/presenca';
 
 
 type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
@@ -26,6 +29,14 @@ export default function StudentCourse() {
   const [duvidaOpen, setDuvidaOpen] = useState(false);
   const [daysSince, setDaysSince] = useState<number | null>(null);
 
+  // Contexto de presença: turma do aluno neste curso, horários agendados de
+  // cada aula e duração da aula (para saber se o acesso é ao vivo ou gravação).
+  const [turmaId, setTurmaId] = useState<string | null>(null);
+  const [horarios, setHorarios] = useState<Record<string, string>>({});
+  const [duracaoMin, setDuracaoMin] = useState(0);
+  const presencaMarcada = useRef<Set<string>>(new Set());
+  const ultimoProgresso = useRef<WatchProgress | null>(null);
+
   useEffect(() => {
     const load = async () => {
       if (!id || !profile) return;
@@ -33,8 +44,21 @@ export default function StudentCourse() {
       if (!c) { nav('/dashboard'); return; }
       setCurso(c);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: as } = await (supabase as any).from('lessons_public').select('id,titulo,descricao,ordem,capa_url').eq('curso_id', id).order('ordem');
+      const sb = supabase as any;
+      const { data: as } = await sb.from('lessons_public').select('id,titulo,descricao,ordem,capa_url').eq('curso_id', id).order('ordem');
       setAulas((as ?? []) as Aula[]);
+
+      const { data: ut } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('curso_id', id).limit(1);
+      const turma = ut?.[0]?.turma_id ?? null;
+      setTurmaId(turma);
+      if (turma) {
+        const [{ data: hs }, { data: ct }] = await Promise.all([
+          sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turma).eq('curso_id', id),
+          sb.from('curso_turmas').select('horario_inicio,horario_fim').eq('turma_id', turma).eq('curso_id', id).maybeSingle(),
+        ]);
+        setHorarios(Object.fromEntries(((hs ?? []) as { aula_id: string; data_hora: string }[]).map((h) => [h.aula_id, h.data_hora])));
+        setDuracaoMin(duracaoAulaMin(ct?.horario_inicio ?? null, ct?.horario_fim ?? null));
+      }
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id);
       setDone(new Set((ps ?? []).filter((p) => p.concluido).map((p) => p.aula_id)));
       const courseAulaIds = new Set((as ?? []).map((a: Aula) => a.id));
@@ -59,6 +83,7 @@ export default function StudentCourse() {
 
   const selectAula = async (aulaId: string) => {
     setCurrentId(aulaId);
+    ultimoProgresso.current = null; // o player remonta e recomeça a contagem
     if (profile) await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: aulaId, concluido: done.has(aulaId), updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
   };
   const toggleDone = async () => {
@@ -71,9 +96,40 @@ export default function StudentCourse() {
   };
   const markCurrentDone = async () => {
     if (!current || !profile || done.has(current.id)) return;
-    await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: current.id, concluido: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
+    await salvarProgresso(current.id, true);
     setDone((prev) => new Set(prev).add(current.id));
   };
+
+  /** Grava tempo assistido junto com o `concluido` já existente. */
+  const salvarProgresso = async (aulaId: string, concluido: boolean) => {
+    if (!profile) return;
+    const p = ultimoProgresso.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('progresso').upsert({
+      user_id: profile.id, aula_id: aulaId, concluido, updated_at: new Date().toISOString(),
+      ...(p ? {
+        segundos_assistidos: Math.round(p.segundosAssistidos),
+        percentual_assistido: Math.round(Math.min(100, p.pct) * 100) / 100,
+      } : {}),
+    }, { onConflict: 'user_id,aula_id' });
+  };
+
+  /**
+   * Ao cruzar o limite de tempo assistido, marca presença uma única vez por
+   * aula. `presencaMarcada` evita reenviar a cada tick do player.
+   */
+  const handleProgress = useCallback((p: WatchProgress) => {
+    ultimoProgresso.current = p;
+    const aulaId = currentId;
+    if (!profile || !turmaId || !aulaId) return;
+    if (p.pct < LIMITE_PRESENCA_PCT || presencaMarcada.current.has(aulaId)) return;
+    presencaMarcada.current.add(aulaId);
+    registrarPresencaAutomatica({
+      aulaId, userId: profile.id, turmaId, pct: p.pct,
+      aoVivo: dentroDaJanelaAoVivo(horarios[aulaId], duracaoMin),
+    });
+    salvarProgresso(aulaId, done.has(aulaId));
+  }, [profile, turmaId, currentId, horarios, duracaoMin, done]); // eslint-disable-line react-hooks/exhaustive-deps
   const goNext = () => { const next = aulas[currentIdx + 1]; if (next) selectAula(next.id); };
 
   if (loading) return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8"><Skeleton className="h-8 w-full max-w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-64 sm:h-96 rounded-xl" /><Skeleton className="h-64 sm:h-96 rounded-xl" /></div></div>;
@@ -180,7 +236,7 @@ export default function StudentCourse() {
         <section className="p-4 sm:p-6 lg:p-8">
           {current ? (
             <>
-              <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onEnded={markCurrentDone} onNext={goNext} /></div>
+              <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onEnded={markCurrentDone} onNext={goNext} onProgress={handleProgress} /></div>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
                 <div className="min-w-0"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0">

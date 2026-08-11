@@ -10,12 +10,23 @@ declare global {
   }
 }
 
+export type WatchProgress = { segundosAssistidos: number; duracao: number; pct: number };
+
 type Props = {
   lessonId: string;
   onEnded?: () => void;
   onNext?: () => void;
   hasNext?: boolean;
+  /** Chamado a cada avanço de reprodução com o total efetivamente assistido. */
+  onProgress?: (p: WatchProgress) => void;
 };
+
+/**
+ * Salto máximo (em segundos de mídia) que ainda conta como reprodução contínua.
+ * O polling roda a cada 500ms, então mesmo a 2x um tick avança ~1s; a folga
+ * cobre travadas de buffer. Saltos maiores são seek e não somam tempo assistido.
+ */
+const MAX_SALTO_CONTINUO = 3;
 
 let ytApiPromise: Promise<void> | null = null;
 function loadYouTubeAPI(): Promise<void> {
@@ -41,12 +52,21 @@ function fmt(s: number): string {
   return `${m}:${ss.toString().padStart(2, '0')}`;
 }
 
-export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }: Props) {
+export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, onProgress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const pollRef = useRef<number | null>(null);
   const hideControlsTimer = useRef<number | null>(null);
+
+  // Tempo efetivamente reproduzido, somado tick a tick. Não usamos a posição do
+  // vídeo como progresso: arrastar a barra para o fim marcaria a aula inteira
+  // como assistida, e rebobinar contaria o mesmo trecho duas vezes.
+  const assistidoRef = useRef(0);
+  const ultimoTempoRef = useRef(0);
+  const onProgressRef = useRef(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; }, [onProgress]);
+  useEffect(() => { assistidoRef.current = 0; ultimoTempoRef.current = 0; }, [lessonId]);
 
   const [videoId, setVideoId] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -158,8 +178,23 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext }
       const p = playerRef.current;
       if (!p?.getCurrentTime) return;
       try {
-        setCurrent(p.getCurrentTime() ?? 0);
-        if (!duration) setDuration(p.getDuration() ?? 0);
+        const t = p.getCurrentTime() ?? 0;
+        setCurrent(t);
+        const dur = duration || (p.getDuration?.() ?? 0);
+        if (!duration && dur) setDuration(dur);
+
+        const delta = t - ultimoTempoRef.current;
+        ultimoTempoRef.current = t;
+        // delta negativo = rebobinou; delta grande = pulou para frente.
+        // Nos dois casos nada é somado — só reprodução contínua conta.
+        if (delta > 0 && delta <= MAX_SALTO_CONTINUO && dur > 0) {
+          assistidoRef.current += delta;
+          onProgressRef.current?.({
+            segundosAssistidos: assistidoRef.current,
+            duracao: dur,
+            pct: Math.min(100, (assistidoRef.current / dur) * 100),
+          });
+        }
       } catch {}
     }, 500);
     return () => {

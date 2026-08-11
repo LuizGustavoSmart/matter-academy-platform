@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, ClipboardList, Pencil, Trash2, MoreHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronRight, Plus, ClipboardList, ClipboardCheck, Pencil, Trash2, MoreHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, IconButton, Card, Badge, EmptyState, Skeleton, Switch, DropdownMenu, useToast, useConfirm } from '../../components/ui';
@@ -99,7 +99,12 @@ export default function AtividadesLista() {
         breadcrumbs={[{ label: 'Atividades', to: '/atividades' }, { label: `${turmaNome} ${cursoTitulo}`.trim() || '…' }]}
         title={`${turmaNome} ${cursoTitulo}`.trim() || '…'}
         subtitle={isProfessor ? 'Atividades desta turma.' : 'Suas atividades.'}
-        actions={isProfessor ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button> : undefined}
+        actions={isProfessor ? (
+          <>
+            <Button variant="secondary" icon={<ClipboardCheck className="w-4 h-4" />} onClick={() => nav(`/presenca/${turmaId}/${cursoId}`)}>Presença</Button>
+            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button>
+          </>
+        ) : undefined}
       />
 
       {loading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
