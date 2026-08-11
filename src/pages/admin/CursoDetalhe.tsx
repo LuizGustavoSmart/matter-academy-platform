@@ -12,9 +12,10 @@ import { uploadAulaCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from './CursoAtividadesTab';
 import CursoPresencaTab, { PresencaAulaModal } from './CursoPresencaTab';
+import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null; faixa: string | null };
 type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
@@ -325,6 +326,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [linkAoVivo, setLinkAoVivo] = useState('');
+  const [faixa, setFaixa] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [professorId, setProfessorId] = useState('');
@@ -335,7 +337,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? '');
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
     setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
     setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
     setDiaSemana(info?.dia_semana ?? ''); setErr(null);
@@ -349,7 +351,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const { error } = await sb.from('cursos').update({
-      titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null,
+      titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null, faixa: faixa || null,
     }).eq('id', curso!.id);
     if (error) { setLoading(false); setErr(error.message); return; }
 
@@ -369,6 +371,12 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cd-tit"><Input id="cd-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cd-desc"><Textarea id="cd-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Faixa" hint="Define a ordem fixa em que os blocos aparecem" htmlFor="cd-faixa">
+          <Select id="cd-faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
+            <option value="">Não definida</option>
+            {FAIXA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </Field>
         <Field label="Link da aula ao vivo" hint="Reutilizado em todas as aulas deste curso" htmlFor="cd-link"><Input id="cd-link" value={linkAoVivo} onChange={(e) => setLinkAoVivo(e.target.value)} placeholder="https://meet.google.com/..." /></Field>
 
         <div className="border-t border-line pt-4 grid grid-cols-2 gap-4">

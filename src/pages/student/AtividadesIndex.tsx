@@ -5,8 +5,10 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, EmptyState, Badge, Skeleton } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
+import { SignedImage } from '../../components/SignedImage';
+import { ordemDaFaixa } from '../../lib/faixa';
 
-type Block = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: string; pendencias: number };
+type Block = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: string; pendencias: number; capaUrl: string | null };
 
 export default function AtividadesIndex() {
   const { profile } = useAuth();
@@ -27,9 +29,14 @@ export default function AtividadesIndex() {
           supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds),
         ]);
         const cursoIds = [...new Set((cts ?? []).map((r) => r.curso_id))];
-        const { data: cursos } = cursoIds.length ? await supabase.from('cursos').select('id,titulo').in('id', cursoIds) : { data: [] };
+        // faixa/capa_url ainda não estão no schema gerado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        type CursoRow = { id: string; titulo: string; capa_url: string | null; faixa: string | null };
+        const { data: cursos } = cursoIds.length
+          ? await (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds)
+          : { data: [] as CursoRow[] };
         const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
-        const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c]));
+        const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
         const pairs = (cts ?? []).map((r) => ({ turma_id: r.turma_id, curso_id: r.curso_id }));
         const { data: atividades } = pairs.length ? await supabase.from('atividades').select('id,turma_id,curso_id').in('turma_id', turmaIds) : { data: [] };
         const atividadeIds = (atividades ?? []).map((a) => a.id);
@@ -42,8 +49,12 @@ export default function AtividadesIndex() {
         });
         const list: Block[] = pairs
           .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-          .map((p) => ({ turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id, cursoTitulo: cursoMap.get(p.curso_id)!.titulo, pendencias: pendMap[`${p.turma_id}:${p.curso_id}`] ?? 0 }))
-          .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || a.cursoTitulo.localeCompare(b.cursoTitulo));
+          .map((p) => ({
+            turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
+            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url,
+            pendencias: pendMap[`${p.turma_id}:${p.curso_id}`] ?? 0,
+          }))
+          .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || ordemDaFaixa(cursoMap.get(a.cursoId)?.faixa) - ordemDaFaixa(cursoMap.get(b.cursoId)?.faixa));
         setBlocks(list);
       } else {
         const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id).not('curso_id', 'is', null);
@@ -51,23 +62,22 @@ export default function AtividadesIndex() {
         if (!pairs.length) { setBlocks([]); setLoading(false); return; }
         const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
         const cursoIds = [...new Set(pairs.map((p) => p.curso_id))];
-        // ordem ainda não está no schema gerado
+        // faixa/capa_url ainda não estão no schema gerado
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [{ data: turmas }, { data: cursos }, { data: cts }] = await Promise.all([
+        const [{ data: turmas }, { data: cursos }] = await Promise.all([
           supabase.from('turmas').select('id,nome').in('id', turmaIds),
-          supabase.from('cursos').select('id,titulo').in('id', cursoIds),
-          (supabase as any).from('curso_turmas').select('curso_id,ordem').in('turma_id', turmaIds),
+          (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds),
         ]);
+        type CursoRow = { id: string; titulo: string; capa_url: string | null; faixa: string | null };
         const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
-        const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c]));
-        const ordemMap: Record<string, number> = {};
-        (cts ?? []).forEach((r: { curso_id: string; ordem: number }) => {
-          if (ordemMap[r.curso_id] === undefined) ordemMap[r.curso_id] = r.ordem ?? 0;
-        });
+        const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
         const list: Block[] = pairs
           .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-          .map((p) => ({ turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id, cursoTitulo: cursoMap.get(p.curso_id)!.titulo, pendencias: 0 }))
-          .sort((a, b) => (ordemMap[a.cursoId] ?? 999) - (ordemMap[b.cursoId] ?? 999));
+          .map((p) => ({
+            turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
+            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, pendencias: 0,
+          }))
+          .sort((a, b) => ordemDaFaixa(cursoMap.get(a.cursoId)?.faixa) - ordemDaFaixa(cursoMap.get(b.cursoId)?.faixa));
         setBlocks(list);
       }
       setLoading(false);
@@ -105,14 +115,19 @@ export default function AtividadesIndex() {
 
 function BlockCard({ b, label, showPend, nav }: { b: Block; label: string; showPend?: boolean; nav: (path: string) => void }) {
   return (
-    <Card className="p-5 flex flex-col gap-4 cursor-pointer hover:border-brand/40 transition-colors" onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-3 min-w-0">
-          <span className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><ClipboardList className="w-5 h-5 text-brand" /></span>
-          <div className="min-w-0"><p className="text-fg font-medium truncate">{label}</p></div>
-        </div>
-        {showPend && b.pendencias > 0 && <Badge tone="warn">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>}
+    <Card className="p-0 overflow-hidden cursor-pointer hover:border-brand/40 transition-colors" onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}>
+      <div className="relative h-24">
+        {b.capaUrl ? (
+          <>
+            <SignedImage bucket="capas" path={b.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-brand/10 grid place-items-center"><ClipboardList className="w-6 h-6 text-brand" /></div>
+        )}
+        {showPend && b.pendencias > 0 && <Badge tone="warn" className="absolute top-2 right-2">{b.pendencias} pendente{b.pendencias > 1 ? 's' : ''}</Badge>}
       </div>
+      <div className="p-4"><p className="text-fg font-medium truncate">{label}</p></div>
     </Card>
   );
 }

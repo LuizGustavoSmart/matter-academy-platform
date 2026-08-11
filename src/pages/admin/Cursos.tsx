@@ -4,13 +4,14 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import {
-  Button, IconButton, Card, Badge, Modal, EmptyState, Skeleton, Field, Input, Textarea, Checkbox, Alert,
+  Button, IconButton, Card, Badge, Modal, EmptyState, Skeleton, Field, Input, Textarea, Select, Checkbox, Alert,
   DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { PageHeader } from '../../layouts/AppShell';
+import { FAIXA_OPTIONS, labelDaFaixa } from '../../lib/faixa';
 
-type Curso = { id: string; titulo: string; descricao: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null };
 type Turma = { id: string; nome: string };
 
 export default function AdminCursos() {
@@ -26,8 +27,10 @@ export default function AdminCursos() {
 
   const load = async () => {
     setLoading(true);
+    // faixa ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [{ data: cs }, { data: ts }, { data: cts }, { data: as }] = await Promise.all([
-      supabase.from('cursos').select('*').order('created_at', { ascending: false }),
+      (supabase as any).from('cursos').select('*').order('created_at', { ascending: false }),
       supabase.from('turmas').select('id,nome').order('nome'),
       supabase.from('curso_turmas').select('curso_id,turma_id'),
       supabase.from('aulas').select('curso_id'),
@@ -79,6 +82,7 @@ export default function AdminCursos() {
                       trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações do curso" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
                     />
                   </div>
+                  {labelDaFaixa(c.faixa) && <Badge tone="outline" className="self-start mb-2">{labelDaFaixa(c.faixa)}</Badge>}
                   <h3 className="mb-1 line-clamp-1">{c.titulo}</h3>
                   <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>
                   <div className="flex flex-wrap gap-1 mb-3 min-h-[24px]">
@@ -109,12 +113,13 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [faixa, setFaixa] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? '');
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setFaixa(curso?.faixa ?? '');
     setSelected(curso ? (cursoTurmas[curso.id] ?? []) : []); setErr(null);
   }, [curso, cursoTurmas, open]);
 
@@ -124,13 +129,16 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim() };
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), faixa: faixa || null };
+    // faixa ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
     let cursoId = curso?.id;
     if (curso) {
-      const { error } = await supabase.from('cursos').update(payload).eq('id', curso.id);
+      const { error } = await sb.from('cursos').update(payload).eq('id', curso.id);
       if (error) { setErr(error.message); setLoading(false); return; }
     } else {
-      const { data, error } = await supabase.from('cursos').insert(payload).select('id').maybeSingle();
+      const { data, error } = await sb.from('cursos').insert(payload).select('id').maybeSingle();
       if (error || !data) { setErr(error?.message ?? 'Erro ao criar curso'); setLoading(false); return; }
       cursoId = data.id;
     }
@@ -150,6 +158,12 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cur-tit"><Input id="cur-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Introdução ao produto" data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cur-desc"><Textarea id="cur-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Resumo do curso" /></Field>
+        <Field label="Faixa" hint="Define a ordem fixa em que os blocos aparecem" htmlFor="cur-faixa">
+          <Select id="cur-faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
+            <option value="">Não definida</option>
+            {FAIXA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </Field>
         <Field label="Turmas com acesso">
           {turmas.length === 0 ? <p className="text-fg-3 text-sm">Crie uma turma antes de vincular.</p> : (
             <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin border border-line rounded-lg p-3 bg-panel-3/30">

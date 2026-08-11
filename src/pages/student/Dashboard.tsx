@@ -8,8 +8,9 @@ import AvatarUpload from '../../components/AvatarUpload';
 import { Card, EmptyState, Badge, Skeleton, SkeletonText, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
+import { ordemDaFaixa } from '../../lib/faixa';
 
-type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null };
+type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null };
 type Turma = { id: string; nome: string; descricao: string | null };
 type Pendente = { id: string; titulo: string; prazo: string | null; cursoId: string | null; turmaId: string; overdue: boolean };
 type NextAula = { titulo: string; cursoTitulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
@@ -32,19 +33,13 @@ export default function StudentDashboard() {
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
       const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
       // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
-      // ordem ainda não está no schema gerado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: ctRows } = turmaIds.length
-        ? await (supabase as any).from('curso_turmas').select('curso_id,ordem').in('turma_id', turmaIds)
+        ? await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds)
         : { data: [] };
       const cursoIds = [...new Set([
         ...(ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string),
-        ...(ctRows ?? []).map((r: { curso_id: string }) => r.curso_id),
+        ...(ctRows ?? []).map((r) => r.curso_id),
       ])];
-      const ordemMap: Record<string, number> = {};
-      (ctRows ?? []).forEach((r: { curso_id: string; ordem: number }) => {
-        if (ordemMap[r.curso_id] === undefined) ordemMap[r.curso_id] = r.ordem ?? 0;
-      });
 
       const { data: ts } = turmaIds.length
         ? await supabase.from('turmas').select('id,nome,descricao').in('id', turmaIds).order('nome')
@@ -58,9 +53,9 @@ export default function StudentDashboard() {
       }
 
       if (!isMonitor) {
-        // capa_url ainda não está no schema gerado
+        // faixa/capa_url ainda não estão no schema gerado
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: cs } = cursoIds.length ? await (supabase as any).from('cursos').select('id,titulo,descricao,capa_url').in('id', cursoIds) : { data: [] };
+        const { data: cs } = cursoIds.length ? await (supabase as any).from('cursos').select('id,titulo,descricao,capa_url,faixa').in('id', cursoIds) : { data: [] };
         if ((cs ?? []).length > 0) {
           const ids = (cs ?? []).map((c: { id: string }) => c.id);
           // lessons_public é uma view não tipada no schema gerado
@@ -75,8 +70,8 @@ export default function StudentDashboard() {
             if (doneSet.has(a.id)) counts[a.curso_id].done++;
           });
           setCourses((cs ?? [])
-            .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null }) => ({ ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 }))
-            .sort((a: CourseCard, b: CourseCard) => (ordemMap[a.id] ?? 999) - (ordemMap[b.id] ?? 999)));
+            .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null }) => ({ ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 }))
+            .sort((a: CourseCard, b: CourseCard) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa)));
         }
 
         if (turmaIds.length) {
@@ -310,35 +305,37 @@ export default function StudentDashboard() {
             {/* Continuar estudando */}
 
             {featured && (
-              <Card className="p-5 sm:p-6 relative overflow-hidden">
-                <span className="absolute -right-16 -top-16 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(closest-side, rgba(203,251,0,0.10), transparent 70%)' }} />
-                <p className="text-brand text-[11px] font-semibold uppercase tracking-wider mb-3">Continuar estudando</p>
-                <div className="flex items-start gap-4">
+              <Card className="p-0 relative overflow-hidden">
+                <div className="relative h-28 sm:h-32">
                   {featured.capaUrl ? (
-                    <SignedImage bucket="capas" path={featured.capaUrl} className="max-h-14 max-w-[4.5rem] w-auto h-auto object-contain rounded-xl border border-line flex-shrink-0" alt="" />
+                    <>
+                      <SignedImage bucket="capas" path={featured.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
+                    </>
                   ) : (
-                    <span className="w-12 h-12 rounded-xl bg-brand/10 border border-brand/20 grid place-items-center flex-shrink-0"><PlayCircle className="w-6 h-6 text-brand" /></span>
+                    <div className="absolute inset-0 bg-brand/10 grid place-items-center"><PlayCircle className="w-8 h-8 text-brand" /></div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <h2 className="mb-1 truncate">{featured.titulo}</h2>
-                    <p className="text-fg-3 text-sm line-clamp-2">{featured.descricao || 'Retome sua próxima aula.'}</p>
-                    <div className="mt-4 space-y-2 max-w-md">
-                      <div className="flex justify-between text-xs"><span className="text-fg-2">{featured.done} de {featuredTotais} aulas</span><span className="text-brand font-medium tabular-nums">{featuredPct}%</span></div>
-                      <div className="h-3 w-full rounded-full bg-line/60 overflow-hidden flex">
-                        <div className="h-full bg-brand transition-all duration-500" style={{ width: `${featuredPctFeitas}%` }} />
-                        <div className="h-full bg-brand/40 transition-all duration-500" style={{ width: `${featuredPctLancadas}%` }} />
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-3">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand inline-block" />{featured.done} feitas</span>
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand/40 inline-block" />{Math.max(featured.total - featured.done, 0)} lançadas a fazer</span>
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-line inline-block" />{Math.max(featuredTotais - featured.total, 0)} ainda não lançadas</span>
-                      </div>
-                    </div>
-
-                    <Link to={`/curso/${featured.id}`} className="mt-4 inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">
-                      {featured.done === 0 ? 'Começar curso' : 'Continuar'}<ArrowRight className="w-4 h-4" />
-                    </Link>
+                  <p className="absolute top-3 left-4 text-brand text-[11px] font-semibold uppercase tracking-wider">Continuar estudando</p>
+                  <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
+                    <div className="flex justify-between text-xs"><span className="text-white/90">{featured.done} de {featuredTotais} aulas</span><span className="text-white font-medium tabular-nums">{featuredPct}%</span></div>
                   </div>
+                  <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
+                    <div className="h-full bg-brand transition-all duration-500" style={{ width: `${featuredPctFeitas}%` }} />
+                    <div className="h-full bg-brand/40 transition-all duration-500" style={{ width: `${featuredPctLancadas}%` }} />
+                  </div>
+                </div>
+                <div className="p-5 sm:p-6">
+                  <h2 className="mb-1 truncate">{featured.titulo}</h2>
+                  <p className="text-fg-3 text-sm line-clamp-2">{featured.descricao || 'Retome sua próxima aula.'}</p>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-3 max-w-md">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand inline-block" />{featured.done} feitas</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand/40 inline-block" />{Math.max(featured.total - featured.done, 0)} lançadas a fazer</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-line inline-block" />{Math.max(featuredTotais - featured.total, 0)} ainda não lançadas</span>
+                  </div>
+
+                  <Link to={`/curso/${featured.id}`} className="mt-4 inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-semibold bg-brand text-brand-ink hover:bg-brand-hover transition-colors">
+                    {featured.done === 0 ? 'Começar curso' : 'Continuar'}<ArrowRight className="w-4 h-4" />
+                  </Link>
                 </div>
               </Card>
             )}
@@ -356,22 +353,26 @@ export default function StudentDashboard() {
                     return (
                       <motion.div key={c.id} variants={staggerItem}>
                         <Link to={`/curso/${c.id}`} className="group">
-                          <Card hoverable className="p-0 h-48 relative overflow-hidden hover:border-brand/40 transition-colors">
-                            {c.capaUrl ? (
-                              <>
-                                <SignedImage bucket="capas" path={c.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" />
-                              </>
-                            ) : (
-                              <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 p-4 pb-5">
-                              <h3 className="mb-1 text-white group-hover:text-white transition-colors line-clamp-1">{c.titulo}</h3>
-                              <p className="text-white/70 text-sm mb-2 line-clamp-1">{c.descricao || 'Sem descrição'}</p>
-                              <div className="flex justify-between text-xs"><span className="text-white/85">{c.done}/{total} aulas</span><span className="text-white font-medium">{pct}%</span></div>
+                          <Card hoverable className="p-0 overflow-hidden hover:border-brand/40 transition-colors">
+                            <div className="relative h-28">
+                              {c.capaUrl ? (
+                                <>
+                                  <SignedImage bucket="capas" path={c.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                                </>
+                              ) : (
+                                <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
+                              )}
+                              <div className="absolute inset-x-0 bottom-0 px-4 pb-2">
+                                <div className="flex justify-between text-xs"><span className="text-white/85">{c.done}/{total} aulas</span><span className="text-white font-medium">{pct}%</span></div>
+                              </div>
+                              <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
+                                <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+                              </div>
                             </div>
-                            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
-                              <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+                            <div className="p-4">
+                              <h3 className="mb-1 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
+                              <p className="text-fg-3 text-sm line-clamp-1">{c.descricao || 'Sem descrição'}</p>
                             </div>
                           </Card>
                         </Link>
