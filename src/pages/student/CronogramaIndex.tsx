@@ -1,40 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ArrowRight, PlayCircle, ClipboardList } from 'lucide-react';
+import { Check, PlayCircle, ClipboardList, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, Skeleton, cn } from '../../components/ui';
+import { Skeleton, Badge, cn } from '../../components/ui';
+import { SignedImage } from '../../components/SignedImage';
+import { ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 
-type AulaEvento = {
-  kind: 'aula';
-  key: string;
-  date: string; // YYYY-MM-DD local
-  ordem: number;
-  cursoId: string;
-  aulaId: string;
-  clickable: boolean;
-};
-type AtividadeEvento = {
-  kind: 'atividade';
-  key: string;
-  date: string;
-  atividadeId: string;
-  ordem: number;
-};
-type Evento = AulaEvento | AtividadeEvento;
+const AULAS_POR_FAIXA = 12;
 
-const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const DIAS_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+type Aula = { id: string; titulo: string; ordem: number };
+type Atividade = { id: string; titulo: string; aulaId: string | null; status: 'pendente' | 'enviada' | 'corrigida' };
+type Curso = { id: string; titulo: string; capaUrl: string | null; faixa: string | null };
 
-function toLocalDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+type AulaNode = { kind: 'aula'; key: string; ordem: number; aula: Aula | null; done: boolean };
+type AtividadeNode = { kind: 'atividade'; key: string; atividade: Atividade };
+type TrailNode = AulaNode | AtividadeNode;
+
+type Trilha = { curso: Curso; nodes: TrailNode[] };
 
 export default function CronogramaIndex() {
   const { profile } = useAuth();
   const nav = useNavigate();
-  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
-  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [trilhas, setTrilhas] = useState<Trilha[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,151 +32,169 @@ export default function CronogramaIndex() {
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
       const pairs = (ut ?? []).filter((r) => r.curso_id) as { turma_id: string; curso_id: string }[];
       const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
-      const pairSet = new Set(pairs.map((p) => `${p.turma_id}:${p.curso_id}`));
+      if (!turmaIds.length) { setTrilhas([]); setLoading(false); return; }
 
-      if (!turmaIds.length) { setEventos([]); setLoading(false); return; }
+      // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
+      const { data: ctRows } = await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds);
+      const cursoIds = [...new Set([...pairs.map((p) => p.curso_id), ...(ctRows ?? []).map((r) => r.curso_id)])];
+      if (!cursoIds.length) { setTrilhas([]); setLoading(false); return; }
 
-      const now = Date.now();
+      // faixa/capa_url ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: hs } = await (supabase as any)
-        .from('aula_horarios')
-        .select('turma_id,curso_id,aula_id,data_hora,aulas(ordem,publicada)')
-        .in('turma_id', turmaIds);
+      const { data: cs } = await (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds);
+      const cursos: Curso[] = ((cs ?? []) as { id: string; titulo: string; capa_url: string | null; faixa: string | null }[])
+        .map((c) => ({ id: c.id, titulo: c.titulo, capaUrl: c.capa_url, faixa: c.faixa }))
+        .sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
 
-      const aulaEventos: AulaEvento[] = (hs ?? [])
-        .filter((h: { turma_id: string; curso_id: string }) => pairSet.has(`${h.turma_id}:${h.curso_id}`))
-        .map((h: { curso_id: string; aula_id: string; data_hora: string; aulas: { ordem: number; publicada: boolean } | null }) => {
-          const t = new Date(h.data_hora).getTime();
-          return {
-            kind: 'aula' as const,
-            key: `aula-${h.aula_id}`,
-            date: toLocalDateKey(new Date(h.data_hora)),
-            ordem: h.aulas?.ordem ?? 0,
-            cursoId: h.curso_id,
-            aulaId: h.aula_id,
-            clickable: !!h.aulas?.publicada && t <= now,
-          };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: as_ } = await (supabase as any).from('lessons_public').select('id,titulo,ordem,curso_id').in('curso_id', cursoIds);
+      const aulasPorCurso: Record<string, Aula[]> = {};
+      (as_ ?? []).forEach((a: { id: string; titulo: string; ordem: number; curso_id: string }) => {
+        (aulasPorCurso[a.curso_id] ??= []).push({ id: a.id, titulo: a.titulo, ordem: a.ordem });
+      });
+
+      const { data: ats } = await supabase.from('atividades').select('id,titulo,aula_id,turma_id,curso_id').in('curso_id', cursoIds);
+      const atividadeIds = (ats ?? []).map((a) => a.id);
+      const { data: envios } = atividadeIds.length
+        ? await supabase.from('atividade_envios').select('atividade_id,enviado_em,corrigido_em').eq('aluno_id', profile.id).in('atividade_id', atividadeIds)
+        : { data: [] };
+      const envioMap = new Map((envios ?? []).map((e) => [e.atividade_id, e]));
+      const atividadesPorCurso: Record<string, Atividade[]> = {};
+      (ats ?? []).forEach((a) => {
+        if (!a.curso_id) return;
+        const e = envioMap.get(a.id);
+        const status: Atividade['status'] = e?.corrigido_em ? 'corrigida' : e?.enviado_em ? 'enviada' : 'pendente';
+        (atividadesPorCurso[a.curso_id] ??= []).push({ id: a.id, titulo: a.titulo, aulaId: a.aula_id, status });
+      });
+
+      const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
+      const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
+
+      const list: Trilha[] = cursos.map((curso) => {
+        const aulasReais = aulasPorCurso[curso.id] ?? [];
+        const porOrdem = new Map(aulasReais.map((a) => [a.ordem, a]));
+        const atividadesDoCurso = atividadesPorCurso[curso.id] ?? [];
+        const atividadesPorAula = new Map<string, Atividade[]>();
+        const atividadesSemAula: Atividade[] = [];
+        atividadesDoCurso.forEach((a) => {
+          if (a.aulaId) {
+            const aulaId: string = a.aulaId;
+            const list = atividadesPorAula.get(aulaId) ?? [];
+            list.push(a);
+            atividadesPorAula.set(aulaId, list);
+          } else atividadesSemAula.push(a);
         });
 
-      const { data: ats } = await supabase
-        .from('atividades')
-        .select('id,turma_id,curso_id,prazo')
-        .in('turma_id', turmaIds)
-        .not('prazo', 'is', null);
+        const total = Math.max(AULAS_POR_FAIXA, aulasReais.length);
+        const nodes: TrailNode[] = [];
+        for (let ordem = 1; ordem <= total; ordem++) {
+          const aula = porOrdem.get(ordem) ?? null;
+          nodes.push({ kind: 'aula', key: `aula-${curso.id}-${ordem}`, ordem, aula, done: aula ? doneSet.has(aula.id) : false });
+          if (aula) {
+            (atividadesPorAula.get(aula.id) ?? []).forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, atividade: a }));
+          }
+        }
+        atividadesSemAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, atividade: a }));
 
-      const atividadeEventos: AtividadeEvento[] = (ats ?? [])
-        .filter((a) => pairSet.has(`${a.turma_id}:${a.curso_id}`))
-        .map((a) => ({ kind: 'atividade' as const, key: `atividade-${a.id}`, date: toLocalDateKey(new Date(a.prazo as string)), atividadeId: a.id, ordem: 0 }));
+        return { curso, nodes };
+      });
 
-      setEventos([...aulaEventos, ...atividadeEventos]);
+      setTrilhas(list);
       setLoading(false);
     })();
   }, [profile]);
 
-  const eventosPorDia = useMemo(() => {
-    const map: Record<string, Evento[]> = {};
-    eventos.forEach((e) => { (map[e.date] ??= []).push(e); });
-    Object.values(map).forEach((list) => {
-      list.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'aula' ? -1 : 1));
-      let n = 0;
-      list.forEach((e) => { if (e.kind === 'atividade') { n += 1; (e as AtividadeEvento).ordem = n; } });
-    });
-    return map;
-  }, [eventos]);
-
-  const weeks = useMemo(() => {
-    const year = cursor.getFullYear();
-    const month = cursor.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const startOffset = firstDay.getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells: (Date | null)[] = [];
-    for (let i = 0; i < startOffset; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
-    while (cells.length % 7 !== 0) cells.push(null);
-    const rows: (Date | null)[][] = [];
-    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-    return rows;
-  }, [cursor]);
-
-  const todayKey = toLocalDateKey(new Date());
-
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-      <header className="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="mb-0.5">Cronograma</h1>
-          <p className="text-fg-3 text-sm">Aulas e prazos de atividades dos seus cursos.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))} className="w-8 h-8 rounded-md border border-line grid place-items-center text-fg-2 hover:bg-panel-2 transition-colors" aria-label="Mês anterior"><ChevronLeft className="w-4 h-4" /></button>
-          <span className="text-fg text-sm font-medium w-36 text-center">{MESES[cursor.getMonth()]} {cursor.getFullYear()}</span>
-          <button onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))} className="w-8 h-8 rounded-md border border-line grid place-items-center text-fg-2 hover:bg-panel-2 transition-colors" aria-label="Próximo mês"><ChevronRight className="w-4 h-4" /></button>
-          <button onClick={() => { const d = new Date(); d.setDate(1); setCursor(d); }} className="text-sm text-brand font-medium ml-1 hover:underline">Hoje</button>
-        </div>
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+      <header className="mb-8">
+        <h1 className="mb-0.5">Cronograma</h1>
+        <p className="text-fg-3 text-sm">Sua trilha de aulas e atividades.</p>
       </header>
 
       {loading ? (
-        <Skeleton className="h-[560px] rounded-xl" />
+        <div className="space-y-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+      ) : trilhas.length === 0 ? (
+        <p className="text-fg-3 text-sm">Aguarde o administrador liberar conteúdo para suas turmas.</p>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-line">
-            {DIAS_SEMANA.map((d, i) => (
-              <div key={i} className="py-2 text-center text-fg-3 text-[11px] font-semibold uppercase tracking-wider">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {weeks.map((week, wi) =>
-              week.map((day, di) => {
-                const key = day ? toLocalDateKey(day) : `empty-${wi}-${di}`;
-                const dayEventos = day ? (eventosPorDia[toLocalDateKey(day)] ?? []) : [];
-                const isToday = day && toLocalDateKey(day) === todayKey;
-                return (
-                  <div key={key} className={cn('min-h-[100px] border-b border-r border-line last:border-r-0 p-1.5 sm:p-2', !day && 'bg-panel-3/20')}>
-                    {day && (
-                      <>
-                        <p className={cn('text-xs mb-1.5 w-5 h-5 grid place-items-center rounded-full', isToday ? 'bg-brand text-brand-ink font-semibold' : 'text-fg-3')}>{day.getDate()}</p>
-                        <div className="space-y-1">
-                          {dayEventos.map((e) => (
-                            <EventoItem key={e.key} evento={e} nav={nav} />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
+        <div className="space-y-12">
+          {trilhas.map((t) => <TrilhaSection key={t.curso.id} trilha={t} nav={nav} />)}
+        </div>
       )}
     </div>
   );
 }
 
-function EventoItem({ evento, nav }: { evento: Evento; nav: (path: string) => void }) {
-  const clickable = evento.kind === 'atividade' || evento.clickable;
-  const label = evento.kind === 'aula' ? `Aula ${evento.ordem || ''}`.trim() : `Atividade ${evento.ordem || ''}`.trim();
-  const Icon = evento.kind === 'aula' ? PlayCircle : ClipboardList;
+function TrilhaSection({ trilha, nav }: { trilha: Trilha; nav: (path: string) => void }) {
+  const { curso, nodes } = trilha;
+  return (
+    <section>
+      <div className="relative rounded-xl overflow-hidden h-20 mb-8 border border-line">
+        {curso.capaUrl ? (
+          <>
+            <SignedImage bucket="capas" path={curso.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/5" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-brand/10" />
+        )}
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          {labelDaFaixa(curso.faixa) && <Badge tone="outline" className="mb-1 bg-black/30 border-white/20 text-white">{labelDaFaixa(curso.faixa)}</Badge>}
+          <h2 className={curso.capaUrl ? 'text-white' : 'text-fg'}>{curso.titulo}</h2>
+        </div>
+      </div>
 
-  const go = () => {
-    if (!clickable) return;
-    if (evento.kind === 'aula') nav(`/curso/${evento.cursoId}?aula=${evento.aulaId}`);
-    else nav(`/atividade/${evento.atividadeId}`);
-  };
+      <div className="relative">
+        <div className="absolute left-1/2 top-0 bottom-0 w-1 -translate-x-1/2 bg-line rounded-full" />
+        <div className="relative flex flex-col items-center gap-3">
+          {nodes.map((node, i) => {
+            const wave = Math.round(Math.sin(i * 0.85) * 64);
+            return (
+              <div key={node.key} className="relative" style={{ transform: `translateX(${wave}px)` }}>
+                {node.kind === 'aula' ? <AulaNodeButton node={node} nav={nav} cursoId={curso.id} /> : <AtividadeNodeButton node={node} nav={nav} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
 
+function AulaNodeButton({ node, nav, cursoId }: { node: AulaNode; nav: (path: string) => void; cursoId: string }) {
+  const available = !!node.aula;
+  const go = () => { if (available) nav(`/curso/${cursoId}?aula=${node.aula!.id}`); };
   return (
     <button
       onClick={go}
-      disabled={!clickable}
+      disabled={!available}
+      title={available ? node.aula!.titulo : 'Em breve'}
       className={cn(
-        'flex items-center gap-1 w-full text-left text-[11px] leading-tight',
-        clickable ? 'text-brand underline hover:text-brand-hover cursor-pointer' : 'text-fg-3 cursor-default'
+        'w-16 h-16 rounded-full grid place-items-center border-2 shadow-ma-1 transition-transform',
+        available ? 'cursor-pointer hover:scale-105' : 'cursor-default',
+        node.done ? 'bg-brand border-brand text-brand-ink' : available ? 'bg-panel-2 border-brand text-brand' : 'bg-white/5 border-white/15 text-white/30'
       )}
     >
-      <Icon className="w-3 h-3 flex-shrink-0" />
-      <span>{label}</span>
-      {clickable && <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />}
+      {node.done ? <Check className="w-6 h-6" /> : available ? <PlayCircle className="w-6 h-6" /> : <Lock className="w-5 h-5" />}
+      <span className="sr-only">{available ? node.aula!.titulo : `Aula ${node.ordem} — Em breve`}</span>
+    </button>
+  );
+}
+
+function AtividadeNodeButton({ node, nav }: { node: AtividadeNode; nav: (path: string) => void }) {
+  const { atividade } = node;
+  return (
+    <button
+      onClick={() => nav(`/atividade/${atividade.id}`)}
+      title={atividade.titulo}
+      className={cn(
+        'w-14 h-14 rounded-2xl rotate-45 grid place-items-center border-2 shadow-ma-1 cursor-pointer hover:scale-105 transition-transform',
+        atividade.status === 'corrigida' ? 'bg-success/20 border-success text-success'
+          : atividade.status === 'enviada' ? 'bg-info/20 border-info text-info'
+          : 'bg-warn/20 border-warn text-warn'
+      )}
+    >
+      <ClipboardList className="w-5 h-5 -rotate-45" />
+      <span className="sr-only">Atividade: {atividade.titulo}</span>
     </button>
   );
 }
