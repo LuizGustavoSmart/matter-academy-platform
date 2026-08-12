@@ -16,6 +16,7 @@ import { TipoCobranca, TIPO_COBRANCA_LABEL, describeCobranca } from '../../lib/f
 import { uploadCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 import { FAIXA_OPTIONS, labelDaFaixa, ordemDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
 type Curso = { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null };
@@ -38,6 +39,7 @@ export default function TurmaDetalhe() {
   const nav = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
+  const faixaCapas = useFaixaCapas();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [turma, setTurma] = useState<Turma | null>(null);
   const [editTurmaOpen, setEditTurmaOpen] = useState(false);
@@ -228,9 +230,9 @@ export default function TurmaDetalhe() {
                       />
                     </div>
                     <div className="relative h-40">
-                      {c.capa_url ? (
+                      {resolveCapaUrl(c.capa_url, c.faixa, faixaCapas) ? (
                         <>
-                          <SignedImage bucket="capas" path={c.capa_url} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                          <SignedImage bucket="capas" path={resolveCapaUrl(c.capa_url, c.faixa, faixaCapas)} className="absolute inset-0 w-full h-full object-cover" alt="" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                         </>
                       ) : (

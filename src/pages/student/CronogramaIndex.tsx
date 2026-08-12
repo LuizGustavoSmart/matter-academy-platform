@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Badge, cn } from '../../components/ui';
 import { SignedImage } from '../../components/SignedImage';
 import { ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 const AULAS_POR_FAIXA = 12;
 
@@ -21,6 +22,7 @@ type Trilha = { curso: Curso; nodes: TrailNode[]; matriculado: boolean };
 
 export default function CronogramaIndex() {
   const { profile } = useAuth();
+  const faixaCapas = useFaixaCapas();
   const nav = useNavigate();
   const [trilhas, setTrilhas] = useState<Trilha[]>([]);
   const [currentKey, setCurrentKey] = useState<string | null>(null);
@@ -170,7 +172,7 @@ export default function CronogramaIndex() {
         <p className="text-fg-3 text-sm">Aguarde o administrador liberar conteúdo para suas turmas.</p>
       ) : (
         <div className="space-y-16">
-          {trilhas.map((t) => <TrilhaSection key={t.curso.id} trilha={t} currentKey={currentKey} nav={nav} />)}
+          {trilhas.map((t) => <TrilhaSection key={t.curso.id} trilha={t} currentKey={currentKey} nav={nav} faixaCapas={faixaCapas} />)}
         </div>
       )}
     </div>
@@ -179,14 +181,15 @@ export default function CronogramaIndex() {
 
 const STATUS_LABEL: Record<Atividade['status'], string> = { pendente: 'Pendente', enviada: 'Enviada', corrigida: 'Corrigida' };
 
-function TrilhaSection({ trilha, currentKey, nav }: { trilha: Trilha; currentKey: string | null; nav: (path: string) => void }) {
+function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha; currentKey: string | null; nav: (path: string) => void; faixaCapas: Record<string, string | null> }) {
   const { curso, nodes, matriculado } = trilha;
   const reversed = [...nodes].reverse();
+  const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
   return (
     <section>
       <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3">
-        {curso.capaUrl ? (
-          <SignedImage bucket="capas" path={curso.capaUrl} className={cn('absolute inset-0 w-full h-full object-cover', !matriculado && 'grayscale opacity-40')} alt="" />
+        {capa ? (
+          <SignedImage bucket="capas" path={capa} className={cn('absolute inset-0 w-full h-full object-cover', !matriculado && 'grayscale opacity-40')} alt="" />
         ) : (
           <div className="absolute inset-0 bg-brand/10" />
         )}

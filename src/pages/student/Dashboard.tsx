@@ -9,6 +9,7 @@ import { Card, EmptyState, Badge, Skeleton, SkeletonText, cn } from '../../compo
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
 import { ordemDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null; matriculado: boolean };
 type Turma = { id: string; nome: string; descricao: string | null };
@@ -17,6 +18,7 @@ type NextAula = { titulo: string; cursoTitulo: string; dataHora: string; linkAoV
 
 export default function StudentDashboard() {
   const { profile } = useAuth();
+  const faixaCapas = useFaixaCapas();
   const isMonitor = profile?.role === 'monitor';
   const firstName = (profile?.nome || profile?.email?.split('@')[0] || '').split(' ')[0];
 
@@ -308,9 +310,9 @@ export default function StudentDashboard() {
             {featured && (
               <Card className="p-0 relative overflow-hidden">
                 <div className="relative h-44 sm:h-56">
-                  {featured.capaUrl ? (
+                  {resolveCapaUrl(featured.capaUrl, featured.faixa, faixaCapas) ? (
                     <>
-                      <SignedImage bucket="capas" path={featured.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                      <SignedImage bucket="capas" path={resolveCapaUrl(featured.capaUrl, featured.faixa, faixaCapas)} className="absolute inset-0 w-full h-full object-cover" alt="" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
                     </>
                   ) : (
@@ -351,12 +353,13 @@ export default function StudentDashboard() {
                   {courses.map((c) => {
                     const total = Math.max(AULAS_POR_FAIXA, c.total);
                     const pct = total ? Math.round((c.done / total) * 100) : 0;
+                    const capa = resolveCapaUrl(c.capaUrl, c.faixa, faixaCapas);
                     const CardInner = (
                       <Card hoverable={c.matriculado} className={cn('p-0 overflow-hidden transition-colors', c.matriculado && 'hover:border-brand/40')}>
                         <div className="relative h-44">
-                          {c.capaUrl ? (
+                          {capa ? (
                             <>
-                              <SignedImage bucket="capas" path={c.capaUrl} className={cn('absolute inset-0 w-full h-full object-cover', !c.matriculado && 'grayscale opacity-40')} alt="" />
+                              <SignedImage bucket="capas" path={capa} className={cn('absolute inset-0 w-full h-full object-cover', !c.matriculado && 'grayscale opacity-40')} alt="" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
                             </>
                           ) : (

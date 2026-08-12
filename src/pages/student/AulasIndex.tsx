@@ -8,12 +8,14 @@ import { Card, EmptyState, Skeleton, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
 import { ordemDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null; matriculado: boolean };
 const AULAS_POR_FAIXA = 12;
 
 export default function AulasIndex() {
   const { profile } = useAuth();
+  const faixaCapas = useFaixaCapas();
   const [courses, setCourses] = useState<CourseCard[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -76,12 +78,13 @@ export default function AulasIndex() {
           {courses.map((c) => {
             const total = Math.max(AULAS_POR_FAIXA, c.total);
             const pct = total ? Math.round((c.done / total) * 100) : 0;
+            const capa = resolveCapaUrl(c.capaUrl, c.faixa, faixaCapas);
             const CardInner = (
               <Card hoverable={c.matriculado} className={cn('p-0 overflow-hidden transition-colors', c.matriculado && 'hover:border-brand/40')}>
                 <div className="relative h-44">
-                  {c.capaUrl ? (
+                  {capa ? (
                     <>
-                      <SignedImage bucket="capas" path={c.capaUrl} className={cn('absolute inset-0 w-full h-full object-cover', !c.matriculado && 'grayscale opacity-40')} alt="" />
+                      <SignedImage bucket="capas" path={capa} className={cn('absolute inset-0 w-full h-full object-cover', !c.matriculado && 'grayscale opacity-40')} alt="" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
                     </>
                   ) : (

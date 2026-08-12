@@ -7,13 +7,14 @@ import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui
 import LessonVideoPlayer, { type WatchProgress } from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 import {
   LIMITE_PRESENCA_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
 } from '../../lib/presenca';
 
 
 type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
-type Curso = { id: string; titulo: string; descricao: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null };
 const AULAS_POR_FAIXA = 12;
 
 export default function StudentCourse() {
@@ -22,6 +23,7 @@ export default function StudentCourse() {
   const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
+  const faixaCapas = useFaixaCapas();
   const [curso, setCurso] = useState<Curso | null>(null);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -235,9 +237,11 @@ export default function StudentCourse() {
                   return (
                     <li key={a.id}>
                       <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border', isCurrent ? 'bg-brand/10 border-brand/30 shadow-sm' : 'hover:bg-panel-2 hover:border-line border-transparent')}>
-                        {a.capa_url && (
+                        {a.capa_url ? (
                           <SignedImage bucket="aulas" path={a.capa_url} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
-                        )}
+                        ) : resolveCapaUrl(null, curso?.faixa, faixaCapas) ? (
+                          <SignedImage bucket="capas" path={resolveCapaUrl(null, curso?.faixa, faixaCapas)} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
+                        ) : null}
                         <span className={cn('w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-medium tabular-nums transition-colors', isDoneA ? 'bg-brand/15 text-brand' : isCurrent ? 'bg-brand text-brand-ink' : 'bg-panel-2 text-fg-3')}>
                           {isDoneA ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <PlayCircle className="w-4 h-4" /> : a.ordem}
                         </span>

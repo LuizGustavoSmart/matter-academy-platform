@@ -7,11 +7,13 @@ import { Card, EmptyState, Badge, Skeleton } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { SignedImage } from '../../components/SignedImage';
 import { ordemDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
-type Block = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: string; pendencias: number; capaUrl: string | null };
+type Block = { turmaId: string; turmaNome: string; cursoId: string; cursoTitulo: string; pendencias: number; capaUrl: string | null; faixa: string | null };
 
 export default function AtividadesIndex() {
   const { profile } = useAuth();
+  const faixaCapas = useFaixaCapas();
   const nav = useNavigate();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +53,7 @@ export default function AtividadesIndex() {
           .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
           .map((p) => ({
             turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
-            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url,
+            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, faixa: cursoMap.get(p.curso_id)!.faixa,
             pendencias: pendMap[`${p.turma_id}:${p.curso_id}`] ?? 0,
           }))
           .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || ordemDaFaixa(cursoMap.get(a.cursoId)?.faixa) - ordemDaFaixa(cursoMap.get(b.cursoId)?.faixa));
@@ -75,7 +77,7 @@ export default function AtividadesIndex() {
           .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
           .map((p) => ({
             turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
-            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, pendencias: 0,
+            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, faixa: cursoMap.get(p.curso_id)!.faixa, pendencias: 0,
           }))
           .sort((a, b) => ordemDaFaixa(cursoMap.get(a.cursoId)?.faixa) - ordemDaFaixa(cursoMap.get(b.cursoId)?.faixa));
         setBlocks(list);
@@ -101,25 +103,26 @@ export default function AtividadesIndex() {
               return (
                 <div key={tId}>
                   <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-3">{group[0].turmaNome}</p>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{group.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} showPend={isStaff} nav={nav} />)}</div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{group.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} showPend={isStaff} nav={nav} faixaCapas={faixaCapas} />)}</div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{blocks.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={isStaff ? `${b.turmaNome} · ${b.cursoTitulo}` : b.cursoTitulo} showPend={isStaff} nav={nav} />)}</div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{blocks.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={isStaff ? `${b.turmaNome} · ${b.cursoTitulo}` : b.cursoTitulo} showPend={isStaff} nav={nav} faixaCapas={faixaCapas} />)}</div>
         )}
     </div>
   );
 }
 
-function BlockCard({ b, label, showPend, nav }: { b: Block; label: string; showPend?: boolean; nav: (path: string) => void }) {
+function BlockCard({ b, label, showPend, nav, faixaCapas }: { b: Block; label: string; showPend?: boolean; nav: (path: string) => void; faixaCapas: Record<string, string | null> }) {
+  const capa = resolveCapaUrl(b.capaUrl, b.faixa, faixaCapas);
   return (
     <Card className="p-0 overflow-hidden cursor-pointer hover:border-brand/40 transition-colors" onClick={() => nav(`/atividades/${b.turmaId}/${b.cursoId}`)}>
       <div className="relative h-40">
-        {b.capaUrl ? (
+        {capa ? (
           <>
-            <SignedImage bucket="capas" path={b.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+            <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
           </>
         ) : (
