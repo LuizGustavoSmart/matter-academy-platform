@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton } from '../../components/ui';
+import { Card, EmptyState, Skeleton, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
 import { ordemDaFaixa } from '../../lib/faixa';
 
-type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null };
+type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null; matriculado: boolean };
 const AULAS_POR_FAIXA = 12;
 
 export default function AulasIndex() {
@@ -25,10 +25,8 @@ export default function AulasIndex() {
       const { data: ctRows } = turmaIds.length
         ? await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds)
         : { data: [] };
-      const cursoIds = [...new Set([
-        ...(ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string),
-        ...(ctRows ?? []).map((r) => r.curso_id),
-      ])];
+      const enrolledCursoIds = new Set((ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string));
+      const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
 
       // faixa/capa_url ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,7 +45,9 @@ export default function AulasIndex() {
           if (doneSet.has(a.id)) counts[a.curso_id].done++;
         });
         setCourses((cs ?? [])
-          .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null }) => ({ ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0 }))
+          .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null }) => ({
+            ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0, matriculado: enrolledCursoIds.has(c.id),
+          }))
           .sort((a: CourseCard, b: CourseCard) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa)));
       } else {
         setCourses([]);
@@ -76,32 +76,41 @@ export default function AulasIndex() {
           {courses.map((c) => {
             const total = Math.max(AULAS_POR_FAIXA, c.total);
             const pct = total ? Math.round((c.done / total) * 100) : 0;
+            const CardInner = (
+              <Card hoverable={c.matriculado} className={cn('p-0 overflow-hidden transition-colors', c.matriculado && 'hover:border-brand/40')}>
+                <div className="relative h-44">
+                  {c.capaUrl ? (
+                    <>
+                      <SignedImage bucket="capas" path={c.capaUrl} className={cn('absolute inset-0 w-full h-full object-cover', !c.matriculado && 'grayscale opacity-40')} alt="" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
+                  )}
+                  {c.matriculado ? (
+                    <div className="absolute inset-x-0 bottom-0 px-4 pb-2">
+                      <div className="flex justify-between text-xs"><span className="text-white/85">{c.done}/{total} aulas</span><span className="text-white font-medium">{pct}%</span></div>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center gap-2">
+                      <Lock className="w-4 h-4 text-white/80" /><span className="text-white/90 text-xs font-semibold uppercase tracking-wider">Bloqueada</span>
+                    </div>
+                  )}
+                  {c.matriculado && (
+                    <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
+                      <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 pt-3">
+                  <h3 className="mb-1 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
+                  <p className="text-fg-3 text-sm line-clamp-1">{c.descricao || 'Sem descrição'}</p>
+                </div>
+              </Card>
+            );
             return (
               <motion.div key={c.id} variants={staggerItem}>
-                <Link to={`/curso/${c.id}`} className="group">
-                  <Card hoverable className="p-0 overflow-hidden hover:border-brand/40 transition-colors">
-                    <div className="relative h-44">
-                      {c.capaUrl ? (
-                        <>
-                          <SignedImage bucket="capas" path={c.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-                        </>
-                      ) : (
-                        <div className="absolute inset-0 bg-brand/10 grid place-items-center"><BookOpen className="w-8 h-8 text-brand" /></div>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 px-4 pb-2">
-                        <div className="flex justify-between text-xs"><span className="text-white/85">{c.done}/{total} aulas</span><span className="text-white font-medium">{pct}%</span></div>
-                      </div>
-                      <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
-                        <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                    <div className="p-4 pt-3">
-                      <h3 className="mb-1 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
-                      <p className="text-fg-3 text-sm line-clamp-1">{c.descricao || 'Sem descrição'}</p>
-                    </div>
-                  </Card>
-                </Link>
+                {c.matriculado ? <Link to={`/curso/${c.id}`} className="group">{CardInner}</Link> : <div className="cursor-default">{CardInner}</div>}
               </motion.div>
             );
           })}

@@ -14,10 +14,10 @@ type Atividade = { id: string; titulo: string; aulaId: string | null; ordem: num
 type Curso = { id: string; titulo: string; capaUrl: string | null; faixa: string | null };
 
 type AulaNode = { kind: 'aula'; key: string; ordem: number; aula: Aula | null; done: boolean };
-type AtividadeNode = { kind: 'atividade'; key: string; atividade: Atividade };
+type AtividadeNode = { kind: 'atividade'; key: string; ordem: number; atividade: Atividade | null };
 type TrailNode = AulaNode | AtividadeNode;
 
-type Trilha = { curso: Curso; nodes: TrailNode[] };
+type Trilha = { curso: Curso; nodes: TrailNode[]; matriculado: boolean };
 
 export default function CronogramaIndex() {
   const { profile } = useAuth();
@@ -32,13 +32,15 @@ export default function CronogramaIndex() {
     (async () => {
       setLoading(true);
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
-      const pairs = (ut ?? []).filter((r) => r.curso_id) as { turma_id: string; curso_id: string }[];
+      const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null }[];
       const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
       if (!turmaIds.length) { setTrilhas([]); setLoading(false); return; }
+      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id).map((p) => p.curso_id as string));
 
-      // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
+      // Todos os cursos das turmas do aluno — inclusive os que ele não está
+      // matriculado especificamente (aparecem bloqueados na trilha).
       const { data: ctRows } = await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds);
-      const cursoIds = [...new Set([...pairs.map((p) => p.curso_id), ...(ctRows ?? []).map((r) => r.curso_id)])];
+      const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
       if (!cursoIds.length) { setTrilhas([]); setLoading(false); return; }
 
       // faixa/capa_url ainda não estão no schema gerado
@@ -50,8 +52,10 @@ export default function CronogramaIndex() {
         .map((c) => ({ id: c.id, titulo: c.titulo, capaUrl: c.capa_url, faixa: c.faixa }))
         .sort((a, b) => ordemDaFaixa(b.faixa) - ordemDaFaixa(a.faixa));
 
+      const cursoIdsMatriculados = cursos.filter((c) => enrolledCursoIds.has(c.id)).map((c) => c.id);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: as_ } = await (supabase as any).from('lessons_public').select('id,titulo,ordem,curso_id').in('curso_id', cursoIds);
+      const { data: as_ } = cursoIdsMatriculados.length ? await (supabase as any).from('lessons_public').select('id,titulo,ordem,curso_id').in('curso_id', cursoIdsMatriculados) : { data: [] };
       const aulasPorCurso: Record<string, Aula[]> = {};
       (as_ ?? []).forEach((a: { id: string; titulo: string; ordem: number; curso_id: string }) => {
         (aulasPorCurso[a.curso_id] ??= []).push({ id: a.id, titulo: a.titulo, ordem: a.ordem });
@@ -59,7 +63,9 @@ export default function CronogramaIndex() {
 
       // ordem ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: ats } = await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id').in('curso_id', cursoIds).order('ordem');
+      const { data: ats } = cursoIdsMatriculados.length
+        ? await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id').in('curso_id', cursoIdsMatriculados).order('ordem')
+        : { data: [] };
       const atividadeIds = (ats ?? []).map((a: { id: string }) => a.id);
       const { data: envios } = atividadeIds.length
         ? await supabase.from('atividade_envios').select('atividade_id,enviado_em,corrigido_em').eq('aluno_id', profile.id).in('atividade_id', atividadeIds)
@@ -73,7 +79,9 @@ export default function CronogramaIndex() {
         (atividadesPorCurso[a.curso_id] ??= []).push({ id: a.id, titulo: a.titulo, aulaId: a.aula_id, ordem: a.ordem ?? 0, status });
       });
 
-      const { data: ps } = await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id).eq('concluido', true);
+      const { data: ps } = cursoIdsMatriculados.length
+        ? await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id).eq('concluido', true)
+        : { data: [] };
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
 
       // Encontra a última atividade — aula assistida ou atividade enviada — para
@@ -90,6 +98,17 @@ export default function CronogramaIndex() {
       });
 
       const list: Trilha[] = cursos.map((curso) => {
+        const matriculado = enrolledCursoIds.has(curso.id);
+        if (!matriculado) {
+          // Curso bloqueado: exibe a trilha inteira como placeholders, sem dados reais.
+          const nodes: TrailNode[] = [];
+          for (let ordem = 1; ordem <= AULAS_POR_FAIXA; ordem++) {
+            nodes.push({ kind: 'aula', key: `locked-aula-${curso.id}-${ordem}`, ordem, aula: null, done: false });
+            nodes.push({ kind: 'atividade', key: `locked-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
+          }
+          return { curso, nodes, matriculado: false };
+        }
+
         const aulasReais = aulasPorCurso[curso.id] ?? [];
         const porOrdem = new Map(aulasReais.map((a) => [a.ordem, a]));
         const atividadesDoCurso = (atividadesPorCurso[curso.id] ?? []).sort((a, b) => a.ordem - b.ordem);
@@ -111,13 +130,17 @@ export default function CronogramaIndex() {
           const key = `aula-${curso.id}-${ordem}`;
           nodes.push({ kind: 'aula', key, ordem, aula, done: aula ? doneSet.has(aula.id) : false });
           if (aula && lastKey === `aula-progresso-${aula.id}`) lastKey = key;
-          if (aula) {
-            (atividadesPorAula.get(aula.id) ?? []).forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, atividade: a }));
+          const atividadesDaAula = aula ? (atividadesPorAula.get(aula.id) ?? []) : [];
+          if (atividadesDaAula.length) {
+            atividadesDaAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
+          } else {
+            // Mantém o ritmo Aula/Atividade mesmo quando a atividade ainda não existe.
+            nodes.push({ kind: 'atividade', key: `placeholder-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
           }
         }
-        atividadesSemAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, atividade: a }));
+        atividadesSemAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a }));
 
-        return { curso, nodes };
+        return { curso, nodes, matriculado: true };
       });
 
       setTrilhas(list);
@@ -157,20 +180,27 @@ export default function CronogramaIndex() {
 const STATUS_LABEL: Record<Atividade['status'], string> = { pendente: 'Pendente', enviada: 'Enviada', corrigida: 'Corrigida' };
 
 function TrilhaSection({ trilha, currentKey, nav }: { trilha: Trilha; currentKey: string | null; nav: (path: string) => void }) {
-  const { curso, nodes } = trilha;
+  const { curso, nodes, matriculado } = trilha;
   const reversed = [...nodes].reverse();
   return (
     <section>
       <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3">
         {curso.capaUrl ? (
-          <SignedImage bucket="capas" path={curso.capaUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
+          <SignedImage bucket="capas" path={curso.capaUrl} className={cn('absolute inset-0 w-full h-full object-cover', !matriculado && 'grayscale opacity-40')} alt="" />
         ) : (
           <div className="absolute inset-0 bg-brand/10" />
+        )}
+        {!matriculado && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
+            <Lock className="w-5 h-5 text-white/80" />
+            <span className="text-white/90 text-sm font-semibold uppercase tracking-wider">Bloqueada</span>
+          </div>
         )}
       </div>
       <div className="flex items-center gap-2 mb-6">
         {labelDaFaixa(curso.faixa) && <Badge tone="outline">{labelDaFaixa(curso.faixa)}</Badge>}
         <h2 className="text-fg">{curso.titulo}</h2>
+        {!matriculado && <Badge tone="default">Bloqueada</Badge>}
       </div>
 
       <div className="flex flex-col items-stretch max-w-sm mx-auto">
@@ -215,6 +245,17 @@ function AulaNodeCard({ node, nav, cursoId, highlight }: { node: AulaNode; nav: 
 
 function AtividadeNodeCard({ node, nav, highlight }: { node: AtividadeNode; nav: (path: string) => void; highlight: boolean }) {
   const { atividade } = node;
+  if (!atividade) {
+    return (
+      <div className="w-full rounded-xl border-2 px-4 py-3.5 flex items-center gap-3 text-left bg-white/5 border-white/10 cursor-default">
+        <span className="w-10 h-10 rounded-lg flex-shrink-0 grid place-items-center bg-white/10 text-white/30"><Lock className="w-4 h-4" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate text-white/35">{`Atividade ${node.ordem}`}</p>
+          <p className="text-xs mt-0.5 text-white/25">Em breve</p>
+        </div>
+      </div>
+    );
+  }
   const tone = atividade.status === 'corrigida' ? { border: 'border-success', bg: 'bg-success/10', iconBg: 'bg-success/15 text-success' }
     : atividade.status === 'enviada' ? { border: 'border-info', bg: 'bg-info/10', iconBg: 'bg-info/15 text-info' }
     : { border: 'border-warn', bg: 'bg-warn/10', iconBg: 'bg-warn/15 text-warn' };
