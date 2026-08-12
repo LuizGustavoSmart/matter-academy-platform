@@ -592,6 +592,24 @@ export type Database = {
           },
         ]
       }
+      faixa_capas: {
+        Row: {
+          capa_url: string | null
+          faixa: string
+          updated_at: string
+        }
+        Insert: {
+          capa_url?: string | null
+          faixa: string
+          updated_at?: string
+        }
+        Update: {
+          capa_url?: string | null
+          faixa?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       presencas: {
         Row: {
           atualizado_em: string
