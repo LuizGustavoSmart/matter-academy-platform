@@ -111,8 +111,10 @@ export default function CronogramaIndex() {
           return { curso, nodes, matriculado: false };
         }
 
-        const aulasReais = aulasPorCurso[curso.id] ?? [];
-        const porOrdem = new Map(aulasReais.map((a) => [a.ordem, a]));
+        // Reindexa para posições sequenciais 1..N — evita que buracos/duplicidade
+        // no campo `ordem` das aulas quebrem o intercalado Aula/Atividade.
+        const aulasReais = [...(aulasPorCurso[curso.id] ?? [])].sort((a, b) => a.ordem - b.ordem);
+        const porOrdem = new Map(aulasReais.map((a, i) => [i + 1, a]));
         const atividadesDoCurso = (atividadesPorCurso[curso.id] ?? []).sort((a, b) => a.ordem - b.ordem);
         const atividadesPorAula = new Map<string, Atividade[]>();
         const atividadesSemAula: Atividade[] = [];
@@ -187,7 +189,17 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
   const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
   return (
     <section>
-      <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3">
+      {/* A trilha lê de baixo para cima, então a capa fica no final da seção — logo antes da Aula 1. */}
+      <div className="flex flex-col items-stretch max-w-sm mx-auto">
+        {reversed.map((node) => (
+          <div key={node.key} id={`node-${node.key}`}>
+            {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
+            <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />
+          </div>
+        ))}
+      </div>
+
+      <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3 max-w-sm mx-auto">
         {capa ? (
           <SignedImage bucket="capas" path={capa} className={cn('absolute inset-0 w-full h-full object-cover', !matriculado && 'grayscale opacity-40')} alt="" />
         ) : (
@@ -200,19 +212,10 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 max-w-sm mx-auto">
         {labelDaFaixa(curso.faixa) && <Badge tone="outline">{labelDaFaixa(curso.faixa)}</Badge>}
         <h2 className="text-fg">{curso.titulo}</h2>
         {!matriculado && <Badge tone="default">Bloqueada</Badge>}
-      </div>
-
-      <div className="flex flex-col items-stretch max-w-sm mx-auto">
-        {reversed.map((node, i) => (
-          <div key={node.key} id={`node-${node.key}`}>
-            {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
-            {i < reversed.length - 1 && <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />}
-          </div>
-        ))}
       </div>
     </section>
   );
