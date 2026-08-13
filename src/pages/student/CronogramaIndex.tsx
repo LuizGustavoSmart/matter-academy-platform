@@ -102,12 +102,12 @@ export default function CronogramaIndex() {
       const list: Trilha[] = cursos.map((curso) => {
         const matriculado = enrolledCursoIds.has(curso.id);
         if (!matriculado) {
-          // Curso bloqueado: exibe a trilha inteira como placeholders, sem dados reais.
-          const nodes: TrailNode[] = [];
-          for (let ordem = 1; ordem <= AULAS_POR_FAIXA; ordem++) {
-            nodes.push({ kind: 'aula', key: `locked-aula-${curso.id}-${ordem}`, ordem, aula: null, done: false });
-            nodes.push({ kind: 'atividade', key: `locked-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
-          }
+          // Curso bloqueado: mostra só uma prévia (3 marcos) — o resto fica coberto pela mensagem de bloqueio.
+          const nodes: TrailNode[] = [
+            { kind: 'aula', key: `locked-aula-${curso.id}-1`, ordem: 1, aula: null, done: false },
+            { kind: 'atividade', key: `locked-atividade-${curso.id}-1`, ordem: 1, atividade: null },
+            { kind: 'aula', key: `locked-aula-${curso.id}-2`, ordem: 2, aula: null, done: false },
+          ];
           return { curso, nodes, matriculado: false };
         }
 
@@ -117,18 +117,25 @@ export default function CronogramaIndex() {
         const porOrdem = new Map(aulasReais.map((a, i) => [i + 1, a]));
         const atividadesDoCurso = (atividadesPorCurso[curso.id] ?? []).sort((a, b) => a.ordem - b.ordem);
         const atividadesPorAula = new Map<string, Atividade[]>();
-        const atividadesSemAula: Atividade[] = [];
+        // Atividades sem aula_id — usadas como reserva, posicionadas pelo próprio
+        // campo `ordem` da atividade (ex.: ordem 6 cai junto da Aula 6).
+        const atividadesSemAulaPorOrdem = new Map<number, Atividade[]>();
         atividadesDoCurso.forEach((a) => {
           if (a.aulaId) {
             const aulaId: string = a.aulaId;
             const list = atividadesPorAula.get(aulaId) ?? [];
             list.push(a);
             atividadesPorAula.set(aulaId, list);
-          } else atividadesSemAula.push(a);
+          } else {
+            const list = atividadesSemAulaPorOrdem.get(a.ordem) ?? [];
+            list.push(a);
+            atividadesSemAulaPorOrdem.set(a.ordem, list);
+          }
         });
 
         const total = Math.max(AULAS_POR_FAIXA, aulasReais.length);
         const nodes: TrailNode[] = [];
+        const ordensUsadasSemAula = new Set<number>();
         for (let ordem = 1; ordem <= total; ordem++) {
           const aula = porOrdem.get(ordem) ?? null;
           const key = `aula-${curso.id}-${ordem}`;
@@ -137,12 +144,19 @@ export default function CronogramaIndex() {
           const atividadesDaAula = aula ? (atividadesPorAula.get(aula.id) ?? []) : [];
           if (atividadesDaAula.length) {
             atividadesDaAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
+          } else if (atividadesSemAulaPorOrdem.has(ordem)) {
+            ordensUsadasSemAula.add(ordem);
+            atividadesSemAulaPorOrdem.get(ordem)!.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
           } else {
             // Mantém o ritmo Aula/Atividade mesmo quando a atividade ainda não existe.
             nodes.push({ kind: 'atividade', key: `placeholder-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
           }
         }
-        atividadesSemAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a }));
+        // Só sobram aqui atividades cujo `ordem` não bateu com nenhuma posição da trilha.
+        atividadesSemAulaPorOrdem.forEach((list, ordem) => {
+          if (ordensUsadasSemAula.has(ordem)) return;
+          list.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a }));
+        });
 
         return { curso, nodes, matriculado: true };
       });
@@ -190,26 +204,30 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
   return (
     <section>
       {/* A trilha lê de baixo para cima, então a capa fica no final da seção — logo antes da Aula 1. */}
-      <div className="flex flex-col items-stretch max-w-sm mx-auto">
-        {reversed.map((node) => (
-          <div key={node.key} id={`node-${node.key}`}>
-            {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
-            <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />
+      <div className="relative max-w-sm mx-auto">
+        <div className={cn('flex flex-col items-stretch', !matriculado && 'blur-sm opacity-60 pointer-events-none select-none')}>
+          {reversed.map((node) => (
+            <div key={node.key} id={`node-${node.key}`}>
+              {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
+              <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />
+            </div>
+          ))}
+        </div>
+        {!matriculado && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-panel border border-line rounded-xl px-5 py-3 flex items-center gap-2 shadow-ma-2">
+              <Lock className="w-4 h-4 text-fg-3" />
+              <span className="text-fg text-sm font-medium">Conteúdo bloqueado</span>
+            </div>
           </div>
-        ))}
+        )}
       </div>
 
       <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3 max-w-sm mx-auto">
         {capa ? (
-          <SignedImage bucket="capas" path={capa} className={cn('absolute inset-0 w-full h-full object-cover', !matriculado && 'grayscale opacity-40')} alt="" />
+          <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" />
         ) : (
           <div className="absolute inset-0 bg-brand/10" />
-        )}
-        {!matriculado && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
-            <Lock className="w-5 h-5 text-white/80" />
-            <span className="text-white/90 text-sm font-semibold uppercase tracking-wider">Bloqueada</span>
-          </div>
         )}
       </div>
       <div className="flex items-center gap-2 max-w-sm mx-auto">
@@ -262,18 +280,18 @@ function AtividadeNodeCard({ node, nav, highlight }: { node: AtividadeNode; nav:
       </div>
     );
   }
-  const tone = atividade.status === 'corrigida' ? { border: 'border-success', bg: 'bg-success/10', iconBg: 'bg-success/15 text-success' }
-    : atividade.status === 'enviada' ? { border: 'border-info', bg: 'bg-info/10', iconBg: 'bg-info/15 text-info' }
-    : { border: 'border-warn', bg: 'bg-warn/10', iconBg: 'bg-warn/15 text-warn' };
+  const done = atividade.status !== 'pendente';
   return (
     <button
       onClick={() => nav(`/atividade/${atividade.id}`)}
       className={cn(
-        'w-full rounded-xl border-2 px-4 py-3.5 flex items-center gap-3 text-left cursor-pointer transition-colors hover:border-opacity-80',
-        highlight ? 'ring-2 ring-brand/30' : '', tone.border, tone.bg
+        'w-full rounded-xl border-2 px-4 py-3.5 flex items-center gap-3 text-left cursor-pointer hover:border-brand/60 transition-colors',
+        highlight ? 'border-brand ring-2 ring-brand/30' : done ? 'bg-brand/10 border-brand' : 'bg-panel border-line'
       )}
     >
-      <span className={cn('w-10 h-10 rounded-lg flex-shrink-0 grid place-items-center', tone.iconBg)}><ClipboardList className="w-5 h-5" /></span>
+      <span className={cn('w-10 h-10 rounded-lg flex-shrink-0 grid place-items-center', done ? 'bg-brand text-brand-ink' : 'bg-brand/15 text-brand')}>
+        {done ? <Check className="w-5 h-5" /> : <ClipboardList className="w-5 h-5" />}
+      </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg truncate">{atividade.titulo}</p>
         <p className="text-xs text-fg-3 mt-0.5">{STATUS_LABEL[atividade.status]}</p>
