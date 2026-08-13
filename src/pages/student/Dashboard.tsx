@@ -8,7 +8,7 @@ import AvatarUpload from '../../components/AvatarUpload';
 import { Card, EmptyState, Badge, Skeleton, SkeletonText, cn } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { SignedImage } from '../../components/SignedImage';
-import { ordemDaFaixa } from '../../lib/faixa';
+import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 type CourseCard = { id: string; titulo: string; descricao: string | null; total: number; done: number; capaUrl: string | null; faixa: string | null; matriculado: boolean };
@@ -52,29 +52,36 @@ export default function StudentDashboard() {
         setDuvidasAbertas(counts);
       }
 
-      if (!isMonitor) {
+      if (!isMonitor && turmaIds.length) {
         // faixa/capa_url ainda não estão no schema gerado
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: cs } = cursoIds.length ? await (supabase as any).from('cursos').select('id,titulo,descricao,capa_url,faixa').in('id', cursoIds) : { data: [] };
-        if ((cs ?? []).length > 0) {
-          const ids = (cs ?? []).map((c: { id: string }) => c.id);
-          // lessons_public é uma view não tipada no schema gerado
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: as } = await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', ids);
-          const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
-          const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
-          const counts: Record<string, { total: number; done: number }> = {};
-          (as ?? []).forEach((a: { id: string; curso_id: string }) => {
-            if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
-            counts[a.curso_id].total++;
-            if (doneSet.has(a.id)) counts[a.curso_id].done++;
-          });
-          setCourses((cs ?? [])
-            .map((c: { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null }) => ({
-              ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0, matriculado: enrolledCursoIds.has(c.id),
-            }))
-            .sort((a: CourseCard, b: CourseCard) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa)));
-        }
+        const cursosReais = (cs ?? []) as { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null }[];
+        const ids = cursosReais.map((c) => c.id);
+        // lessons_public é uma view não tipada no schema gerado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: as } = ids.length ? await (supabase as any).from('lessons_public').select('id,curso_id').in('curso_id', ids) : { data: [] };
+        const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
+        const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
+        const counts: Record<string, { total: number; done: number }> = {};
+        (as ?? []).forEach((a: { id: string; curso_id: string }) => {
+          if (!counts[a.curso_id]) counts[a.curso_id] = { total: 0, done: 0 };
+          counts[a.curso_id].total++;
+          if (doneSet.has(a.id)) counts[a.curso_id].done++;
+        });
+
+        // As 4 faixas sempre aparecem — a que ainda não existir na plataforma
+        // vira um bloco bloqueado "virtual".
+        const faixasPresentes = new Set(cursosReais.map((c) => c.faixa));
+        const cursosVirtuais = FAIXA_OPTIONS.filter((o) => !faixasPresentes.has(o.value)).map((o) => ({
+          id: `virtual-${o.value}`, titulo: labelDaFaixa(o.value) ?? o.label, descricao: null, capa_url: null, faixa: o.value as string | null,
+        }));
+
+        setCourses([...cursosReais, ...cursosVirtuais]
+          .map((c) => ({
+            ...c, capaUrl: c.capa_url, total: counts[c.id]?.total ?? 0, done: counts[c.id]?.done ?? 0, matriculado: enrolledCursoIds.has(c.id),
+          }))
+          .sort((a: CourseCard, b: CourseCard) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa)));
 
         if (turmaIds.length) {
           // Atividades ainda não enviadas (independente do prazo já ter passado ou não)

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Badge, cn } from '../../components/ui';
 import { SignedImage } from '../../components/SignedImage';
-import { ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
+import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 const AULAS_POR_FAIXA = 12;
@@ -48,11 +48,19 @@ export default function CronogramaIndex() {
       // faixa/capa_url ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: cs } = await (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds);
+      const cursosReais: Curso[] = ((cs ?? []) as { id: string; titulo: string; capa_url: string | null; faixa: string | null }[])
+        .map((c) => ({ id: c.id, titulo: c.titulo, capaUrl: c.capa_url, faixa: c.faixa }));
+
+      // As 4 faixas sempre aparecem, mesmo que o curso daquela faixa ainda não
+      // exista na plataforma — nesse caso é um bloco bloqueado "virtual".
+      const faixasPresentes = new Set(cursosReais.map((c) => c.faixa));
+      const cursosVirtuais: Curso[] = FAIXA_OPTIONS
+        .filter((o) => !faixasPresentes.has(o.value))
+        .map((o) => ({ id: `virtual-${o.value}`, titulo: labelDaFaixa(o.value) ?? o.label, capaUrl: null, faixa: o.value }));
+
       // A trilha rola de baixo para cima: Faixa Branca fica no final (embaixo),
       // Preta no topo — por isso a ordem das seções na página é decrescente.
-      const cursos: Curso[] = ((cs ?? []) as { id: string; titulo: string; capa_url: string | null; faixa: string | null }[])
-        .map((c) => ({ id: c.id, titulo: c.titulo, capaUrl: c.capa_url, faixa: c.faixa }))
-        .sort((a, b) => ordemDaFaixa(b.faixa) - ordemDaFaixa(a.faixa));
+      const cursos: Curso[] = [...cursosReais, ...cursosVirtuais].sort((a, b) => ordemDaFaixa(b.faixa) - ordemDaFaixa(a.faixa));
 
       const cursoIdsMatriculados = cursos.filter((c) => enrolledCursoIds.has(c.id)).map((c) => c.id);
 
@@ -66,7 +74,10 @@ export default function CronogramaIndex() {
       // ordem ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: ats } = cursoIdsMatriculados.length
-        ? await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id').in('curso_id', cursoIdsMatriculados).order('ordem')
+        // Empate no `ordem` (padrão 0 até o professor reordenar manualmente) é
+        // resolvido pela data de criação — quem foi criada primeiro aparece
+        // primeiro, em vez de depender da ordem de retorno do banco.
+        ? await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id,created_at').in('curso_id', cursoIdsMatriculados).order('ordem').order('created_at', { ascending: true })
         : { data: [] };
       const atividadeIds = (ats ?? []).map((a: { id: string }) => a.id);
       const { data: envios } = atividadeIds.length
