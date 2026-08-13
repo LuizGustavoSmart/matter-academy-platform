@@ -112,14 +112,19 @@ export default function CronogramaIndex() {
         }
 
         // Reindexa para posições sequenciais 1..N — evita que buracos/duplicidade
-        // no campo `ordem` das aulas quebrem o intercalado Aula/Atividade.
-        const aulasReais = [...(aulasPorCurso[curso.id] ?? [])].sort((a, b) => a.ordem - b.ordem);
+        // no campo `ordem` das aulas ou aulas repetidas (ex.: mesma aula
+        // retornada mais de uma vez por estar em mais de uma turma) quebrem
+        // o intercalado Aula/Atividade.
+        const aulasVistas = new Set<string>();
+        const aulasReais = [...(aulasPorCurso[curso.id] ?? [])]
+          .sort((a, b) => a.ordem - b.ordem)
+          .filter((a) => { if (aulasVistas.has(a.id)) return false; aulasVistas.add(a.id); return true; });
         const porOrdem = new Map(aulasReais.map((a, i) => [i + 1, a]));
         const atividadesDoCurso = (atividadesPorCurso[curso.id] ?? []).sort((a, b) => a.ordem - b.ordem);
         const atividadesPorAula = new Map<string, Atividade[]>();
-        // Atividades sem aula_id — usadas como reserva, posicionadas pelo próprio
-        // campo `ordem` da atividade (ex.: ordem 6 cai junto da Aula 6).
-        const atividadesSemAulaPorOrdem = new Map<number, Atividade[]>();
+        // Atividades sem aula_id (ou cujo `ordem` não é confiável) — preenchidas
+        // em ordem, uma por vaga, nas posições que sobrarem sem atividade real.
+        const atividadesSemAula: Atividade[] = [];
         atividadesDoCurso.forEach((a) => {
           if (a.aulaId) {
             const aulaId: string = a.aulaId;
@@ -127,15 +132,13 @@ export default function CronogramaIndex() {
             list.push(a);
             atividadesPorAula.set(aulaId, list);
           } else {
-            const list = atividadesSemAulaPorOrdem.get(a.ordem) ?? [];
-            list.push(a);
-            atividadesSemAulaPorOrdem.set(a.ordem, list);
+            atividadesSemAula.push(a);
           }
         });
+        let proximaSemAula = 0;
 
         const total = Math.max(AULAS_POR_FAIXA, aulasReais.length);
         const nodes: TrailNode[] = [];
-        const ordensUsadasSemAula = new Set<number>();
         for (let ordem = 1; ordem <= total; ordem++) {
           const aula = porOrdem.get(ordem) ?? null;
           const key = `aula-${curso.id}-${ordem}`;
@@ -144,19 +147,19 @@ export default function CronogramaIndex() {
           const atividadesDaAula = aula ? (atividadesPorAula.get(aula.id) ?? []) : [];
           if (atividadesDaAula.length) {
             atividadesDaAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
-          } else if (atividadesSemAulaPorOrdem.has(ordem)) {
-            ordensUsadasSemAula.add(ordem);
-            atividadesSemAulaPorOrdem.get(ordem)!.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
+          } else if (proximaSemAula < atividadesSemAula.length) {
+            nodes.push({ kind: 'atividade', key: `atividade-${atividadesSemAula[proximaSemAula].id}`, ordem, atividade: atividadesSemAula[proximaSemAula] });
+            proximaSemAula++;
           } else {
             // Mantém o ritmo Aula/Atividade mesmo quando a atividade ainda não existe.
             nodes.push({ kind: 'atividade', key: `placeholder-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
           }
         }
-        // Só sobram aqui atividades cujo `ordem` não bateu com nenhuma posição da trilha.
-        atividadesSemAulaPorOrdem.forEach((list, ordem) => {
-          if (ordensUsadasSemAula.has(ordem)) return;
-          list.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a }));
-        });
+        // Só sobram aqui atividades sem vaga disponível na trilha (mais atividades que aulas).
+        for (; proximaSemAula < atividadesSemAula.length; proximaSemAula++) {
+          const a = atividadesSemAula[proximaSemAula];
+          nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a });
+        }
 
         return { curso, nodes, matriculado: true };
       });
