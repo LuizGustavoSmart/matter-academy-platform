@@ -31,6 +31,7 @@ import DuvidasIndex from './pages/student/DuvidasIndex';
 import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
 import MinhasTurmas from './pages/student/MinhasTurmas';
 import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
+import TurmaCursoDetalhe from './pages/student/TurmaCursoDetalhe';
 import PresencaCurso from './pages/student/PresencaCurso';
 
 function Loading() {
@@ -118,6 +119,7 @@ export default function App() {
                     <Route path="/duvidas/:duvidaId" element={<DuvidaDetalhe />} />
                     <Route path="/turmas" element={<MinhasTurmas />} />
                     <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
+                    <Route path="/turmas/:turmaId/cursos/:cursoId" element={<TurmaCursoDetalhe />} />
                   </Route>
                 </Route>
 

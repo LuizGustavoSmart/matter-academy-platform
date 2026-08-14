@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, PlayCircle, ClipboardList, Lock } from 'lucide-react';
+import { Check, PlayCircle, ClipboardList, Lock, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Badge, cn } from '../../components/ui';
@@ -74,10 +74,7 @@ export default function CronogramaIndex() {
       // ordem ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: ats } = cursoIdsMatriculados.length
-        // Empate no `ordem` (padrão 0 até o professor reordenar manualmente) é
-        // resolvido pela data de criação — quem foi criada primeiro aparece
-        // primeiro, em vez de depender da ordem de retorno do banco.
-        ? await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id,created_at').in('curso_id', cursoIdsMatriculados).order('ordem').order('created_at', { ascending: true })
+        ? await (supabase as any).from('atividades').select('id,titulo,aula_id,ordem,turma_id,curso_id').in('curso_id', cursoIdsMatriculados).order('ordem')
         : { data: [] };
       const atividadeIds = (ats ?? []).map((a: { id: string }) => a.id);
       const { data: envios } = atividadeIds.length
@@ -93,22 +90,9 @@ export default function CronogramaIndex() {
       });
 
       const { data: ps } = cursoIdsMatriculados.length
-        ? await supabase.from('progresso').select('aula_id,concluido,updated_at').eq('user_id', profile.id).eq('concluido', true)
+        ? await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true)
         : { data: [] };
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
-
-      // Encontra a última atividade — aula assistida ou atividade enviada — para
-      // abrir a trilha já posicionada onde o aluno parou.
-      let lastKey: string | null = null;
-      let lastAt = 0;
-      (ps ?? []).forEach((p) => {
-        const t = p.updated_at ? new Date(p.updated_at).getTime() : 0;
-        if (t > lastAt) { lastAt = t; lastKey = `aula-progresso-${p.aula_id}`; }
-      });
-      (envios ?? []).forEach((e) => {
-        const t = e.enviado_em ? new Date(e.enviado_em).getTime() : 0;
-        if (t > lastAt) { lastAt = t; lastKey = `atividade-${e.atividade_id}`; }
-      });
 
       const list: Trilha[] = cursos.map((curso) => {
         const matriculado = enrolledCursoIds.has(curso.id);
@@ -132,9 +116,8 @@ export default function CronogramaIndex() {
           .filter((a) => { if (aulasVistas.has(a.id)) return false; aulasVistas.add(a.id); return true; });
         const porOrdem = new Map(aulasReais.map((a, i) => [i + 1, a]));
         const atividadesDoCurso = (atividadesPorCurso[curso.id] ?? []).sort((a, b) => a.ordem - b.ordem);
+        // A posição de cada atividade vem sempre da aula a que ela está vinculada.
         const atividadesPorAula = new Map<string, Atividade[]>();
-        // Atividades sem aula_id (ou cujo `ordem` não é confiável) — preenchidas
-        // em ordem, uma por vaga, nas posições que sobrarem sem atividade real.
         const atividadesSemAula: Atividade[] = [];
         atividadesDoCurso.forEach((a) => {
           if (a.aulaId) {
@@ -146,7 +129,6 @@ export default function CronogramaIndex() {
             atividadesSemAula.push(a);
           }
         });
-        let proximaSemAula = 0;
 
         const total = Math.max(AULAS_POR_FAIXA, aulasReais.length);
         const nodes: TrailNode[] = [];
@@ -154,29 +136,31 @@ export default function CronogramaIndex() {
           const aula = porOrdem.get(ordem) ?? null;
           const key = `aula-${curso.id}-${ordem}`;
           nodes.push({ kind: 'aula', key, ordem, aula, done: aula ? doneSet.has(aula.id) : false });
-          if (aula && lastKey === `aula-progresso-${aula.id}`) lastKey = key;
           const atividadesDaAula = aula ? (atividadesPorAula.get(aula.id) ?? []) : [];
           if (atividadesDaAula.length) {
             atividadesDaAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem, atividade: a }));
-          } else if (proximaSemAula < atividadesSemAula.length) {
-            nodes.push({ kind: 'atividade', key: `atividade-${atividadesSemAula[proximaSemAula].id}`, ordem, atividade: atividadesSemAula[proximaSemAula] });
-            proximaSemAula++;
           } else {
             // Mantém o ritmo Aula/Atividade mesmo quando a atividade ainda não existe.
             nodes.push({ kind: 'atividade', key: `placeholder-atividade-${curso.id}-${ordem}`, ordem, atividade: null });
           }
         }
-        // Só sobram aqui atividades sem vaga disponível na trilha (mais atividades que aulas).
-        for (; proximaSemAula < atividadesSemAula.length; proximaSemAula++) {
-          const a = atividadesSemAula[proximaSemAula];
-          nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a });
-        }
+        // Atividades sem aula_id — sem posição confiável, ficam ao final.
+        atividadesSemAula.forEach((a) => nodes.push({ kind: 'atividade', key: `atividade-${a.id}`, ordem: total + 1, atividade: a }));
 
         return { curso, nodes, matriculado: true };
       });
 
+      // Centraliza inicialmente na primeira atividade ainda não enviada, na
+      // ordem cronológica (Faixa Branca primeiro, depois Verde, Marrom, Preta).
+      let pendingKey: string | null = null;
+      for (const t of [...list].reverse()) {
+        if (!t.matriculado) continue;
+        const node = t.nodes.find((n) => n.kind === 'atividade' && n.atividade && n.atividade.status === 'pendente');
+        if (node) { pendingKey = node.key; break; }
+      }
+
       setTrilhas(list);
-      setCurrentKey(lastKey);
+      setCurrentKey(pendingKey);
       setLoading(false);
     })();
   }, [profile]);
@@ -213,29 +197,32 @@ const STATUS_LABEL: Record<Atividade['status'], string> = { pendente: 'Pendente'
 
 function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha; currentKey: string | null; nav: (path: string) => void; faixaCapas: Record<string, string | null> }) {
   const { curso, nodes, matriculado } = trilha;
+  const [expanded, setExpanded] = useState(true);
   const reversed = [...nodes].reverse();
   const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
   return (
     <section>
       {/* A trilha lê de baixo para cima, então a capa fica no final da seção — logo antes da Aula 1. */}
-      <div className="relative max-w-sm mx-auto">
-        <div className={cn('flex flex-col items-stretch', !matriculado && 'blur-sm opacity-60 pointer-events-none select-none')}>
-          {reversed.map((node) => (
-            <div key={node.key} id={`node-${node.key}`}>
-              {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
-              <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />
-            </div>
-          ))}
-        </div>
-        {!matriculado && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-panel border border-line rounded-xl px-5 py-3 flex items-center gap-2 shadow-ma-2">
-              <Lock className="w-4 h-4 text-fg-3" />
-              <span className="text-fg text-sm font-medium">Conteúdo bloqueado</span>
-            </div>
+      {matriculado && !expanded ? null : (
+        <div className="relative max-w-sm mx-auto">
+          <div className={cn('flex flex-col items-stretch', !matriculado && 'blur-sm opacity-60 pointer-events-none select-none')}>
+            {reversed.map((node) => (
+              <div key={node.key} id={`node-${node.key}`}>
+                {node.kind === 'aula' ? <AulaNodeCard node={node} nav={nav} cursoId={curso.id} highlight={node.key === currentKey} /> : <AtividadeNodeCard node={node} nav={nav} highlight={node.key === currentKey} />}
+                <div className="h-12 border-l-2 border-dashed border-line mx-auto w-0" />
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+          {!matriculado && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-panel border border-line rounded-xl px-5 py-3 flex items-center gap-2 shadow-ma-2">
+                <Lock className="w-4 h-4 text-fg-3" />
+                <span className="text-fg text-sm font-medium">Conteúdo bloqueado</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3 max-w-sm mx-auto">
         {capa ? (
@@ -246,8 +233,17 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
       </div>
       <div className="flex items-center gap-2 max-w-sm mx-auto">
         {labelDaFaixa(curso.faixa) && <Badge tone="outline">{labelDaFaixa(curso.faixa)}</Badge>}
-        <h2 className="text-fg">{curso.titulo}</h2>
+        <h2 className="text-fg flex-1 min-w-0 truncate">{curso.titulo}</h2>
         {!matriculado && <Badge tone="default">Bloqueada</Badge>}
+        {matriculado && (
+          <button
+            onClick={() => setExpanded((e) => !e)}
+            aria-label={expanded ? 'Recolher faixa' : 'Expandir faixa'}
+            className="w-8 h-8 rounded-md grid place-items-center text-fg-3 hover:text-fg hover:bg-panel-2 transition-colors flex-shrink-0"
+          >
+            <ChevronDown className={cn('w-4 h-4 transition-transform', !expanded && '-rotate-90')} />
+          </button>
+        )}
       </div>
     </section>
   );
@@ -283,12 +279,13 @@ function AulaNodeCard({ node, nav, cursoId, highlight }: { node: AulaNode; nav: 
 
 function AtividadeNodeCard({ node, nav, highlight }: { node: AtividadeNode; nav: (path: string) => void; highlight: boolean }) {
   const { atividade } = node;
+  const titulo = node.ordem === AULAS_POR_FAIXA ? 'Projeto Final' : atividade?.titulo;
   if (!atividade) {
     return (
       <div className="w-full rounded-xl border-2 px-4 py-3.5 flex items-center gap-3 text-left bg-white/5 border-white/10 cursor-default">
         <span className="w-10 h-10 rounded-lg flex-shrink-0 grid place-items-center bg-white/10 text-white/30"><Lock className="w-4 h-4" /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate text-white/35">{`Atividade ${node.ordem}`}</p>
+          <p className="text-sm font-medium truncate text-white/35">{titulo ?? `Atividade ${node.ordem}`}</p>
           <p className="text-xs mt-0.5 text-white/25">Em breve</p>
         </div>
       </div>
@@ -307,7 +304,7 @@ function AtividadeNodeCard({ node, nav, highlight }: { node: AtividadeNode; nav:
         {done ? <Check className="w-5 h-5" /> : <ClipboardList className="w-5 h-5" />}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-fg truncate">{atividade.titulo}</p>
+        <p className="text-sm font-medium text-fg truncate">{titulo}</p>
         <p className="text-xs text-fg-3 mt-0.5">{STATUS_LABEL[atividade.status]}</p>
       </div>
     </button>

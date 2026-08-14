@@ -14,10 +14,10 @@ export default function StudentLayout() {
     {
       items: [
         { to: '/dashboard', label: 'Menu', icon: Home, match: (p) => p === '/dashboard' },
-        { to: '/aulas', label: 'Aulas', icon: BookOpen, match: (p) => p.startsWith('/aulas') || p.startsWith('/curso/') },
+        ...(isStaff ? [] : [{ to: '/aulas', label: 'Aulas', icon: BookOpen, match: (p: string) => p.startsWith('/aulas') || p.startsWith('/curso/') }]),
         { to: '/cronograma', label: 'Cronograma', icon: CalendarDays, match: (p) => p.startsWith('/cronograma') },
         ...(isStaff ? [{ to: '/turmas', label: 'Turmas', icon: Layers, match: (p: string) => p.startsWith('/turmas') }] : []),
-        { to: '/atividades', label: 'Atividades', icon: ClipboardList, match: (p) => p.startsWith('/atividades') || p.startsWith('/atividade/') },
+        ...(isStaff ? [] : [{ to: '/atividades', label: 'Atividades', icon: ClipboardList, match: (p: string) => p.startsWith('/atividades') || p.startsWith('/atividade/') }]),
         { to: '/duvidas', label: 'Dúvidas', icon: HelpCircle, match: (p) => p.startsWith('/duvidas') },
         { to: '/comunidade', label: 'Comunidade', icon: MessageSquare, match: (p) => p === '/comunidade' || p.startsWith('/turma/') },
       ],
