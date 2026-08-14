@@ -439,7 +439,7 @@ export default function StudentDashboard() {
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {pendentes.map((a) => (
-                    <Link key={a.id} to={a.cursoId ? `/atividades/${a.turmaId}/${a.cursoId}` : '/atividades'} className={cn('block rounded-lg border p-3 transition-colors', a.overdue ? 'border-danger/30 bg-danger/[0.04] hover:bg-danger/[0.08]' : 'border-line hover:border-line-strong hover:bg-panel-2/40')}>
+                    <Link key={a.id} to={`/atividade/${a.id}`} className={cn('block rounded-lg border p-3 transition-colors', a.overdue ? 'border-danger/30 bg-danger/[0.04] hover:bg-danger/[0.08]' : 'border-line hover:border-line-strong hover:bg-panel-2/40')}>
                       <p className={cn('text-sm font-medium truncate', a.overdue ? 'text-danger' : 'text-fg')}>{a.titulo}</p>
                       <p className={cn('text-xs mt-0.5', a.overdue ? 'text-danger/80' : 'text-fg-3')}>
                         {a.prazo ? `Vencimento: ${new Date(a.prazo).toLocaleDateString('pt-BR')}` : 'Sem prazo definido'}

@@ -243,7 +243,6 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
         )}
       </div>
       <div className="flex items-center gap-2 max-w-sm mx-auto">
-        {labelDaFaixa(curso.faixa) && <Badge tone="outline">{labelDaFaixa(curso.faixa)}</Badge>}
         <h2 className="text-fg flex-1 min-w-0 truncate">{curso.titulo}</h2>
         {!matriculado && <Badge tone="default">Bloqueada</Badge>}
       </div>
