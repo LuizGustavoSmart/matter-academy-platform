@@ -224,6 +224,17 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
         </div>
       )}
 
+      {matriculado && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          aria-label={expanded ? 'Recolher faixa' : 'Expandir faixa'}
+          className="flex items-center justify-center gap-1.5 w-full max-w-sm mx-auto mb-3 py-1.5 rounded-md text-xs font-medium text-fg-3 hover:text-fg hover:bg-panel-2 transition-colors"
+        >
+          <ChevronDown className={cn('w-4 h-4 transition-transform', !expanded && '-rotate-90')} />
+          {expanded ? 'Recolher' : 'Expandir'}
+        </button>
+      )}
+
       <div className="relative rounded-xl overflow-hidden h-48 sm:h-56 mb-3 max-w-sm mx-auto">
         {capa ? (
           <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" />
@@ -235,15 +246,6 @@ function TrilhaSection({ trilha, currentKey, nav, faixaCapas }: { trilha: Trilha
         {labelDaFaixa(curso.faixa) && <Badge tone="outline">{labelDaFaixa(curso.faixa)}</Badge>}
         <h2 className="text-fg flex-1 min-w-0 truncate">{curso.titulo}</h2>
         {!matriculado && <Badge tone="default">Bloqueada</Badge>}
-        {matriculado && (
-          <button
-            onClick={() => setExpanded((e) => !e)}
-            aria-label={expanded ? 'Recolher faixa' : 'Expandir faixa'}
-            className="w-8 h-8 rounded-md grid place-items-center text-fg-3 hover:text-fg hover:bg-panel-2 transition-colors flex-shrink-0"
-          >
-            <ChevronDown className={cn('w-4 h-4 transition-transform', !expanded && '-rotate-90')} />
-          </button>
-        )}
       </div>
     </section>
   );

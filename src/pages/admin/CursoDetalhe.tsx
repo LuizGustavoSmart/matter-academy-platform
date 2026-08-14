@@ -16,7 +16,7 @@ import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null; faixa: string | null };
-type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
+export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
 type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca' | 'alunos';
@@ -412,7 +412,7 @@ function toDatetimeLocal(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onClose, onDone }: {
+export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onClose, onDone }: {
   open: boolean; aula: Aula | null; cursoId: string; turmaId: string; dataHoraAtual: string | null; nextOrdem: number; onClose: () => void; onDone: () => void;
 }) {
   const toast = useToast();
