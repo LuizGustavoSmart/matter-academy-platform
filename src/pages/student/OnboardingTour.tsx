@@ -14,13 +14,20 @@ const STEPS = [
   { to: '/comunidade', title: 'Comunidade', description: 'Converse com colegas e professores da sua turma, por curso.' },
 ];
 
+const EMBAIXADOR_STEP = {
+  to: '/turmas', title: 'Acompanhar turma',
+  description: 'Aqui você acompanha as métricas das turmas em que é embaixador: presença, entregas de atividades, dúvidas e o progresso de cada aluno.',
+};
+
 export default function OnboardingTour() {
   const { profile, refresh } = useAuth();
   const toast = useToast();
   const [showWelcome, setShowWelcome] = useState(false);
 
+  const isEmbaixador = profile?.role === 'embaixador';
+
   useEffect(() => {
-    if (profile && profile.role === 'student' && profile.tour_visto === false) {
+    if (profile && (profile.role === 'student' || profile.role === 'embaixador') && profile.tour_visto === false) {
       setShowWelcome(true);
     }
   }, [profile]);
@@ -46,7 +53,7 @@ export default function OnboardingTour() {
       prevBtnText: 'Voltar',
       doneBtnText: 'Concluir',
       progressText: '{{current}} de {{total}}',
-      steps: STEPS.map((s) => ({
+      steps: [...STEPS, ...(isEmbaixador ? [EMBAIXADOR_STEP] : [])].map((s) => ({
         element: `[data-tour="${s.to}"]`,
         popover: { title: s.title, description: s.description },
       })),

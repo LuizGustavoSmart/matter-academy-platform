@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal, HelpCircle, ClipboardList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, DropdownMenu, useToast, useConfirm } from '../../components/ui';
+import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
@@ -13,7 +13,9 @@ import { AulaModal, type Aula } from '../admin/CursoDetalhe';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null };
-type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca';
+type Tab = 'dashboard' | 'aulas' | 'atividades' | 'duvidas' | 'presenca' | 'alunos';
+type Duvida = { id: string; titulo: string; status: 'aberta' | 'resolvida'; created_at: string; alunoNome: string | null; alunoEmail: string };
+type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssistidas: number; atividadesEnviadas: number };
 
 export default function TurmaCursoDetalhe() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
@@ -22,6 +24,8 @@ export default function TurmaCursoDetalhe() {
   const confirm = useConfirm();
   const { profile } = useAuth();
   const isStaff = profile?.role === 'professor' || profile?.role === 'monitor';
+  const isEmbaixador = profile?.role === 'embaixador';
+  const canView = isStaff || isEmbaixador;
   const [tab, setTab] = useState<Tab>('dashboard');
   const [turma, setTurma] = useState<Turma | null>(null);
   const [curso, setCurso] = useState<Curso | null>(null);
@@ -33,6 +37,12 @@ export default function TurmaCursoDetalhe() {
   const [aulasLoading, setAulasLoading] = useState(false);
   const [createAulaOpen, setCreateAulaOpen] = useState(false);
   const [editAula, setEditAula] = useState<Aula | null>(null);
+
+  const [duvidas, setDuvidas] = useState<Duvida[]>([]);
+  const [duvidasLoading, setDuvidasLoading] = useState(false);
+
+  const [alunosResumo, setAlunosResumo] = useState<AlunoResumo[]>([]);
+  const [alunosLoading, setAlunosLoading] = useState(false);
 
   const loadBase = async () => {
     setLoading(true);
@@ -64,8 +74,53 @@ export default function TurmaCursoDetalhe() {
     setAulasLoading(false);
   };
 
-  useEffect(() => { if (isStaff) loadBase(); }, [turmaId, cursoId, isStaff]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (isStaff && tab === 'aulas') loadAulas(); }, [tab, cursoId, isStaff]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadDuvidas = async () => {
+    setDuvidasLoading(true);
+    const { data } = await supabase.from('duvidas').select('id,titulo,status,created_at,aluno_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('created_at', { ascending: false });
+    const alunoIds = [...new Set((data ?? []).map((d) => d.aluno_id))];
+    const { data: profiles } = alunoIds.length ? await supabase.from('profiles').select('id,nome,email').in('id', alunoIds) : { data: [] };
+    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+    setDuvidas((data ?? []).map((d) => ({
+      id: d.id, titulo: d.titulo, status: d.status as Duvida['status'], created_at: d.created_at,
+      alunoNome: profileMap.get(d.aluno_id)?.nome ?? null, alunoEmail: profileMap.get(d.aluno_id)?.email ?? '',
+    })));
+    setDuvidasLoading(false);
+  };
+
+  const loadAlunos = async () => {
+    setAlunosLoading(true);
+    const { data: uts } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!);
+    const userIds = (uts ?? []).map((r) => r.user_id);
+    if (!userIds.length) { setAlunosResumo([]); setAlunosLoading(false); return; }
+    const [{ data: profiles }, { data: aulasData }] = await Promise.all([
+      supabase.from('profiles').select('id,email,nome,role').in('id', userIds),
+      supabase.from('aulas').select('id').eq('curso_id', cursoId!),
+    ]);
+    const students = (profiles ?? []).filter((p) => p.role === 'student');
+    const aulaIds = (aulasData ?? []).map((a) => a.id);
+    const studentIds = students.map((s) => s.id);
+    const [{ data: prog }, { data: ats }] = await Promise.all([
+      aulaIds.length ? supabase.from('progresso').select('user_id,aula_id,concluido').in('user_id', studentIds).in('aula_id', aulaIds).eq('concluido', true) : Promise.resolve({ data: [] }),
+      supabase.from('atividades').select('id').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
+    ]);
+    const atividadeIds = (ats ?? []).map((a) => a.id);
+    const { data: envios } = atividadeIds.length
+      ? await supabase.from('atividade_envios').select('aluno_id,atividade_id,enviado_em').in('atividade_id', atividadeIds).in('aluno_id', studentIds)
+      : { data: [] };
+    const aulasPorAluno: Record<string, number> = {};
+    (prog ?? []).forEach((p) => { aulasPorAluno[p.user_id] = (aulasPorAluno[p.user_id] ?? 0) + 1; });
+    const enviosPorAluno: Record<string, number> = {};
+    (envios ?? []).forEach((e) => { if (e.enviado_em) enviosPorAluno[e.aluno_id] = (enviosPorAluno[e.aluno_id] ?? 0) + 1; });
+    setAlunosResumo(students.map((s) => ({
+      id: s.id, email: s.email, nome: s.nome, aulasAssistidas: aulasPorAluno[s.id] ?? 0, atividadesEnviadas: enviosPorAluno[s.id] ?? 0,
+    })));
+    setAlunosLoading(false);
+  };
+
+  useEffect(() => { if (canView) loadBase(); }, [turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canView && tab === 'aulas') loadAulas(); }, [tab, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canView && tab === 'duvidas') loadDuvidas(); }, [tab, turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canView && tab === 'alunos') loadAlunos(); }, [tab, turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const delAula = async (a: Aula) => {
     const ok = await confirm({ title: 'Excluir aula', tone: 'danger', confirmLabel: 'Excluir', message: <>Excluir <strong className="text-fg">{a.titulo}</strong>?</> });
@@ -96,32 +151,57 @@ export default function TurmaCursoDetalhe() {
 
   const maxOrdem = useMemo(() => aulas.reduce((m, a) => Math.max(m, a.ordem), 0), [aulas]);
 
-  if (profile && !isStaff) return <Navigate to="/dashboard" replace />;
+  if (profile && !canView) return <Navigate to="/dashboard" replace />;
   if (loading) return <div><Skeleton className="h-8 w-64 mb-6" /><Skeleton className="h-64 rounded-xl" /></div>;
+
+  const tabs = [
+    { value: 'dashboard' as const, label: 'Dashboard' },
+    { value: 'aulas' as const, label: 'Aulas', count: aulas.length },
+    { value: 'atividades' as const, label: 'Atividades' },
+    ...(isEmbaixador ? [{ value: 'duvidas' as const, label: 'Dúvidas' }] : []),
+    { value: 'presenca' as const, label: 'Presença' },
+    ...(isEmbaixador ? [{ value: 'alunos' as const, label: 'Alunos' }] : []),
+  ];
 
   return (
     <div>
-      <button onClick={() => nav(`/turmas/${turmaId}`)} className="inline-flex items-center gap-2 text-sm text-fg-3 hover:text-fg mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar para a turma</button>
+      <button onClick={() => nav('/turmas')} className="inline-flex items-center gap-2 text-sm text-fg-3 hover:text-fg mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar para Cursos</button>
       <PageHeader title={curso?.titulo ?? '…'} subtitle={turma?.nome} />
 
-      <Tabs className="mb-6" value={tab} onChange={setTab}
-        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulas.length }, { value: 'atividades', label: 'Atividades' }, { value: 'presenca', label: 'Presença' }]} />
+      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={tabs} />
 
       {tab === 'dashboard' && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatTile label="Aulas" value={aulas.length || '—'} icon={<PlayCircle className="w-4 h-4" />} />
-          <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
-        </div>
+        isEmbaixador ? (
+          <div className="space-y-8">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <StatTile label="Aulas" value={aulas.length || '—'} icon={<PlayCircle className="w-4 h-4" />} />
+              <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+            </div>
+            <div>
+              <h2 className="text-base mb-3">Presença por aula</h2>
+              <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} readOnly />
+            </div>
+            <div>
+              <h2 className="text-base mb-3">Atividades</h2>
+              <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} readOnly />
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <StatTile label="Aulas" value={aulas.length || '—'} icon={<PlayCircle className="w-4 h-4" />} />
+            <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+          </div>
+        )
       )}
 
       {tab === 'aulas' && (
         <div>
           <div className="flex items-center justify-between mb-4 gap-3">
             <p className="text-fg-3 text-sm">Aulas deste curso.</p>
-            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button>
+            {!isEmbaixador && <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button>}
           </div>
           {aulasLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
-            aulas.length === 0 ? <EmptyState icon={<PlayCircle className="w-8 h-8" />} title="Nenhuma aula" description="Adicione a primeira aula deste curso." action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button>} /> : (
+            aulas.length === 0 ? <EmptyState icon={<PlayCircle className="w-8 h-8" />} title="Nenhuma aula" description={isEmbaixador ? 'Nenhuma aula cadastrada ainda.' : 'Adicione a primeira aula deste curso.'} action={!isEmbaixador ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button> : undefined} /> : (
               <Card className="overflow-hidden">
                 <ul>
                   {aulas.map((a, i) => {
@@ -141,20 +221,24 @@ export default function TurmaCursoDetalhe() {
                             {horarios[a.id] ? new Date(horarios[a.id]).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem data/horário agendado'}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
-                          <IconButton label="Mover para cima" onClick={() => moveAula(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
-                          <IconButton label="Mover para baixo" onClick={() => moveAula(a, 1)} disabled={i === aulas.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
-                          <DropdownMenu
-                            items={[
-                              ...(a.youtube_url ? [{ label: 'Abrir no YouTube', icon: <ExternalLink className="w-4 h-4" />, onClick: () => window.open(a.youtube_url, '_blank', 'noopener') }] : []),
-                              { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditAula(a) },
-                              { type: 'separator' as const },
-                              { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger' as const, onClick: () => delAula(a) },
-                            ]}
-                            trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da aula" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
-                          />
-                        </div>
+                        {isEmbaixador ? (
+                          <Badge tone={a.publicada ? 'success' : 'default'} className="flex-shrink-0">{a.publicada ? 'Visível' : 'Oculta'}</Badge>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
+                            <IconButton label="Mover para cima" onClick={() => moveAula(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
+                            <IconButton label="Mover para baixo" onClick={() => moveAula(a, 1)} disabled={i === aulas.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
+                            <DropdownMenu
+                              items={[
+                                ...(a.youtube_url ? [{ label: 'Abrir no YouTube', icon: <ExternalLink className="w-4 h-4" />, onClick: () => window.open(a.youtube_url, '_blank', 'noopener') }] : []),
+                                { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditAula(a) },
+                                { type: 'separator' as const },
+                                { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger' as const, onClick: () => delAula(a) },
+                              ]}
+                              trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da aula" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
+                            />
+                          </div>
+                        )}
                       </li>
                     );
                   })}
@@ -164,11 +248,62 @@ export default function TurmaCursoDetalhe() {
         </div>
       )}
 
-      {tab === 'atividades' && <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} />}
-      {tab === 'presenca' && <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} />}
+      {tab === 'atividades' && <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} readOnly={isEmbaixador} />}
+      {tab === 'presenca' && <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} readOnly={isEmbaixador} />}
 
-      <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); }} />
-      <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+      {tab === 'duvidas' && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <StatTile label="Dúvidas abertas" value={duvidas.filter((d) => d.status === 'aberta').length} icon={<HelpCircle className="w-4 h-4" />} />
+          </div>
+          {duvidasLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
+            duvidas.length === 0 ? <EmptyState icon={<HelpCircle className="w-8 h-8" />} title="Nenhuma dúvida enviada nesta turma/curso" /> : (
+              <Card className="overflow-hidden">
+                <ul>
+                  {duvidas.map((d) => (
+                    <li key={d.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-fg text-sm font-medium truncate">{d.titulo}</p>
+                        <p className="text-fg-3 text-xs mt-0.5 truncate">{d.alunoNome || d.alunoEmail} · {new Date(d.created_at).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                      <Badge tone={d.status === 'resolvida' ? 'success' : 'warn'} dot className="flex-shrink-0">{d.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+        </div>
+      )}
+
+      {tab === 'alunos' && (
+        <div>
+          {alunosLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
+            alunosResumo.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" /> : (
+              <Card className="overflow-hidden">
+                <ul>
+                  {alunosResumo.map((a) => (
+                    <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0">
+                      <Avatar name={a.nome} email={a.email} size={32} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
+                        <p className="text-fg-3 text-xs truncate">{a.email}</p>
+                      </div>
+                      <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><PlayCircle className="w-4 h-4 text-fg-3" />{a.aulasAssistidas} aulas</span>
+                      <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><ClipboardList className="w-4 h-4 text-fg-3" />{a.atividadesEnviadas} atividades</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+        </div>
+      )}
+
+      {!isEmbaixador && (
+        <>
+          <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); }} />
+          <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+        </>
+      )}
     </div>
   );
 }

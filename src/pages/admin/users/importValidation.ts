@@ -185,7 +185,7 @@ export type ExportUser = {
   turmas: { nome: string }[];
 };
 const ROLE_EXPORT_LABEL: Record<Role, string> = {
-  admin: 'Administrador', professor: 'Professor', monitor: 'Monitor', student: 'Aluno',
+  admin: 'Administrador', professor: 'Professor', monitor: 'Monitor', student: 'Aluno', embaixador: 'Embaixador',
 };
 export function exportUsersToXlsx(users: ExportUser[]) {
   const rows = users.map((u) => [

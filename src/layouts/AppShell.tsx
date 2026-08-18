@@ -18,7 +18,7 @@ export type NavItem = {
 export type NavGroup = { title?: string; items: NavItem[] };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: 'Administrador', student: 'Aluno', professor: 'Professor', monitor: 'Monitor',
+  admin: 'Administrador', student: 'Aluno', professor: 'Professor', monitor: 'Monitor', embaixador: 'Embaixador',
 };
 
 const COLLAPSE_KEY = 'ma_sidebar_collapsed';

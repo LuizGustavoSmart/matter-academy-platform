@@ -14,7 +14,7 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const INVITE_WEBHOOK_URL = Deno.env.get("INVITE_WEBHOOK_URL") ?? "";
 
 type InviteEvent = "invite" | "reinvite";
-type UserRole = "admin" | "student" | "professor" | "monitor";
+type UserRole = "admin" | "student" | "professor" | "monitor" | "embaixador";
 
 const ROLE_ALIASES: Record<string, UserRole> = {
   admin: "admin",
@@ -23,6 +23,7 @@ const ROLE_ALIASES: Record<string, UserRole> = {
   aluno: "student",
   professor: "professor",
   monitor: "monitor",
+  embaixador: "embaixador",
 };
 
 function normalizeRole(value: unknown): UserRole | null {
@@ -150,7 +151,7 @@ Deno.serve(async (req: Request) => {
         sobrenome?: string;
         telefone?: string;
         empresa?: string;
-        turma_cursos?: { turma_id: string; curso_id: string }[];
+        turma_cursos?: { turma_id: string; curso_id: string; is_embaixador?: boolean }[];
         turma_ids?: string[];
         role?: string;
         send_invite?: boolean;
@@ -199,9 +200,9 @@ Deno.serve(async (req: Request) => {
       }
 
       // Suporta turma_cursos (novo formato: pares turma+curso) e turma_ids (legado)
-      const pairs: { user_id: string; turma_id: string; curso_id: string | null }[] = turma_cursos?.length
-        ? turma_cursos.map(({ turma_id, curso_id }) => ({ user_id: created.user.id, turma_id, curso_id }))
-        : (turma_ids ?? []).map((tid) => ({ user_id: created.user.id, turma_id: tid, curso_id: null }));
+      const pairs: { user_id: string; turma_id: string; curso_id: string | null; is_embaixador: boolean }[] = turma_cursos?.length
+        ? turma_cursos.map(({ turma_id, curso_id, is_embaixador }) => ({ user_id: created.user.id, turma_id, curso_id, is_embaixador: !!is_embaixador }))
+        : (turma_ids ?? []).map((tid) => ({ user_id: created.user.id, turma_id: tid, curso_id: null, is_embaixador: false }));
 
       if (pairs.length) {
         const { error: turmasErr } = await admin.from("user_turmas").insert(pairs);
@@ -262,7 +263,7 @@ Deno.serve(async (req: Request) => {
       const { user_id, email: rawEmail, nome, sobrenome, telefone, empresa, status, role, turma_cursos, turma_ids } = body as {
         user_id: string; email?: string; nome?: string; sobrenome?: string; telefone?: string; empresa?: string;
         status?: string; role?: string;
-        turma_cursos?: { turma_id: string; curso_id: string }[];
+        turma_cursos?: { turma_id: string; curso_id: string; is_embaixador?: boolean }[];
         turma_ids?: string[];
       };
       const email = rawEmail !== undefined ? normalizeEmail(rawEmail) : undefined;
@@ -289,9 +290,9 @@ Deno.serve(async (req: Request) => {
       }
       if (turma_cursos !== undefined || turma_ids !== undefined) {
         await admin.from("user_turmas").delete().eq("user_id", user_id);
-        const pairs: { user_id: string; turma_id: string; curso_id: string | null }[] = turma_cursos?.length
-          ? turma_cursos.map(({ turma_id, curso_id }) => ({ user_id, turma_id, curso_id }))
-          : (turma_ids ?? []).map((tid) => ({ user_id, turma_id: tid, curso_id: null }));
+        const pairs: { user_id: string; turma_id: string; curso_id: string | null; is_embaixador: boolean }[] = turma_cursos?.length
+          ? turma_cursos.map(({ turma_id, curso_id, is_embaixador }) => ({ user_id, turma_id, curso_id, is_embaixador: !!is_embaixador }))
+          : (turma_ids ?? []).map((tid) => ({ user_id, turma_id: tid, curso_id: null, is_embaixador: false }));
         if (pairs.length) {
           await admin.from("user_turmas").insert(pairs);
         }

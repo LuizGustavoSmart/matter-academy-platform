@@ -12,7 +12,7 @@ type Atividade = AtividadeEditavel & { publicada: boolean; ordem: number };
 type Envio = { id?: string; arquivo_url: string | null; arquivo_nome: string | null; texto: string | null; enviado_em: string | null; nota: number | null; comentario_professor: string | null; corrigido_em: string | null };
 type AlunoRow = { id: string; email: string; nome: string | null };
 
-export default function CursoAtividadesTab({ turmaId, cursoId }: { turmaId: string; cursoId: string }) {
+export default function CursoAtividadesTab({ turmaId, cursoId, readOnly = false }: { turmaId: string; cursoId: string; readOnly?: boolean }) {
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -107,39 +107,42 @@ export default function CursoAtividadesTab({ turmaId, cursoId }: { turmaId: stri
 
       <div className="flex items-center justify-between mb-4 gap-3">
         <p className="text-fg-3 text-sm">Atividades desta turma.</p>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button>
+        {!readOnly && <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button>}
       </div>
 
       {loading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
         atividades.length === 0 ? (
-          <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade" description="Crie a primeira atividade desta turma." action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button>} />
+          <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade" description={readOnly ? 'Nenhuma atividade cadastrada ainda.' : 'Crie a primeira atividade desta turma.'} action={!readOnly ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Criar atividade</Button> : undefined} />
         ) : (
           <Card className="overflow-hidden">
             <ul>
               {atividades.map((a, i) => {
                 const pend = alunos.filter((al) => { const e = envios[a.id]?.[al.id]; return e?.enviado_em && !e.corrigido_em; }).length;
+                const enviados = alunos.filter((al) => envios[a.id]?.[al.id]?.enviado_em).length;
                 const prazoLabel = a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : '–';
                 return (
                   <li key={a.id} className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setGradeAtividade(a)}>
                       <p className="text-fg text-sm font-medium truncate">{a.titulo}</p>
-                      <p className="text-fg-3 text-xs mt-0.5 truncate">Prazo: {prazoLabel}{a.avaliada_com_nota === false ? ' · Sem nota' : ''}</p>
+                      <p className="text-fg-3 text-xs mt-0.5 truncate">Prazo: {prazoLabel}{a.avaliada_com_nota === false ? ' · Sem nota' : ''}{readOnly ? ` · ${enviados}/${alunos.length} entregues` : ''}</p>
                     </div>
                     {pend > 0 && <Badge tone="warn" className="flex-shrink-0">{pend} pend.</Badge>}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <IconButton label="Mover para cima" onClick={() => moveAtividade(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
-                      <IconButton label="Mover para baixo" onClick={() => moveAtividade(a, 1)} disabled={i === atividades.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
-                      <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap hidden sm:inline">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
-                      <DropdownMenu
-                        items={[
-                          { label: 'Ver respostas', icon: <ClipboardList className="w-4 h-4" />, onClick: () => setGradeAtividade(a) },
-                          { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditAtividade(a) },
-                          { type: 'separator' as const },
-                          { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger' as const, onClick: () => delAtividade(a) },
-                        ]}
-                        trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da atividade" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
-                      />
-                    </div>
+                    {readOnly ? null : (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <IconButton label="Mover para cima" onClick={() => moveAtividade(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
+                        <IconButton label="Mover para baixo" onClick={() => moveAtividade(a, 1)} disabled={i === atividades.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
+                        <Switch checked={a.publicada} onChange={() => togglePublicada(a)} label={<span className="text-xs whitespace-nowrap hidden sm:inline">{a.publicada ? 'Visível' : 'Oculta'}</span>} />
+                        <DropdownMenu
+                          items={[
+                            { label: 'Ver respostas', icon: <ClipboardList className="w-4 h-4" />, onClick: () => setGradeAtividade(a) },
+                            { label: 'Editar', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditAtividade(a) },
+                            { type: 'separator' as const },
+                            { label: 'Excluir', icon: <Trash2 className="w-4 h-4" />, tone: 'danger' as const, onClick: () => delAtividade(a) },
+                          ]}
+                          trigger={({ toggle, ref, open }) => <IconButton ref={ref} label="Ações da atividade" onClick={toggle} className={open ? 'bg-panel-3 text-fg' : ''}><MoreHorizontal className="w-4 h-4" /></IconButton>}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -147,13 +150,18 @@ export default function CursoAtividadesTab({ turmaId, cursoId }: { turmaId: stri
           </Card>
         )}
 
-      <CriarAtividadeModal open={createOpen} turmaId={turmaId} cursoId={cursoId} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); toast.success('Atividade criada.'); load(); }} />
-      <CriarAtividadeModal open={!!editAtividade} turmaId={turmaId} cursoId={cursoId} atividade={editAtividade} onClose={() => setEditAtividade(null)} onDone={() => { setEditAtividade(null); toast.success('Atividade atualizada.'); load(); }} />
+      {!readOnly && (
+        <>
+          <CriarAtividadeModal open={createOpen} turmaId={turmaId} cursoId={cursoId} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); toast.success('Atividade criada.'); load(); }} />
+          <CriarAtividadeModal open={!!editAtividade} turmaId={turmaId} cursoId={cursoId} atividade={editAtividade} onClose={() => setEditAtividade(null)} onDone={() => { setEditAtividade(null); toast.success('Atividade atualizada.'); load(); }} />
+        </>
+      )}
       {gradeAtividade && (
         <GradeModal
           atividade={gradeAtividade}
           alunos={alunos}
           envios={envios[gradeAtividade.id] ?? {}}
+          readOnly={readOnly}
           onClose={() => setGradeAtividade(null)}
           onSaved={() => { load(); }}
         />
@@ -162,8 +170,8 @@ export default function CursoAtividadesTab({ turmaId, cursoId }: { turmaId: stri
   );
 }
 
-function GradeModal({ atividade, alunos, envios, onClose, onSaved }: {
-  atividade: Atividade; alunos: AlunoRow[]; envios: Record<string, Envio>; onClose: () => void; onSaved: () => void;
+function GradeModal({ atividade, alunos, envios, readOnly = false, onClose, onSaved }: {
+  atividade: Atividade; alunos: AlunoRow[]; envios: Record<string, Envio>; readOnly?: boolean; onClose: () => void; onSaved: () => void;
 }) {
   const toast = useToast();
   const [selectedAluno, setSelectedAluno] = useState<AlunoRow | null>(null);
@@ -212,7 +220,9 @@ function GradeModal({ atividade, alunos, envios, onClose, onSaved }: {
 
       {selectedAluno && (
         <Modal open onClose={() => setSelectedAluno(null)} title={selectedAluno.nome || selectedAluno.email}
-          footer={<><Button variant="secondary" onClick={() => setSelectedAluno(null)}>Fechar</Button><Button variant="primary" loading={saving === selectedAluno.id} onClick={() => salvarNota(selectedAluno.id)}>{atividade.avaliada_com_nota === false ? 'Marcar como revisada' : 'Salvar correção'}</Button></>}>
+          footer={readOnly
+            ? <Button variant="secondary" onClick={() => setSelectedAluno(null)}>Fechar</Button>
+            : <><Button variant="secondary" onClick={() => setSelectedAluno(null)}>Fechar</Button><Button variant="primary" loading={saving === selectedAluno.id} onClick={() => salvarNota(selectedAluno.id)}>{atividade.avaliada_com_nota === false ? 'Marcar como revisada' : 'Salvar correção'}</Button></>}>
           <div className="space-y-4">
             {selectedAluno.nome && <p className="text-fg-3 text-sm -mt-1">{selectedAluno.email}</p>}
             {envios[selectedAluno.id]?.texto ? (
@@ -221,12 +231,19 @@ function GradeModal({ atividade, alunos, envios, onClose, onSaved }: {
             {envios[selectedAluno.id]?.arquivo_url ? (
               <div><p className="text-fg-3 text-xs mb-1">Arquivo anexado</p><FileLink bucket="atividades" path={envios[selectedAluno.id].arquivo_url!} className="inline-flex items-center gap-2 text-sm text-brand hover:underline"><Paperclip className="w-4 h-4" /> {envios[selectedAluno.id].arquivo_nome ?? 'Arquivo enviado'}</FileLink></div>
             ) : <p className="text-fg-3 text-sm">Nenhum arquivo anexado.</p>}
-            <div className="border-t border-line pt-4 space-y-3">
-              {atividade.avaliada_com_nota !== false && (
-                <Field label={`Nota (máx. ${atividade.nota_maxima})`} htmlFor="gm-nota"><Input id="gm-nota" type="number" value={drafts[selectedAluno.id]?.nota ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], nota: e.target.value } }))} max={atividade.nota_maxima} min={0} className="max-w-[140px]" /></Field>
-              )}
-              <Field label="Comentário" hint="Opcional" htmlFor="gm-com"><Textarea id="gm-com" rows={4} value={drafts[selectedAluno.id]?.comentario ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], comentario: e.target.value } }))} placeholder="Escreva um comentário para o aluno…" /></Field>
-            </div>
+            {readOnly ? (
+              <div className="border-t border-line pt-4 text-sm text-fg-2">
+                {atividade.avaliada_com_nota !== false && envios[selectedAluno.id]?.nota != null && <p>Nota: <strong className="text-fg">{envios[selectedAluno.id].nota}/{atividade.nota_maxima}</strong></p>}
+                {envios[selectedAluno.id]?.comentario_professor && <p className="mt-1">Comentário: {envios[selectedAluno.id].comentario_professor}</p>}
+              </div>
+            ) : (
+              <div className="border-t border-line pt-4 space-y-3">
+                {atividade.avaliada_com_nota !== false && (
+                  <Field label={`Nota (máx. ${atividade.nota_maxima})`} htmlFor="gm-nota"><Input id="gm-nota" type="number" value={drafts[selectedAluno.id]?.nota ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], nota: e.target.value } }))} max={atividade.nota_maxima} min={0} className="max-w-[140px]" /></Field>
+                )}
+                <Field label="Comentário" hint="Opcional" htmlFor="gm-com"><Textarea id="gm-com" rows={4} value={drafts[selectedAluno.id]?.comentario ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [selectedAluno.id]: { ...d[selectedAluno.id], comentario: e.target.value } }))} placeholder="Escreva um comentário para o aluno…" /></Field>
+              </div>
+            )}
           </div>
         </Modal>
       )}

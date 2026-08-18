@@ -3,15 +3,16 @@
    entre a criação individual e a importação por planilha.
    ============================================================ */
 
-export type Role = 'admin' | 'student' | 'professor' | 'monitor';
+export type Role = 'admin' | 'student' | 'professor' | 'monitor' | 'embaixador';
 export type UserStatus = 'pending' | 'active' | 'blocked';
 
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: 'Administrador', professor: 'Professor', monitor: 'Monitor', student: 'Aluno',
+  admin: 'Administrador', professor: 'Professor', monitor: 'Monitor', student: 'Aluno', embaixador: 'Embaixador',
 };
 
 export const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'student', label: 'Aluno' },
+  { value: 'embaixador', label: 'Embaixador' },
   { value: 'professor', label: 'Professor' },
   { value: 'monitor', label: 'Monitor' },
   { value: 'admin', label: 'Administrador' },
@@ -22,6 +23,7 @@ const ROLE_ALIASES: Record<string, Role> = {
   student: 'student', aluno: 'student', estudante: 'student',
   professor: 'professor', teacher: 'professor', 'docente': 'professor',
   monitor: 'monitor', tutor: 'monitor',
+  embaixador: 'embaixador', ambassador: 'embaixador',
 };
 
 export function parseRole(value: unknown): Role | null {

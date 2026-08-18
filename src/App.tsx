@@ -39,7 +39,7 @@ function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
 }
 
-function RequireAuth({ roles }: { roles?: Array<'admin' | 'student' | 'professor' | 'monitor'> }) {
+function RequireAuth({ roles }: { roles?: Array<'admin' | 'student' | 'professor' | 'monitor' | 'embaixador'> }) {
   const { session, profile, loading } = useAuth();
   if (loading) return <Loading />;
   if (!session || !profile) return <Navigate to="/login" replace />;
@@ -105,7 +105,7 @@ export default function App() {
                   </Route>
                 </Route>
 
-                <Route element={<RequireAuth roles={["student", "professor", "monitor"]} />}>
+                <Route element={<RequireAuth roles={["student", "professor", "monitor", "embaixador"]} />}>
                   <Route element={<StudentLayout />}>
                     <Route path="/dashboard" element={<StudentDashboard />} />
                     <Route path="/aulas" element={<AulasIndex />} />

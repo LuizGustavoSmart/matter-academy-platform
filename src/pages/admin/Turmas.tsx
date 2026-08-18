@@ -32,12 +32,16 @@ export default function AdminTurmas() {
     const rows = (data ?? []) as Turma[];
     setTurmas(rows);
     const [{ data: uts }, { data: cts }] = await Promise.all([
-      supabase.from('user_turmas').select('turma_id'),
+      supabase.from('user_turmas').select('turma_id,user_id'),
       supabase.from('curso_turmas').select('turma_id'),
     ]);
     const c: Record<string, { alunos: number; cursos: number }> = {};
+    // Um aluno pode ter uma linha por curso dentro da mesma turma — conta cada
+    // pessoa uma única vez, não uma vez por curso em que está matriculada.
+    const alunosPorTurma: Record<string, Set<string>> = {};
     rows.forEach((t) => (c[t.id] = { alunos: 0, cursos: 0 }));
-    (uts ?? []).forEach((r) => { if (c[r.turma_id]) c[r.turma_id].alunos++; });
+    (uts ?? []).forEach((r) => { if (c[r.turma_id]) (alunosPorTurma[r.turma_id] ??= new Set()).add(r.user_id); });
+    Object.entries(alunosPorTurma).forEach(([turmaId, set]) => { if (c[turmaId]) c[turmaId].alunos = set.size; });
     (cts ?? []).forEach((r) => { if (c[r.turma_id]) c[r.turma_id].cursos++; });
     setCounts(c);
     setLoading(false);

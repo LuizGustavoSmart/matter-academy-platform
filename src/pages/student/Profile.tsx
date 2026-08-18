@@ -71,7 +71,7 @@ export default function Profile() {
           emAndamento: !r.data_fim || r.data_fim >= hoje,
         }));
         setCursosMinistrados(list);
-      } else if (profile.role === 'student') {
+      } else if ((profile.role === 'student' || profile.role === 'embaixador')) {
         const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
         const pairs = (ut ?? []).filter((r) => r.curso_id) as { turma_id: string; curso_id: string }[];
         const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
@@ -178,7 +178,7 @@ export default function Profile() {
         )}
       </Card>
 
-      {profile?.role === 'student' && (
+      {(profile?.role === 'student' || profile?.role === 'embaixador') && (
         <Card className="p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-4"><GraduationCap className="w-4 h-4 text-fg-2" /><h2 className="text-base">Sua faixa</h2></div>
           {extraLoading ? <Skeleton className="h-16 rounded-lg" /> : !faixaInfo || (!faixaInfo.concluida && !faixaInfo.faixaAtual) ? (

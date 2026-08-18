@@ -7,7 +7,7 @@ export type Profile = {
   email: string;
   nome: string | null;
   avatar_url?: string | null;
-  role: 'admin' | 'student' | 'professor' | 'monitor';
+  role: 'admin' | 'student' | 'professor' | 'monitor' | 'embaixador';
   status: 'pending' | 'active' | 'blocked';
   tour_visto?: boolean;
 };

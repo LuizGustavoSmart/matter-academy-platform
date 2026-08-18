@@ -4,7 +4,7 @@ import { ROLE_LABEL, statusLabel, fullName, formatPhone, type Role } from '../..
 import type { UserRow } from './types';
 
 const ROLE_TONE: Record<Role, 'success' | 'warn' | 'info' | 'default'> = {
-  admin: 'success', professor: 'warn', monitor: 'info', student: 'default',
+  admin: 'success', professor: 'warn', monitor: 'info', student: 'default', embaixador: 'info',
 };
 const STATUS_TONE: Record<string, 'success' | 'warn' | 'danger'> = {
   active: 'success', pending: 'warn', blocked: 'danger',

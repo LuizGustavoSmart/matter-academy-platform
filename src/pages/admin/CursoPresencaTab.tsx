@@ -28,7 +28,7 @@ function nomeDe(a: AlunoRow) {
 
 /* ─────────────────────── Aba: visão geral por aula ─────────────────────── */
 
-export default function CursoPresencaTab({ turmaId, cursoId }: { turmaId: string; cursoId: string }) {
+export default function CursoPresencaTab({ turmaId, cursoId, readOnly = false }: { turmaId: string; cursoId: string; readOnly?: boolean }) {
   const [aulas, setAulas] = useState<AulaPresenca[]>([]);
   const [horarios, setHorarios] = useState<Record<string, string>>({});
   const [totalAlunos, setTotalAlunos] = useState(0);
@@ -111,7 +111,7 @@ export default function CursoPresencaTab({ turmaId, cursoId }: { turmaId: string
       )}
 
       {aulaAberta && (
-        <PresencaAulaModal turmaId={turmaId} cursoId={cursoId} aula={aulaAberta}
+        <PresencaAulaModal turmaId={turmaId} cursoId={cursoId} aula={aulaAberta} readOnly={readOnly}
           onClose={() => setAulaAberta(null)} onSaved={load} />
       )}
     </div>
@@ -124,8 +124,8 @@ export default function CursoPresencaTab({ turmaId, cursoId }: { turmaId: string
  * Lista TODOS os alunos matriculados na turma/curso — quem não tem registro
  * aparece como ausente. Reaproveitada pela aba Presença e pela lista de aulas.
  */
-export function PresencaAulaModal({ turmaId, cursoId, aula, onClose, onSaved }: {
-  turmaId: string; cursoId: string; aula: AulaPresenca; onClose: () => void; onSaved?: () => void;
+export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, onClose, onSaved }: {
+  turmaId: string; cursoId: string; aula: AulaPresenca; readOnly?: boolean; onClose: () => void; onSaved?: () => void;
 }) {
   const { profile } = useAuth();
   const toast = useToast();
@@ -194,9 +194,11 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, onClose, onSaved }: 
               <CheckCircle2 className="w-4 h-4 text-ok" />
               <span className="text-fg-2"><strong className="text-fg">{presentes}</strong> de {alunos.length} presentes</span>
             </div>
-            <Button variant="secondary" size="sm" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
-              Importar lista do Teams
-            </Button>
+            {!readOnly && (
+              <Button variant="secondary" size="sm" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
+                Importar lista do Teams
+              </Button>
+            )}
           </div>
           <ul className="-mx-5">
             {alunos.map((al) => {
@@ -219,14 +221,18 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, onClose, onSaved }: 
                       {p?.editado_por && <span className="text-fg-3 text-xs">· editado manualmente</span>}
                     </div>
                   </div>
-                  <Switch checked={presente} disabled={salvando === al.id} onChange={(v) => marcar(al, v)}
-                    label={<span className="text-xs whitespace-nowrap w-14 inline-block">{presente ? 'Presente' : 'Ausente'}</span>} />
+                  {readOnly ? (
+                    <Badge tone={presente ? 'success' : 'default'} className="flex-shrink-0">{presente ? 'Presente' : 'Ausente'}</Badge>
+                  ) : (
+                    <Switch checked={presente} disabled={salvando === al.id} onChange={(v) => marcar(al, v)}
+                      label={<span className="text-xs whitespace-nowrap w-14 inline-block">{presente ? 'Presente' : 'Ausente'}</span>} />
+                  )}
                 </li>
               );
             })}
           </ul>
 
-          {importOpen && (
+          {!readOnly && importOpen && (
             <PresencaTeamsImportModal turmaId={turmaId} aulaId={aula.id} alunos={alunos}
               onClose={() => setImportOpen(false)}
               onDone={() => { load(); onSaved?.(); }} />
