@@ -32,6 +32,7 @@ import DuvidaDetalhe from './pages/student/DuvidaDetalhe';
 import MinhasTurmas from './pages/student/MinhasTurmas';
 import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
 import TurmaCursoDetalhe from './pages/student/TurmaCursoDetalhe';
+import Profile from './pages/student/Profile';
 import PresencaCurso from './pages/student/PresencaCurso';
 
 function Loading() {
@@ -100,6 +101,7 @@ export default function App() {
                     <Route path="/admin/aulas" element={<AdminAulas />} />
                     <Route path="/admin/faixas" element={<AdminFaixas />} />
                     <Route path="/admin/mapa-professores" element={<MapaProfessores />} />
+                    <Route path="/perfil" element={<Profile />} />
                   </Route>
                 </Route>
 
@@ -120,6 +122,7 @@ export default function App() {
                     <Route path="/turmas" element={<MinhasTurmas />} />
                     <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
                     <Route path="/turmas/:turmaId/cursos/:cursoId" element={<TurmaCursoDetalhe />} />
+                    <Route path="/perfil" element={<Profile />} />
                   </Route>
                 </Route>
 

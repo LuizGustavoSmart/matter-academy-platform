@@ -48,7 +48,7 @@ export default function AdminFaixas() {
   return (
     <div>
       <PageHeader
-        title="Faixas"
+        title="Modelos"
         subtitle="Capa padrão de cada faixa. Cursos e aulas sem capa própria usam automaticamente a imagem da faixa correspondente."
       />
 

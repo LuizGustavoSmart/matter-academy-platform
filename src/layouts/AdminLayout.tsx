@@ -14,7 +14,7 @@ const nav: NavGroup[] = [
     items: [
       { to: '/admin/usuarios', label: 'Usuários', icon: Users },
       { to: '/admin/turmas', label: 'Turmas', icon: Layers },
-      { to: '/admin/faixas', label: 'Faixas', icon: Image },
+      { to: '/admin/faixas', label: 'Modelos', icon: Image },
     ],
   },
   {

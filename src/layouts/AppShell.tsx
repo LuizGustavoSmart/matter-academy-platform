@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog } from 'lucide-react';
+import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog, UserCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 import { Avatar, Breadcrumbs, cn } from '../components/ui';
@@ -115,13 +115,16 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
             variants={popIn}
             className="absolute bottom-full mb-2 left-0 right-0 min-w-[220px] ma-glass ma-glass-strong rounded-lg overflow-hidden z-50"
           >
-            <div className="px-3.5 py-3 border-b border-line">
+            <button role="menuitem" onClick={() => { setOpen(false); nav('/perfil'); }} className="w-full text-left px-3.5 py-3 border-b border-line hover:bg-panel-3 transition-colors">
               <p className="text-sm text-fg font-medium truncate">{profile?.nome || name}</p>
               <p className="text-xs text-fg-3 truncate mt-0.5">{profile?.email}</p>
               <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand/12 text-brand border border-brand/25">
                 {ROLE_LABEL[profile?.role ?? ''] ?? 'Usuário'}
               </span>
-            </div>
+            </button>
+            <button role="menuitem" onClick={() => { setOpen(false); nav('/perfil'); }} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors">
+              <UserCircle className="w-4 h-4" /> Meu perfil
+            </button>
             <button role="menuitem" onClick={logout} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors">
               <LogOut className="w-4 h-4" /> Sair da conta
             </button>

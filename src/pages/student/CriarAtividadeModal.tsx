@@ -4,11 +4,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Modal, Field, Input, Textarea, Select, Switch, Alert } from '../../components/ui';
 
+const AULAS_POR_FAIXA = 12;
+
 type Aula = { id: string; titulo: string };
 export type AtividadeEditavel = {
   id: string; titulo: string; descricao: string | null; aula_id: string | null;
   nota_maxima: number; prazo: string | null; anexo_url: string | null; anexo_nome: string | null;
-  avaliada_com_nota?: boolean;
+  avaliada_com_nota?: boolean; ordem?: number;
 };
 
 export default function CriarAtividadeModal({
@@ -20,6 +22,7 @@ export default function CriarAtividadeModal({
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [aulaId, setAulaId] = useState('');
+  const [posicao, setPosicao] = useState(1);
   const [avaliadaComNota, setAvaliadaComNota] = useState(true);
   const [notaMaxima, setNotaMaxima] = useState(10);
   const [prazo, setPrazo] = useState('');
@@ -33,6 +36,7 @@ export default function CriarAtividadeModal({
   useEffect(() => {
     if (!open) return;
     setTitulo(atividade?.titulo ?? ''); setDescricao(atividade?.descricao ?? ''); setAulaId(atividade?.aula_id ?? '');
+    setPosicao(atividade?.ordem || 1);
     setAvaliadaComNota(atividade?.avaliada_com_nota ?? true);
     setNotaMaxima(atividade?.nota_maxima ?? 10);
     setPrazo(atividade?.prazo ? toDatetimeLocal(atividade.prazo) : '');
@@ -52,6 +56,8 @@ export default function CriarAtividadeModal({
       const payload = {
         aula_id: aulaId || null, titulo: titulo.trim(), descricao: descricao.trim(),
         anexo_url, anexo_nome, avaliada_com_nota: avaliadaComNota, nota_maxima: notaMaxima, prazo: prazo ? new Date(prazo).toISOString() : null,
+        // Curso sem aulas: a posição escolhida (Atividade 1, 2...) define a ordem, já que não há aula para vincular.
+        ...(aulas.length === 0 ? { ordem: posicao } : {}),
       };
       // avaliada_com_nota ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,12 +79,20 @@ export default function CriarAtividadeModal({
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="ca-tit"><Input id="ca-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="ca-desc"><Textarea id="ca-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
-        <Field label="Aula relacionada" hint="Opcional" htmlFor="ca-aula">
-          <Select id="ca-aula" value={aulaId} onChange={(e) => setAulaId(e.target.value)}>
-            <option value="">Nenhuma</option>
-            {aulas.map((a) => <option key={a.id} value={a.id}>{a.titulo}</option>)}
-          </Select>
-        </Field>
+        {aulas.length > 0 ? (
+          <Field label="Aula relacionada" hint="Opcional" htmlFor="ca-aula">
+            <Select id="ca-aula" value={aulaId} onChange={(e) => setAulaId(e.target.value)}>
+              <option value="">Nenhuma</option>
+              {aulas.map((a) => <option key={a.id} value={a.id}>{a.titulo}</option>)}
+            </Select>
+          </Field>
+        ) : (
+          <Field label="Posição da atividade" hint="Este curso não tem aulas — escolha a posição para manter a ordem correta" htmlFor="ca-posicao">
+            <Select id="ca-posicao" value={posicao} onChange={(e) => setPosicao(parseInt(e.target.value, 10) || 1)}>
+              {Array.from({ length: AULAS_POR_FAIXA }, (_, i) => i + 1).map((n) => <option key={n} value={n}>Atividade {n}</option>)}
+            </Select>
+          </Field>
+        )}
 
         <div className="flex items-center gap-3 rounded-lg border border-line bg-panel-3/30 p-3">
           <Switch checked={avaliadaComNota} onChange={setAvaliadaComNota} />
