@@ -843,18 +843,21 @@ export type Database = {
         Row: {
           curso_id: string | null
           id: string
+          is_embaixador: boolean
           turma_id: string
           user_id: string
         }
         Insert: {
           curso_id?: string | null
           id?: string
+          is_embaixador?: boolean
           turma_id: string
           user_id: string
         }
         Update: {
           curso_id?: string | null
           id?: string
+          is_embaixador?: boolean
           turma_id?: string
           user_id?: string
         }
