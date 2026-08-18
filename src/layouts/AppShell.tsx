@@ -1,12 +1,13 @@
-import { useEffect, useState, ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 import { Avatar, Breadcrumbs, cn } from '../components/ui';
 import type { Crumb } from '../components/ui';
-import { fadeScrim, slideFromLeft } from '../components/ui/motion';
+import { fadeScrim, popIn, slideFromLeft } from '../components/ui/motion';
 
 export type NavItem = {
   label: string;
@@ -70,36 +71,92 @@ function NavList({ nav, collapsed, onNavigate }: { nav: NavGroup[]; collapsed: b
 }
 
 /* ════════════════════════════ ProfileMenu ═════════════════════════════ */
+/**
+ * Posicionado via portal para document.body (mesmo padrão do DropdownMenu
+ * genérico em components/ui/overlays.tsx) — evitar aninhar o conteúdo do
+ * menu dentro do próprio botão, que causava uma corrida entre o listener de
+ * "clique fora" (mousedown) e o clique no item "Meu perfil" (que só chegava
+ * depois), fazendo a navegação nunca disparar.
+ */
 function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
   const { profile, signOut } = useAuth();
   const nav = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ bottom: number; left: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+
+  const place = useCallback(() => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ bottom: window.innerHeight - r.top + 8, left: r.left, right: window.innerWidth - r.right });
+  }, []);
+
+  const toggle = () => { if (!open) place(); setOpen((o) => !o); };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (!btnRef.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
 
   const logout = async () => { await signOut(); nav('/login'); };
   const name = profile?.nome || profile?.email?.split('@')[0] || 'Conta';
 
   return (
-    <div className={cn('flex items-center gap-1.5', !collapsed && 'w-full')}>
+    <div>
       <button
-        onClick={() => nav('/perfil')}
-        title={collapsed ? 'Meu perfil' : undefined}
-        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors min-w-0', !collapsed && 'flex-1')}
+        ref={btnRef}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors', !collapsed && 'w-full')}
       >
         <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} />
         {!collapsed && (
-          <>
-            <span className="min-w-0 text-left flex-1">
-              <span className="block text-sm text-fg font-medium truncate">{name}</span>
-              <span className="block text-[11px] text-fg-3 truncate">{ROLE_LABEL[profile?.role ?? ''] ?? profile?.email}</span>
-            </span>
-            <ChevronRight className="w-4 h-4 text-fg-3 flex-shrink-0" />
-          </>
+          <span className="min-w-0 text-left flex-1">
+            <span className="block text-sm text-fg font-medium truncate">{name}</span>
+            <span className="block text-[11px] text-fg-3 truncate">{ROLE_LABEL[profile?.role ?? ''] ?? profile?.email}</span>
+          </span>
         )}
       </button>
-      {!collapsed && (
-        <button onClick={logout} title="Sair da conta" aria-label="Sair da conta"
-          className="flex-shrink-0 grid place-items-center w-8 h-8 rounded-lg text-fg-3 hover:text-fg hover:bg-panel-2 transition-colors">
-          <LogOut className="w-4 h-4" />
-        </button>
+
+      {pos && createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              role="menu"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={popIn}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="fixed z-[60] min-w-[220px] ma-glass ma-glass-strong rounded-lg overflow-hidden"
+              style={{ bottom: pos.bottom, left: pos.left }}
+            >
+              <button role="menuitem" onClick={() => { setOpen(false); nav('/perfil'); }} className="w-full text-left px-3.5 py-3 border-b border-line hover:bg-panel-3 transition-colors">
+                <p className="text-sm text-fg font-medium truncate">{profile?.nome || name}</p>
+                <p className="text-xs text-fg-3 truncate mt-0.5">{profile?.email}</p>
+                <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand/12 text-brand border border-brand/25">
+                  {ROLE_LABEL[profile?.role ?? ''] ?? 'Usuário'}
+                </span>
+              </button>
+              <button role="menuitem" onClick={logout} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors">
+                <LogOut className="w-4 h-4" /> Sair da conta
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
     </div>
   );
