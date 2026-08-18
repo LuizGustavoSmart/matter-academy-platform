@@ -39,6 +39,9 @@ export const ORIGEM_TONE: Record<OrigemPresenca, 'success' | 'info' | 'warn' | '
 /** Percentual do vídeo que precisa ser assistido para marcar presença. */
 export const LIMITE_PRESENCA_PCT = 80;
 
+/** Percentual assistido (contínuo, sem contar avanço/arrasto) para marcar a aula como concluída. */
+export const LIMITE_CONCLUSAO_PCT = 70;
+
 /** O aluno pode entrar um pouco antes do horário marcado e ainda contar como ao vivo. */
 const TOLERANCIA_ANTES_MIN = 30;
 /** Usada quando a turma não tem horário de início/fim cadastrado em curso_turmas. */

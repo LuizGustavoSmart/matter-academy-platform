@@ -9,7 +9,7 @@ import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 import {
-  LIMITE_PRESENCA_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
+  LIMITE_PRESENCA_PCT, LIMITE_CONCLUSAO_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
 } from '../../lib/presenca';
 
 
@@ -96,20 +96,6 @@ export default function StudentCourse() {
     ultimoProgresso.current = null; // o player remonta e recomeça a contagem
     if (profile) await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: aulaId, concluido: done.has(aulaId), updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
   };
-  const toggleDone = async () => {
-    if (!current || !profile) return;
-    const newDone = !done.has(current.id);
-    await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: current.id, concluido: newDone, updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
-    const next = new Set(done);
-    if (newDone) next.add(current.id); else next.delete(current.id);
-    setDone(next);
-  };
-  const markCurrentDone = async () => {
-    if (!current || !profile || done.has(current.id)) return;
-    await salvarProgresso(current.id, true);
-    setDone((prev) => new Set(prev).add(current.id));
-  };
-
   /** Grava tempo assistido junto com o `concluido` já existente. */
   const salvarProgresso = async (aulaId: string, concluido: boolean) => {
     if (!profile) return;
@@ -131,14 +117,22 @@ export default function StudentCourse() {
   const handleProgress = useCallback((p: WatchProgress) => {
     ultimoProgresso.current = p;
     const aulaId = currentId;
-    if (!profile || !turmaId || !aulaId) return;
-    if (p.pct < LIMITE_PRESENCA_PCT || presencaMarcada.current.has(aulaId)) return;
+    if (!profile || !aulaId) return;
+
+    // A aula só conta como concluída ao cruzar o percentual assistido mínimo —
+    // não existe mais marcação manual pelo aluno.
+    if (!done.has(aulaId) && p.pct >= LIMITE_CONCLUSAO_PCT) {
+      salvarProgresso(aulaId, true);
+      setDone((prev) => new Set(prev).add(aulaId));
+    }
+
+    if (!turmaId || p.pct < LIMITE_PRESENCA_PCT || presencaMarcada.current.has(aulaId)) return;
     presencaMarcada.current.add(aulaId);
     registrarPresencaAutomatica({
       aulaId, userId: profile.id, turmaId, pct: p.pct,
       aoVivo: dentroDaJanelaAoVivo(horarios[aulaId], duracaoMin),
     });
-    salvarProgresso(aulaId, done.has(aulaId));
+    salvarProgresso(aulaId, true);
   }, [profile, turmaId, currentId, horarios, duracaoMin, done]); // eslint-disable-line react-hooks/exhaustive-deps
   const goNext = () => { const next = aulas[currentIdx + 1]; if (next) selectAula(next.id); };
 
@@ -262,12 +256,14 @@ export default function StudentCourse() {
         <section className="p-4 sm:p-6 lg:p-8">
           {current ? (
             <>
-              <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onEnded={markCurrentDone} onNext={goNext} onProgress={handleProgress} /></div>
+              <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
                 <div className="min-w-0"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0">
+                <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0 sm:items-center">
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
-                  <Button variant={isDone ? 'primary' : 'secondary'} onClick={toggleDone} icon={<Check className="w-4 h-4" />}>{isDone ? 'Concluída' : 'Marcar como concluída'}</Button>
+                  <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
+                    <Check className="w-4 h-4" />{isDone ? 'Concluída' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
+                  </span>
                 </div>
               </div>
               {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words">{current.descricao}</p>}
