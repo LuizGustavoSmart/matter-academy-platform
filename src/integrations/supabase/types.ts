@@ -967,6 +967,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_embaixador_of_turma: { Args: { p_turma_id: string }; Returns: boolean }
+      is_embaixador_over_user: { Args: { p_user_id: string }; Returns: boolean }
       is_professor_of_turma: { Args: { t_id: string }; Returns: boolean }
       shares_turma_with: { Args: { _other: string }; Returns: boolean }
       storage_can_access_atividade_path: {
