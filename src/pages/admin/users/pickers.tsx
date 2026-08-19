@@ -3,7 +3,7 @@ import { Checkbox, Switch } from '../../../components/ui';
 
 export type Turma = { id: string; nome: string };
 export type CursoInfo = { id: string; titulo: string };
-export type TurmaSelection = { turma_id: string; curso_ids: string[]; is_embaixador?: boolean };
+export type TurmaSelection = { turma_id: string; curso_ids: string[]; embaixador_curso_ids?: string[] };
 
 /** Carrega os cursos de cada turma via curso_turmas. */
 export async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
@@ -34,21 +34,31 @@ export function TurmaCoursePicker({
 }) {
   const isTurmaSelected = (tid: string) => value.some((v) => v.turma_id === tid);
   const getCursoIds = (tid: string) => value.find((v) => v.turma_id === tid)?.curso_ids ?? [];
-  const isEmbaixadorTurma = (tid: string) => !!value.find((v) => v.turma_id === tid)?.is_embaixador;
+  const isEmbaixadorCurso = (tid: string, cid: string) => !!value.find((v) => v.turma_id === tid)?.embaixador_curso_ids?.includes(cid);
 
   const toggleTurma = (tid: string) => {
     if (isTurmaSelected(tid)) onChange(value.filter((v) => v.turma_id !== tid));
-    else onChange([...value, { turma_id: tid, curso_ids: [], is_embaixador: showEmbaixadorToggle }]);
+    else onChange([...value, { turma_id: tid, curso_ids: [], embaixador_curso_ids: [] }]);
   };
   const toggleCurso = (tid: string, cid: string) => {
     onChange(value.map((v) => {
       if (v.turma_id !== tid) return v;
-      const curso_ids = v.curso_ids.includes(cid) ? v.curso_ids.filter((c) => c !== cid) : [...v.curso_ids, cid];
-      return { ...v, curso_ids };
+      const selecionando = !v.curso_ids.includes(cid);
+      const curso_ids = selecionando ? [...v.curso_ids, cid] : v.curso_ids.filter((c) => c !== cid);
+      // Ao desmarcar o curso, remove também a marcação de embaixador nele.
+      const embaixador_curso_ids = selecionando
+        ? (showEmbaixadorToggle ? [...(v.embaixador_curso_ids ?? []), cid] : v.embaixador_curso_ids)
+        : (v.embaixador_curso_ids ?? []).filter((c) => c !== cid);
+      return { ...v, curso_ids, embaixador_curso_ids };
     }));
   };
-  const toggleEmbaixador = (tid: string) => {
-    onChange(value.map((v) => (v.turma_id === tid ? { ...v, is_embaixador: !v.is_embaixador } : v)));
+  const toggleEmbaixadorCurso = (tid: string, cid: string) => {
+    onChange(value.map((v) => {
+      if (v.turma_id !== tid) return v;
+      const current = v.embaixador_curso_ids ?? [];
+      const embaixador_curso_ids = current.includes(cid) ? current.filter((c) => c !== cid) : [...current, cid];
+      return { ...v, embaixador_curso_ids };
+    }));
   };
 
   if (turmas.length === 0) {
@@ -67,23 +77,27 @@ export function TurmaCoursePicker({
             <div className="flex items-center gap-2 flex-wrap">
               <Checkbox checked={selected} onChange={() => toggleTurma(t.id)} label={<span className="text-fg font-medium">{t.nome}</span>} />
               {missingCourse && <span className="text-danger text-xs">selecione ao menos 1 curso</span>}
-              {selected && showEmbaixadorToggle && (
-                <Switch checked={!!isEmbaixadorTurma(t.id)} onChange={() => toggleEmbaixador(t.id)}
-                  label={<span className="text-xs whitespace-nowrap">{isEmbaixadorTurma(t.id) ? 'Embaixador' : 'Aluno normal'}</span>} />
-              )}
             </div>
             {selected && showCourses && (
-              <div className="ml-6 mt-1.5 space-y-1 pb-1">
+              <div className="ml-6 mt-1.5 space-y-1.5 pb-1">
                 {courses.length === 0 ? (
                   <p className="text-fg-3 text-xs italic">Nenhum curso vinculado a esta turma.</p>
-                ) : courses.map((c) => (
-                  <Checkbox
-                    key={c.id}
-                    checked={selectedCursoIds.includes(c.id)}
-                    onChange={() => toggleCurso(t.id, c.id)}
-                    label={<span className="text-fg-2 text-[13px]">{c.titulo}</span>}
-                  />
-                ))}
+                ) : courses.map((c) => {
+                  const cursoSelecionado = selectedCursoIds.includes(c.id);
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 flex-wrap">
+                      <Checkbox
+                        checked={cursoSelecionado}
+                        onChange={() => toggleCurso(t.id, c.id)}
+                        label={<span className="text-fg-2 text-[13px]">{c.titulo}</span>}
+                      />
+                      {cursoSelecionado && showEmbaixadorToggle && (
+                        <Switch checked={isEmbaixadorCurso(t.id, c.id)} onChange={() => toggleEmbaixadorCurso(t.id, c.id)}
+                          label={<span className="text-xs whitespace-nowrap">{isEmbaixadorCurso(t.id, c.id) ? 'Embaixador' : 'Aluno normal'}</span>} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

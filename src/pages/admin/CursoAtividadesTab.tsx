@@ -127,6 +127,7 @@ export default function CursoAtividadesTab({ turmaId, cursoId, readOnly = false 
                       <p className="text-fg-3 text-xs mt-0.5 truncate">Prazo: {prazoLabel}{a.avaliada_com_nota === false ? ' · Sem nota' : ''}{readOnly ? ` · ${enviados}/${alunos.length} entregues` : ''}</p>
                     </div>
                     {pend > 0 && <Badge tone="warn" className="flex-shrink-0">{pend} pend.</Badge>}
+                    {readOnly && !a.publicada && <Badge className="flex-shrink-0">Não disponível</Badge>}
                     {readOnly ? null : (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <IconButton label="Mover para cima" onClick={() => moveAtividade(a, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconButton>
