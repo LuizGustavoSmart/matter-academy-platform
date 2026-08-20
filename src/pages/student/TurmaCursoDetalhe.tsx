@@ -3,7 +3,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal, HelpCircle, ClipboardList, Percent, Clock, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, cn, useToast, useConfirm } from '../../components/ui';
+import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
@@ -19,9 +19,17 @@ type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssist
 type NextAula = { titulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
 type EmbDashboard = {
   aulasTotal: number; aulasFeitas: number; presencaMedia: number;
-  atividadesTotal: number; nextAula: NextAula | null;
+  atividadesTotal: number; atividadesDisponiveis: number; nextAula: NextAula | null;
 };
 const AULAS_POR_FAIXA = 12;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Ordena por "ordem", mas força qualquer item titulado "Projeto Final" para o fim da lista. */
+function sortProjetoFinalLast<T extends { titulo: string }>(rows: T[]): T[] {
+  const isFinal = (r: T) => r.titulo.trim().toLowerCase() === 'projeto final';
+  return [...rows.filter((r) => !isFinal(r)), ...rows.filter(isFinal)];
+}
 
 export default function TurmaCursoDetalhe() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
@@ -51,6 +59,7 @@ export default function TurmaCursoDetalhe() {
 
   const [alunosResumo, setAlunosResumo] = useState<AlunoResumo[]>([]);
   const [alunosLoading, setAlunosLoading] = useState(false);
+  const [alunosTotais, setAlunosTotais] = useState({ aulas: 0, atividades: 0 });
 
   const [embDash, setEmbDash] = useState<EmbDashboard | null>(null);
   const [embDashLoading, setEmbDashLoading] = useState(false);
@@ -110,7 +119,7 @@ export default function TurmaCursoDetalhe() {
     setAlunosLoading(true);
     const { data: uts } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!);
     const userIds = (uts ?? []).map((r) => r.user_id);
-    if (!userIds.length) { setAlunosResumo([]); setAlunosLoading(false); return; }
+    if (!userIds.length) { setAlunosResumo([]); setAlunosTotais({ aulas: 0, atividades: 0 }); setAlunosLoading(false); return; }
     const [{ data: profiles }, { data: aulasData }] = await Promise.all([
       supabase.from('profiles').select('id,email,nome,role').in('id', userIds),
       supabase.from('aulas').select('id').eq('curso_id', cursoId!),
@@ -133,6 +142,7 @@ export default function TurmaCursoDetalhe() {
     setAlunosResumo(students.map((s) => ({
       id: s.id, email: s.email, nome: s.nome, aulasAssistidas: aulasPorAluno[s.id] ?? 0, atividadesEnviadas: enviosPorAluno[s.id] ?? 0,
     })));
+    setAlunosTotais({ aulas: aulaIds.length, atividades: atividadeIds.length });
     setAlunosLoading(false);
   };
 
@@ -159,12 +169,14 @@ export default function TurmaCursoDetalhe() {
 
     const [{ data: presencas }, { data: atividades }] = await Promise.all([
       aulaIds.length ? supabase.from('presencas').select('aula_id,presente').eq('turma_id', turmaId!).in('aula_id', aulaIds) : Promise.resolve({ data: [] }),
-      supabase.from('atividades').select('id').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
+      sb.from('atividades').select('id,publicada').eq('turma_id', turmaId!).eq('curso_id', cursoId!),
     ]);
     const presentesCount = (presencas ?? []).filter((p) => p.presente).length;
     const presencaMedia = aulasFeitas > 0 && alunosCount > 0 ? Math.round((presentesCount / (aulasFeitas * alunosCount)) * 100) : 0;
 
-    const atividadeIds = (atividades ?? []).map((a) => a.id);
+    const atividadesRows = (atividades ?? []) as { id: string; publicada: boolean }[];
+    const atividadeIds = atividadesRows.map((a) => a.id);
+    const atividadesDisponiveis = atividadesRows.filter((a) => a.publicada).length;
 
     type Chosen = { id: string; dh: string };
     let started: Chosen | null = null;
@@ -185,7 +197,7 @@ export default function TurmaCursoDetalhe() {
       started: !!started,
     } : null;
 
-    setEmbDash({ aulasTotal, aulasFeitas, presencaMedia, atividadesTotal: atividadeIds.length, nextAula });
+    setEmbDash({ aulasTotal, aulasFeitas, presencaMedia, atividadesTotal: atividadeIds.length, atividadesDisponiveis, nextAula });
     setEmbDashLoading(false);
   };
 
@@ -249,25 +261,33 @@ export default function TurmaCursoDetalhe() {
       {tab === 'dashboard' && (
         isEmbaixador ? (
           embDashLoading || !embDash ? (
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}</div>
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-4">
+                <Skeleton className="h-24 rounded-lg" />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}</div>
+              </div>
+              <Skeleton className="h-48 rounded-lg" />
+            </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  <StatTile label="Aulas realizadas" value={`${embDash.aulasFeitas}/${embDash.aulasTotal || '—'}`} icon={<PlayCircle className="w-4 h-4" />} />
-                  <StatTile label="Aulas restantes" value={Math.max(embDash.aulasTotal - embDash.aulasFeitas, 0)} icon={<Clock className="w-4 h-4" />} />
-                  <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
-                  <StatTile label="Presença média" value={`${embDash.presencaMedia}%`} icon={<Percent className="w-4 h-4" />} />
-                  <StatTile label="Atividades" value={embDash.atividadesTotal} icon={<ClipboardList className="w-4 h-4" />} />
-                </div>
                 <Card className="p-5">
-                  <p className="text-fg-3 text-xs mb-2">{embDash.aulasFeitas} aula{embDash.aulasFeitas === 1 ? '' : 's'} realizada{embDash.aulasFeitas === 1 ? '' : 's'}</p>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2"><PlayCircle className="w-4 h-4 text-fg-2" /><span className="text-fg-3 text-xs font-semibold uppercase tracking-wider">Aulas realizadas</span></div>
+                    <p className="text-2xl font-display font-semibold text-fg tabular-nums">{embDash.aulasFeitas}<span className="text-fg-3 text-base font-normal">/{embDash.aulasTotal || '—'}</span></p>
+                  </div>
                   <div className="flex gap-1">
                     {Array.from({ length: Math.max(embDash.aulasTotal, AULAS_POR_FAIXA) }).map((_, i) => (
                       <div key={i} className={i < embDash.aulasFeitas ? 'h-2.5 flex-1 rounded-full bg-brand transition-colors' : 'h-2.5 flex-1 rounded-full bg-line/60 transition-colors'} />
                     ))}
                   </div>
                 </Card>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatTile label="Aulas restantes" value={Math.max(embDash.aulasTotal - embDash.aulasFeitas, 0)} icon={<Clock className="w-4 h-4" />} />
+                  <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+                  <StatTile label="Presença média" value={`${embDash.presencaMedia}%`} icon={<Percent className="w-4 h-4" />} />
+                  <StatTile label="Atividades" value={`${embDash.atividadesDisponiveis}/${embDash.atividadesTotal || '—'}`} icon={<ClipboardList className="w-4 h-4" />} />
+                </div>
               </div>
               <Card className="p-5">
                 <div className="flex items-center gap-2 mb-4"><Video className="w-4 h-4 text-fg-2" /><h2 className="text-base">Próxima aula</h2></div>
@@ -302,7 +322,7 @@ export default function TurmaCursoDetalhe() {
       {tab === 'aulas' && (
         <div>
           <div className="flex items-center justify-between mb-4 gap-3">
-            <p className="text-fg-3 text-sm">Aulas deste curso.</p>
+            <p className="text-fg-3 text-sm">Cronograma de aulas</p>
             {!isEmbaixador && <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button>}
           </div>
           {aulasLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
@@ -355,7 +375,7 @@ export default function TurmaCursoDetalhe() {
 
       {tab === 'atividades' && (
         isEmbaixador
-          ? <AtividadesEngajamento turmaId={turmaId!} cursoId={cursoId!} turmaNome={turma?.nome ?? ''} alunosCount={alunosCount} />
+          ? <AtividadesEngajamento turmaId={turmaId!} cursoId={cursoId!} alunosCount={alunosCount} />
           : <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} />
       )}
       {tab === 'presenca' && (
@@ -394,17 +414,21 @@ export default function TurmaCursoDetalhe() {
             alunosResumo.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" /> : (
               <Card className="overflow-hidden">
                 <ul>
-                  {alunosResumo.map((a) => (
-                    <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setAlunoDetalhe(a)}>
-                      <Avatar name={a.nome} email={a.email} size={32} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
-                        <p className="text-fg-3 text-xs truncate">{a.email}</p>
-                      </div>
-                      <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><PlayCircle className="w-4 h-4 text-fg-3" />{a.aulasAssistidas} aulas</span>
-                      <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><ClipboardList className="w-4 h-4 text-fg-3" />{a.atividadesEnviadas} atividades</span>
-                    </li>
-                  ))}
+                  {alunosResumo.map((a) => {
+                    const pctAulas = alunosTotais.aulas ? Math.round((a.aulasAssistidas / alunosTotais.aulas) * 100) : 0;
+                    const pctAtividades = alunosTotais.atividades ? Math.round((a.atividadesEnviadas / alunosTotais.atividades) * 100) : 0;
+                    return (
+                      <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setAlunoDetalhe(a)}>
+                        <Avatar name={a.nome} email={a.email} size={32} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
+                          <p className="text-fg-3 text-xs truncate">{a.email}</p>
+                        </div>
+                        <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><PlayCircle className="w-4 h-4 text-fg-3" />Aulas - {pad2(a.aulasAssistidas)}/{pad2(alunosTotais.aulas)} ({pctAulas}%)</span>
+                        <span className="flex items-center gap-1.5 text-sm text-fg-2 flex-shrink-0"><ClipboardList className="w-4 h-4 text-fg-3" />Atividades - {pad2(a.atividadesEnviadas)}/{pad2(alunosTotais.atividades)} ({pctAtividades}%)</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </Card>
             )}
@@ -483,8 +507,8 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
 }
 
 /* ═══════════════════ Engajamento nas Atividades (embaixador) ═══════════════════ */
-function AtividadesEngajamento({ turmaId, cursoId, turmaNome, alunosCount }: {
-  turmaId: string; cursoId: string; turmaNome: string; alunosCount: number;
+function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
+  turmaId: string; cursoId: string; alunosCount: number;
 }) {
   type Row = { id: string; ordem: number; titulo: string; entregues: number };
   const [rows, setRows] = useState<Row[]>([]);
@@ -500,23 +524,19 @@ function AtividadesEngajamento({ turmaId, cursoId, turmaNome, alunosCount }: {
         : { data: [] };
       const entreguesPorAtividade: Record<string, number> = {};
       (envios ?? []).forEach((e) => { if (e.enviado_em) entreguesPorAtividade[e.atividade_id] = (entreguesPorAtividade[e.atividade_id] ?? 0) + 1; });
-      setRows((atividades ?? []).map((a) => ({ id: a.id, ordem: a.ordem, titulo: a.titulo, entregues: entreguesPorAtividade[a.id] ?? 0 })));
+      const list = (atividades ?? []).map((a) => ({ id: a.id, ordem: a.ordem, titulo: a.titulo, entregues: entreguesPorAtividade[a.id] ?? 0 }));
+      setRows(sortProjetoFinalLast(list));
       setLoading(false);
     })();
   }, [turmaId, cursoId]);
 
   if (loading) return <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>;
 
-  const semEntrega = rows.filter((r) => r.entregues === 0);
-
   return (
     <Card className="p-5 sm:p-6">
-      <h2 className="text-base mb-0.5">Engajamento nas Atividades — Turma {turmaNome}</h2>
-      {semEntrega.length > 0 && (
-        <p className="text-warn text-xs mb-5">{semEntrega.map((r) => r.titulo).join(', ')}: nenhuma entrega até o momento</p>
-      )}
+      <h2 className="text-base mb-5">Engajamento nas Atividades</h2>
       {rows.length === 0 ? <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade cadastrada" /> : (
-        <div className={cn('space-y-4', semEntrega.length === 0 && 'mt-5')}>
+        <div className="space-y-4">
           {rows.map((r) => {
             const pct = alunosCount ? Math.round((r.entregues / alunosCount) * 100) : 0;
             return (
@@ -562,7 +582,7 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
         ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').eq('aluno_id', aluno.id).in('atividade_id', atividadeIds)
         : { data: [] };
       const envioMap = new Map((envios ?? []).map((e) => [e.atividade_id, e.enviado_em]));
-      setAtividades((ats ?? []).map((a) => ({ id: a.id, titulo: a.titulo, enviadoEm: envioMap.get(a.id) ?? null })));
+      setAtividades(sortProjetoFinalLast((ats ?? []).map((a) => ({ id: a.id, titulo: a.titulo, enviadoEm: envioMap.get(a.id) ?? null }))));
 
       const horariosMap = new Map(((hs ?? []) as { aula_id: string; data_hora: string }[]).map((h) => [h.aula_id, h.data_hora]));
       const presencaMap = new Map(((presencas ?? []) as { aula_id: string; presente: boolean }[]).map((p) => [p.aula_id, p.presente]));
@@ -572,6 +592,11 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
       setLoading(false);
     })();
   }, [turmaId, cursoId, aluno.id]);
+
+  const atividadesEntregues = atividades.filter((a) => a.enviadoEm).length;
+  const pctAtividades = atividades.length ? Math.round((atividadesEntregues / atividades.length) * 100) : 0;
+  const aulasPresentes = aulas.filter((a) => a.presente).length;
+  const pctAulas = aulas.length ? Math.round((aulasPresentes / aulas.length) * 100) : 0;
 
   return (
     <Modal open onClose={onClose} size="lg" title={aluno.nome || aluno.email}>
@@ -583,7 +608,9 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
       ) : (
         <div className="grid sm:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">Atividades</h3>
+            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">
+              Atividades - {pad2(atividadesEntregues)}/{pad2(atividades.length)} ({pctAtividades}%)
+            </h3>
             {atividades.length === 0 ? <p className="text-fg-3 text-sm">Nenhuma atividade.</p> : (
               <ul className="space-y-1.5">
                 {atividades.map((a) => (
@@ -596,7 +623,9 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
             )}
           </div>
           <div>
-            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">Presença</h3>
+            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">
+              Presença - {pad2(aulasPresentes)}/{pad2(aulas.length)} ({pctAulas}%)
+            </h3>
             {aulas.length === 0 ? <p className="text-fg-3 text-sm">Nenhuma aula.</p> : (
               <ul className="space-y-1.5">
                 {aulas.map((a) => (
