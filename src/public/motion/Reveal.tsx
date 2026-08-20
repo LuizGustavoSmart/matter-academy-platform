@@ -32,7 +32,7 @@ export function Reveal({ children, className, delay = 0, as = 'div' }: RevealPro
   return (
     <Tag
       className={className}
-      initial="hidden"
+      initial={false}
       whileInView="visible"
       viewport={viewportOnce}
       variants={delayedFadeRise}
@@ -66,7 +66,7 @@ export function RevealGroup({
   return (
     <m.div
       className={className}
-      initial="hidden"
+      initial={false}
       whileInView="visible"
       viewport={viewportOnce}
       variants={variants}
