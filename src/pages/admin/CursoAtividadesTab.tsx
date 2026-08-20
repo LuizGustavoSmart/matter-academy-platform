@@ -30,7 +30,7 @@ export default function CursoAtividadesTab({ turmaId, cursoId, readOnly = false 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const [{ data: as }, { data: ut }] = await Promise.all([
-      sb.from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem,avaliada_com_nota').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: false }),
+      sb.from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem,avaliada_com_nota').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: true }),
       supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId).eq('curso_id', cursoId),
     ]);
     setAtividades(as ?? []);

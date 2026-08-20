@@ -517,7 +517,7 @@ function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data: atividades } = await supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem');
+      const { data: atividades } = await supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: true });
       const atividadeIds = (atividades ?? []).map((a) => a.id);
       const { data: envios } = atividadeIds.length
         ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').in('atividade_id', atividadeIds)
@@ -572,7 +572,7 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const [{ data: ats }, { data: aulasList }, { data: hs }, { data: presencas }] = await Promise.all([
-        supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem'),
+        supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: true }),
         sb.from('aulas').select('id,ordem,titulo').eq('curso_id', cursoId).order('ordem'),
         sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId).eq('curso_id', cursoId),
         supabase.from('presencas').select('aula_id,presente').eq('turma_id', turmaId).eq('user_id', aluno.id),

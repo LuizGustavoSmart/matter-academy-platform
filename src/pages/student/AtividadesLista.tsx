@@ -41,7 +41,7 @@ export default function AtividadesLista() {
       supabase.from('cursos').select('titulo').eq('id', cursoId!).maybeSingle(),
       // publicada/ordem/avaliada_com_nota ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem,avaliada_com_nota').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('ordem').order('created_at', { ascending: false }),
+      (supabase as any).from('atividades').select('id,titulo,descricao,aula_id,anexo_url,anexo_nome,prazo,nota_maxima,publicada,ordem,avaliada_com_nota').eq('turma_id', turmaId!).eq('curso_id', cursoId!).order('ordem').order('created_at', { ascending: true }),
     ]);
     setTurmaNome(t?.nome ?? ''); setCursoTitulo(c?.titulo ?? ''); setAtividades(as ?? []);
     const atividadeIds = (as ?? []).map((a: Atividade) => a.id);
