@@ -3,7 +3,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal, HelpCircle, ClipboardList, Percent, Clock, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, useToast, useConfirm } from '../../components/ui';
+import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, cn, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
@@ -19,8 +19,9 @@ type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssist
 type NextAula = { titulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
 type EmbDashboard = {
   aulasTotal: number; aulasFeitas: number; presencaMedia: number;
-  atividadesTotal: number; entregasRecebidas: number; entregasEsperadas: number; nextAula: NextAula | null;
+  atividadesTotal: number; nextAula: NextAula | null;
 };
+const AULAS_POR_FAIXA = 12;
 
 export default function TurmaCursoDetalhe() {
   const { turmaId, cursoId } = useParams<{ turmaId: string; cursoId: string }>();
@@ -35,7 +36,9 @@ export default function TurmaCursoDetalhe() {
   const [turma, setTurma] = useState<Turma | null>(null);
   const [curso, setCurso] = useState<Curso | null>(null);
   const [alunosCount, setAlunosCount] = useState(0);
+  const [professorNome, setProfessorNome] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [alunoDetalhe, setAlunoDetalhe] = useState<AlunoResumo | null>(null);
 
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [horarios, setHorarios] = useState<Record<string, string>>({});
@@ -54,10 +57,14 @@ export default function TurmaCursoDetalhe() {
 
   const loadBase = async () => {
     setLoading(true);
-    const [{ data: t }, { data: c }, { data: uts }] = await Promise.all([
+    // professor_id ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const [{ data: t }, { data: c }, { data: uts }, { data: ct }] = await Promise.all([
       supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
       supabase.from('cursos').select('id,titulo,descricao').eq('id', cursoId!).maybeSingle(),
       supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!),
+      sb.from('curso_turmas').select('professor_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!).maybeSingle(),
     ]);
     setTurma(t); setCurso(c);
     const userIds = (uts ?? []).map((r) => r.user_id);
@@ -65,6 +72,10 @@ export default function TurmaCursoDetalhe() {
       const { data: profiles } = await supabase.from('profiles').select('id,role').in('id', userIds);
       setAlunosCount((profiles ?? []).filter((p) => p.role === 'student').length);
     } else setAlunosCount(0);
+    if (ct?.professor_id) {
+      const { data: prof } = await supabase.from('profiles').select('nome,sobrenome,email').eq('id', ct.professor_id).maybeSingle();
+      setProfessorNome(prof ? ([prof.nome, prof.sobrenome].filter(Boolean).join(' ') || prof.email) : null);
+    } else setProfessorNome(null);
     setLoading(false);
   };
 
@@ -154,11 +165,6 @@ export default function TurmaCursoDetalhe() {
     const presencaMedia = aulasFeitas > 0 && alunosCount > 0 ? Math.round((presentesCount / (aulasFeitas * alunosCount)) * 100) : 0;
 
     const atividadeIds = (atividades ?? []).map((a) => a.id);
-    const { data: envios } = atividadeIds.length
-      ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').in('atividade_id', atividadeIds)
-      : { data: [] };
-    const entregasRecebidas = (envios ?? []).filter((e) => e.enviado_em).length;
-    const entregasEsperadas = atividadeIds.length * alunosCount;
 
     type Chosen = { id: string; dh: string };
     let started: Chosen | null = null;
@@ -179,13 +185,13 @@ export default function TurmaCursoDetalhe() {
       started: !!started,
     } : null;
 
-    setEmbDash({ aulasTotal, aulasFeitas, presencaMedia, atividadesTotal: atividadeIds.length, entregasRecebidas, entregasEsperadas, nextAula });
+    setEmbDash({ aulasTotal, aulasFeitas, presencaMedia, atividadesTotal: atividadeIds.length, nextAula });
     setEmbDashLoading(false);
   };
 
   useEffect(() => { if (canView) loadBase(); }, [turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isEmbaixador && tab === 'dashboard') loadEmbDashboard(); }, [tab, turmaId, cursoId, isEmbaixador, alunosCount]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (canView && tab === 'aulas') loadAulas(); }, [tab, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canView) loadAulas(); }, [turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (canView && tab === 'duvidas') loadDuvidas(); }, [tab, turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (canView && tab === 'alunos') loadAlunos(); }, [tab, turmaId, cursoId, canView]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -221,9 +227,11 @@ export default function TurmaCursoDetalhe() {
   if (profile && !canView) return <Navigate to="/dashboard" replace />;
   if (loading) return <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8"><Skeleton className="h-8 w-64 mb-6" /><Skeleton className="h-64 rounded-xl" /></div>;
 
+  const aulasDisponiveis = aulas.filter((a) => a.publicada).length;
+
   const tabs = [
     { value: 'dashboard' as const, label: 'Dashboard' },
-    { value: 'aulas' as const, label: 'Aulas', count: aulas.length },
+    { value: 'aulas' as const, label: 'Aulas', count: aulasDisponiveis },
     { value: 'atividades' as const, label: 'Atividades' },
     ...(isEmbaixador ? [{ value: 'duvidas' as const, label: 'Dúvidas' }] : []),
     { value: 'presenca' as const, label: 'Presença' },
@@ -233,27 +241,33 @@ export default function TurmaCursoDetalhe() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <button onClick={() => nav('/turmas')} className="inline-flex items-center gap-2 text-sm text-fg-3 hover:text-fg mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar para Cursos</button>
-      <PageHeader title={curso?.titulo ?? '…'} subtitle={turma?.nome} />
+      <PageHeader title={curso?.titulo ?? '…'} subtitle={turma?.nome} className={professorNome ? 'mb-1' : undefined} />
+      {professorNome && <p className="text-fg-3 text-sm mb-6">Professor: <span className="text-fg-2">{professorNome}</span></p>}
 
       <Tabs className="mb-6" value={tab} onChange={setTab} tabs={tabs} />
 
       {tab === 'dashboard' && (
         isEmbaixador ? (
           embDashLoading || !embDash ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}</div>
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}</div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   <StatTile label="Aulas realizadas" value={`${embDash.aulasFeitas}/${embDash.aulasTotal || '—'}`} icon={<PlayCircle className="w-4 h-4" />} />
                   <StatTile label="Aulas restantes" value={Math.max(embDash.aulasTotal - embDash.aulasFeitas, 0)} icon={<Clock className="w-4 h-4" />} />
                   <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
                   <StatTile label="Presença média" value={`${embDash.presencaMedia}%`} icon={<Percent className="w-4 h-4" />} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
                   <StatTile label="Atividades" value={embDash.atividadesTotal} icon={<ClipboardList className="w-4 h-4" />} />
-                  <StatTile label="Entregas recebidas" value={`${embDash.entregasRecebidas}/${embDash.entregasEsperadas || '—'}`} icon={<ClipboardList className="w-4 h-4" />} />
                 </div>
+                <Card className="p-5">
+                  <p className="text-fg-3 text-xs mb-2">{embDash.aulasFeitas} aula{embDash.aulasFeitas === 1 ? '' : 's'} realizada{embDash.aulasFeitas === 1 ? '' : 's'}</p>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.max(embDash.aulasTotal, AULAS_POR_FAIXA) }).map((_, i) => (
+                      <div key={i} className={i < embDash.aulasFeitas ? 'h-2.5 flex-1 rounded-full bg-brand transition-colors' : 'h-2.5 flex-1 rounded-full bg-line/60 transition-colors'} />
+                    ))}
+                  </div>
+                </Card>
               </div>
               <Card className="p-5">
                 <div className="flex items-center gap-2 mb-4"><Video className="w-4 h-4 text-fg-2" /><h2 className="text-base">Próxima aula</h2></div>
@@ -339,8 +353,16 @@ export default function TurmaCursoDetalhe() {
         </div>
       )}
 
-      {tab === 'atividades' && <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} readOnly={isEmbaixador} />}
-      {tab === 'presenca' && <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} readOnly={isEmbaixador} />}
+      {tab === 'atividades' && (
+        isEmbaixador
+          ? <AtividadesEngajamento turmaId={turmaId!} cursoId={cursoId!} turmaNome={turma?.nome ?? ''} alunosCount={alunosCount} />
+          : <CursoAtividadesTab turmaId={turmaId!} cursoId={cursoId!} />
+      )}
+      {tab === 'presenca' && (
+        isEmbaixador
+          ? <PresencaBarList turmaId={turmaId!} cursoId={cursoId!} turmaNome={turma?.nome ?? ''} alunosCount={alunosCount} />
+          : <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} />
+      )}
 
       {tab === 'duvidas' && (
         <div>
@@ -373,7 +395,7 @@ export default function TurmaCursoDetalhe() {
               <Card className="overflow-hidden">
                 <ul>
                   {alunosResumo.map((a) => (
-                    <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0">
+                    <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setAlunoDetalhe(a)}>
                       <Avatar name={a.nome} email={a.email} size={32} />
                       <div className="flex-1 min-w-0">
                         <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
@@ -395,7 +417,200 @@ export default function TurmaCursoDetalhe() {
           <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
         </>
       )}
+
+      {alunoDetalhe && <AlunoDetalheModal turmaId={turmaId!} cursoId={cursoId!} aluno={alunoDetalhe} onClose={() => setAlunoDetalhe(null)} />}
     </div>
+  );
+}
+
+/* ═══════════════════ Presença por Aula (embaixador) ═══════════════════ */
+function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
+  turmaId: string; cursoId: string; turmaNome: string; alunosCount: number;
+}) {
+  type Row = { id: string; ordem: number; titulo: string; dataHora: string | null; presentes: number };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      // aulas/aula_horarios ainda não estão no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      const [{ data: aulasList }, { data: hs }, { data: presencas }] = await Promise.all([
+        sb.from('aulas').select('id,ordem,titulo').eq('curso_id', cursoId).order('ordem'),
+        sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId).eq('curso_id', cursoId),
+        supabase.from('presencas').select('aula_id,presente').eq('turma_id', turmaId),
+      ]);
+      const horariosMap = new Map(((hs ?? []) as { aula_id: string; data_hora: string }[]).map((h) => [h.aula_id, h.data_hora]));
+      const presentesPorAula: Record<string, number> = {};
+      ((presencas ?? []) as { aula_id: string; presente: boolean }[]).forEach((p) => {
+        if (p.presente) presentesPorAula[p.aula_id] = (presentesPorAula[p.aula_id] ?? 0) + 1;
+      });
+      setRows(((aulasList ?? []) as { id: string; ordem: number; titulo: string }[]).map((a) => ({
+        id: a.id, ordem: a.ordem, titulo: a.titulo, dataHora: horariosMap.get(a.id) ?? null, presentes: presentesPorAula[a.id] ?? 0,
+      })));
+      setLoading(false);
+    })();
+  }, [turmaId, cursoId]);
+
+  if (loading) return <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>;
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <h2 className="text-base mb-0.5">Presença por Aula — {turmaNome}</h2>
+      <p className="text-fg-3 text-xs mb-5">% de inscritos presentes</p>
+      {rows.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhuma aula cadastrada" /> : (
+        <div className="space-y-4">
+          {rows.map((r) => {
+            const pct = alunosCount ? Math.round((r.presentes / alunosCount) * 100) : 0;
+            return (
+              <div key={r.id}>
+                <div className="flex items-center justify-between text-sm mb-1.5 gap-3">
+                  <span className="text-fg-2 truncate">Aula {r.ordem}{r.dataHora ? ` – ${new Date(r.dataHora).toLocaleDateString('pt-BR')}` : ''}</span>
+                  <span className="text-brand font-medium tabular-nums flex-shrink-0">{r.presentes}/{alunosCount} ({pct}%)</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-line/50 overflow-hidden">
+                  <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ═══════════════════ Engajamento nas Atividades (embaixador) ═══════════════════ */
+function AtividadesEngajamento({ turmaId, cursoId, turmaNome, alunosCount }: {
+  turmaId: string; cursoId: string; turmaNome: string; alunosCount: number;
+}) {
+  type Row = { id: string; ordem: number; titulo: string; entregues: number };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data: atividades } = await supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem');
+      const atividadeIds = (atividades ?? []).map((a) => a.id);
+      const { data: envios } = atividadeIds.length
+        ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').in('atividade_id', atividadeIds)
+        : { data: [] };
+      const entreguesPorAtividade: Record<string, number> = {};
+      (envios ?? []).forEach((e) => { if (e.enviado_em) entreguesPorAtividade[e.atividade_id] = (entreguesPorAtividade[e.atividade_id] ?? 0) + 1; });
+      setRows((atividades ?? []).map((a) => ({ id: a.id, ordem: a.ordem, titulo: a.titulo, entregues: entreguesPorAtividade[a.id] ?? 0 })));
+      setLoading(false);
+    })();
+  }, [turmaId, cursoId]);
+
+  if (loading) return <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>;
+
+  const semEntrega = rows.filter((r) => r.entregues === 0);
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <h2 className="text-base mb-0.5">Engajamento nas Atividades — Turma {turmaNome}</h2>
+      {semEntrega.length > 0 && (
+        <p className="text-warn text-xs mb-5">{semEntrega.map((r) => r.titulo).join(', ')}: nenhuma entrega até o momento</p>
+      )}
+      {rows.length === 0 ? <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade cadastrada" /> : (
+        <div className={cn('space-y-4', semEntrega.length === 0 && 'mt-5')}>
+          {rows.map((r) => {
+            const pct = alunosCount ? Math.round((r.entregues / alunosCount) * 100) : 0;
+            return (
+              <div key={r.id} className="flex items-center gap-4">
+                <span className="text-fg-2 text-sm w-32 sm:w-40 flex-shrink-0 truncate">{r.titulo}</span>
+                <div className="flex-1 h-2 rounded-full bg-line/50 overflow-hidden">
+                  <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-fg-3 text-xs tabular-nums flex-shrink-0 w-16 text-right">{r.entregues}/{alunosCount}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ═══════════════════ Detalhe do aluno (embaixador) ═══════════════════ */
+function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
+  turmaId: string; cursoId: string; aluno: AlunoResumo; onClose: () => void;
+}) {
+  type AtividadeRow = { id: string; titulo: string; enviadoEm: string | null };
+  type AulaRow = { id: string; titulo: string; dataHora: string | null; presente: boolean };
+  const [atividades, setAtividades] = useState<AtividadeRow[]>([]);
+  const [aulas, setAulas] = useState<AulaRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      // aulas/aula_horarios ainda não estão no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      const [{ data: ats }, { data: aulasList }, { data: hs }, { data: presencas }] = await Promise.all([
+        supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem'),
+        sb.from('aulas').select('id,ordem,titulo').eq('curso_id', cursoId).order('ordem'),
+        sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId).eq('curso_id', cursoId),
+        supabase.from('presencas').select('aula_id,presente').eq('turma_id', turmaId).eq('user_id', aluno.id),
+      ]);
+      const atividadeIds = (ats ?? []).map((a) => a.id);
+      const { data: envios } = atividadeIds.length
+        ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').eq('aluno_id', aluno.id).in('atividade_id', atividadeIds)
+        : { data: [] };
+      const envioMap = new Map((envios ?? []).map((e) => [e.atividade_id, e.enviado_em]));
+      setAtividades((ats ?? []).map((a) => ({ id: a.id, titulo: a.titulo, enviadoEm: envioMap.get(a.id) ?? null })));
+
+      const horariosMap = new Map(((hs ?? []) as { aula_id: string; data_hora: string }[]).map((h) => [h.aula_id, h.data_hora]));
+      const presencaMap = new Map(((presencas ?? []) as { aula_id: string; presente: boolean }[]).map((p) => [p.aula_id, p.presente]));
+      setAulas(((aulasList ?? []) as { id: string; titulo: string }[]).map((a) => ({
+        id: a.id, titulo: a.titulo, dataHora: horariosMap.get(a.id) ?? null, presente: !!presencaMap.get(a.id),
+      })));
+      setLoading(false);
+    })();
+  }, [turmaId, cursoId, aluno.id]);
+
+  return (
+    <Modal open onClose={onClose} size="lg" title={aluno.nome || aluno.email}>
+      {loading ? (
+        <div className="grid sm:grid-cols-2 gap-6">
+          <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-8 rounded-md" />)}</div>
+          <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-8 rounded-md" />)}</div>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-6">
+          <div>
+            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">Atividades</h3>
+            {atividades.length === 0 ? <p className="text-fg-3 text-sm">Nenhuma atividade.</p> : (
+              <ul className="space-y-1.5">
+                {atividades.map((a) => (
+                  <li key={a.id} className="text-sm text-fg-2">
+                    {a.titulo}{a.enviadoEm ? ` – ${new Date(a.enviadoEm).toLocaleDateString('pt-BR')}` : ''} –{' '}
+                    <span className={a.enviadoEm ? 'text-ok font-medium' : 'text-fg-3'}>{a.enviadoEm ? 'Entregue' : 'Não entregue'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3 className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-2">Presença</h3>
+            {aulas.length === 0 ? <p className="text-fg-3 text-sm">Nenhuma aula.</p> : (
+              <ul className="space-y-1.5">
+                {aulas.map((a) => (
+                  <li key={a.id} className="text-sm text-fg-2">
+                    {a.titulo}{a.dataHora ? ` – ${new Date(a.dataHora).toLocaleDateString('pt-BR')}` : ''} –{' '}
+                    <span className={a.presente ? 'text-ok font-medium' : 'text-danger'}>{a.presente ? 'Presente' : 'Ausente'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
