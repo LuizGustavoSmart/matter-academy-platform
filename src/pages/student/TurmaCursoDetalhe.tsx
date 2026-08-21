@@ -451,7 +451,7 @@ export default function TurmaCursoDetalhe() {
 function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
   turmaId: string; cursoId: string; turmaNome: string; alunosCount: number;
 }) {
-  type Row = { id: string; ordem: number; titulo: string; dataHora: string | null; presentes: number };
+  type Row = { id: string; ordem: number; titulo: string; dataHora: string | null; presentes: number; publicada: boolean };
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [aulaSelecionada, setAulaSelecionada] = useState<Row | null>(null);
@@ -463,7 +463,7 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const [{ data: aulasList }, { data: hs }, { data: presencas }] = await Promise.all([
-        sb.from('aulas').select('id,ordem,titulo').eq('curso_id', cursoId).order('ordem'),
+        sb.from('aulas').select('id,ordem,titulo,publicada').eq('curso_id', cursoId).order('ordem'),
         sb.from('aula_horarios').select('aula_id,data_hora').eq('turma_id', turmaId).eq('curso_id', cursoId),
         supabase.from('presencas').select('aula_id,presente').eq('turma_id', turmaId),
       ]);
@@ -472,8 +472,8 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
       ((presencas ?? []) as { aula_id: string; presente: boolean }[]).forEach((p) => {
         if (p.presente) presentesPorAula[p.aula_id] = (presentesPorAula[p.aula_id] ?? 0) + 1;
       });
-      setRows(((aulasList ?? []) as { id: string; ordem: number; titulo: string }[]).map((a) => ({
-        id: a.id, ordem: a.ordem, titulo: a.titulo, dataHora: horariosMap.get(a.id) ?? null, presentes: presentesPorAula[a.id] ?? 0,
+      setRows(((aulasList ?? []) as { id: string; ordem: number; titulo: string; publicada: boolean }[]).map((a) => ({
+        id: a.id, ordem: a.ordem, titulo: a.titulo, dataHora: horariosMap.get(a.id) ?? null, presentes: presentesPorAula[a.id] ?? 0, publicada: a.publicada,
       })));
       setLoading(false);
     })();
@@ -488,6 +488,16 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
       {rows.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhuma aula cadastrada" /> : (
         <div className="space-y-4">
           {rows.map((r) => {
+            if (!r.publicada) {
+              return (
+                <div key={r.id} className="px-2 py-1">
+                  <div className="flex items-center justify-between text-sm gap-3">
+                    <span className="text-fg-2 truncate">Aula {r.ordem}{r.dataHora ? ` – ${new Date(r.dataHora).toLocaleDateString('pt-BR')}` : ''}</span>
+                    <span className="text-fg-3 italic flex-shrink-0">Aula ainda não disponível</span>
+                  </div>
+                </div>
+              );
+            }
             const pct = alunosCount ? Math.round((r.presentes / alunosCount) * 100) : 0;
             return (
               <button key={r.id} onClick={() => setAulaSelecionada(r)} className="block w-full text-left rounded-md -mx-2 px-2 py-1 hover:bg-panel-2/40 transition-colors">
