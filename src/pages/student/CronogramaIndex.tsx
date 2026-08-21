@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, PlayCircle, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -9,23 +9,22 @@ import { FAIXA_OPTIONS, FAIXA_DOT_CLASS, ordemDaFaixa, labelDaFaixa } from '../.
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 const AULAS_POR_FAIXA = 12;
-const COLS = 6;
 
-/* ── Constantes de layout — usadas tanto para renderizar quanto para
-   calcular a posição vertical exata dos marcos nas laterais. As casas ficam
-   coladas umas nas outras (como num tabuleiro de tipo "trilha"), formando
-   uma cápsula por linha; as curvas entre linhas são outra cápsula, do
-   tamanho da altura da casa, encaixada na borda compartilhada. ── */
-const TILE_W = 92;
-const TILE_H = 68;
-const ROW_H = TILE_H + 28;
-const ROW_CONNECTOR_H = 34;
-const BANNER_H = 168;
-const BANNER_CONNECTOR_H = 24;
-const BOARD_W = COLS * TILE_W;
-const GUTTER_W = 260;
+/* ── Constantes de layout — a trilha agora é uma coluna vertical única, então
+   cada linha se auto-alinha no fluxo normal do documento; não é preciso
+   calcular posições em pixel para os marcos, já que eles ficam na MESMA
+   linha do bloco a que se referem. ── */
+const TILE = 108;
+const TRANSITION_TILE = 156;
+const CONNECTOR_H = 48;
+const GUTTER_W = 288;
 
-/** Fundo sutil por faixa — a mesma variedade de cor do tabuleiro de referência, dentro da paleta da plataforma. */
+/** Deslocamento horizontal (px) de cada casa, em ciclo — o "efeito cobra":
+    a trilha ondula suavemente para os lados em vez de subir reta. Reinicia
+    em 0 a cada troca de faixa (o bloco de transição fica centralizado). */
+const WAVE = [0, 56, 80, 56, 0, -56, -80, -56];
+
+/** Fundo sutil por faixa — mesma variedade de cor do tabuleiro de referência, dentro da paleta da plataforma. */
 const FAIXA_BG_CLASS: Record<string, string> = {
   branca: 'bg-white/10',
   verde: 'bg-emerald-500/15',
@@ -35,9 +34,8 @@ const FAIXA_BG_CLASS: Record<string, string> = {
 
 type Aula = { id: string; titulo: string; ordem: number };
 type Curso = { id: string; titulo: string; capaUrl: string | null; faixa: string | null };
-type Slot = { ordem: number; aula: Aula | null; done: boolean; isCurrent: boolean };
+type Slot = { ordem: number; aula: Aula | null; done: boolean };
 type Marco = { titulo: string; desc: string };
-type MarcoPosicionado = Marco & { yCenter: number; side: 'left' | 'right' };
 
 const MARCOS: Record<string, { ordem: number; titulo: string; desc: string }[]> = {
   branca: [
@@ -65,13 +63,6 @@ const MARCOS: Record<string, { ordem: number; titulo: string; desc: string }[]> 
     { ordem: 12, titulo: 'Final — Líder Estratégico de IA', desc: 'Constrói e defende uma estratégia de IA para a organização, conectando visão de futuro, prioridades, governança, cultura, capacitação e métricas em um plano estratégico executável.' },
   ],
 };
-
-/** Agrupa em linhas de `cols`, invertendo as linhas ímpares — o "efeito cobra" do tabuleiro. */
-function paraLinhasEmCobra<T>(itens: T[], cols: number): T[][] {
-  const linhas: T[][] = [];
-  for (let i = 0; i < itens.length; i += cols) linhas.push(itens.slice(i, i + cols));
-  return linhas.map((linha, i) => (i % 2 === 1 ? [...linha].reverse() : linha));
-}
 
 export default function CronogramaIndex() {
   const { profile } = useAuth();
@@ -135,19 +126,13 @@ export default function CronogramaIndex() {
         for (let ordem = 1; ordem <= total; ordem++) {
           const aula = porOrdem.get(ordem) ?? null;
           const done = aula ? doneSet.has(aula.id) : false;
-          slots.push({ ordem, aula, done, isCurrent: false });
+          slots.push({ ordem, aula, done });
         }
         map[curso.id] = slots;
         if (!currentKey) {
           const proxima = slots.find((s) => s.aula && !s.done);
           if (proxima) currentKey = `${curso.id}:${proxima.ordem}`;
         }
-      }
-      if (currentKey) {
-        const [cid, ordemStr] = currentKey.split(':');
-        const ordem = Number(ordemStr);
-        const slot = map[cid]?.find((s) => s.ordem === ordem);
-        if (slot) slot.isCurrent = true;
       }
 
       setCursos(cursosOrdenados);
@@ -183,153 +168,147 @@ export default function CronogramaIndex() {
   );
 }
 
+/* ─────────────────── Board: uma única coluna vertical ─────────────────── */
+
+type Row =
+  | { type: 'transicao'; key: string; curso: Curso; primeira: boolean }
+  | { type: 'aula'; key: string; curso: Curso; slot: Slot; marco: Marco | null; marcoSide: 'left' | 'right' | null };
+
 function Board({ cursos, slotsPorCurso, currentSlotKey, nav, faixaCapas, profile }: {
   cursos: Curso[]; slotsPorCurso: Record<string, Slot[]>; currentSlotKey: string | null;
   nav: (path: string) => void; faixaCapas: Record<string, string | null>;
   profile: { nome?: string | null; email?: string; avatar_url?: string | null } | null;
 }) {
-  // Uma única passada monta o board e já calcula, em pixels, a posição
-  // vertical exata de cada marco — assim as laterais alinham perfeitamente
-  // com a linha do tabuleiro em que ele acontece, sem depender de medir o DOM.
-  const blocks: { key: string; height: number; render: () => ReactNode }[] = [];
-  const marcos: MarcoPosicionado[] = [];
-  let y = 0;
-
+  const rows: Row[] = [];
+  const offsets: number[] = [];
+  let marcoToggle = 0;
   cursos.forEach((curso, cursoIdx) => {
-    const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
+    rows.push({ type: 'transicao', key: `transicao-${curso.id}`, curso, primeira: cursoIdx === 0 });
+    offsets.push(0); // o bloco de transição fica sempre centralizado
     const marcosDoCurso = curso.faixa ? MARCOS[curso.faixa] ?? [] : [];
-    blocks.push({
-      key: `banner-${curso.id}`, height: BANNER_H,
-      render: () => (
-        <div className="text-center" style={{ width: BOARD_W }}>
-          <div className="relative rounded-xl overflow-hidden h-[104px] mb-2">
-            {capa ? <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" /> : <div className="absolute inset-0 bg-brand/10" />}
-          </div>
-          <div className="flex items-center justify-center gap-2">
-            <span className={cn('w-3 h-3 rounded-full flex-shrink-0', FAIXA_DOT_CLASS[curso.faixa ?? ''] ?? 'bg-line')} />
-            <h2 className="text-fg text-sm font-medium truncate">{curso.titulo}</h2>
-          </div>
-        </div>
-      ),
-    });
-    y += BANNER_H;
-    blocks.push({ key: `bannerConn-${curso.id}`, height: BANNER_CONNECTOR_H, render: () => <ConnectorStub side="center" /> });
-    y += BANNER_CONNECTOR_H;
-
     const slots = slotsPorCurso[curso.id] ?? [];
-    const linhas = paraLinhasEmCobra(slots, COLS);
-
-    linhas.forEach((linha, linhaIdx) => {
-      const rowTop = y;
-      const marcosDaLinha: Marco[] = [];
-      linha.forEach((slot, colIdx) => {
-        const marco = marcosDoCurso.find((m) => m.ordem === slot.ordem);
-        if (marco) {
-          marcos.push({ ...marco, yCenter: rowTop + ROW_H / 2, side: colIdx < COLS / 2 ? 'left' : 'right' });
-          marcosDaLinha.push(marco);
-        }
-      });
-      blocks.push({
-        key: `row-${curso.id}-${linhaIdx}`, height: ROW_H,
-        render: () => (
-          <>
-            <div className="relative" style={{ width: BOARD_W, height: ROW_H }}>
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full overflow-hidden flex shadow-ma-1" style={{ height: TILE_H }}>
-                {linha.map((slot) => (
-                  <TileButton key={slot.ordem} slot={slot} cursoId={curso.id} nav={nav} faixa={curso.faixa} isCurrent={`${curso.id}:${slot.ordem}` === currentSlotKey} />
-                ))}
-              </div>
-              {linha.map((slot, colIdx) => (`${curso.id}:${slot.ordem}` === currentSlotKey) && (
-                <div key={slot.ordem} className="absolute -top-1 z-10" style={{ left: colIdx * TILE_W + TILE_W / 2, transform: 'translateX(-50%)' }}>
-                  <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} className="ring-2 ring-brand shadow-ma-2" />
-                </div>
-              ))}
-            </div>
-            {marcosDaLinha.length > 0 && (
-              <div className="lg:hidden w-full space-y-2 my-2">
-                {marcosDaLinha.map((m, i) => (
-                  <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3 text-xs">
-                    <p className="text-fg font-semibold leading-snug mb-1">{m.titulo}</p>
-                    <p className="text-fg-3 leading-snug">{m.desc}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        ),
-      });
-      y += ROW_H;
-      if (linhaIdx < linhas.length - 1) {
-        const side: 'left' | 'right' = linhaIdx % 2 === 0 ? 'right' : 'left';
-        blocks.push({ key: `rowConn-${curso.id}-${linhaIdx}`, height: ROW_CONNECTOR_H, render: () => <ConnectorStub side={side} /> });
-        y += ROW_CONNECTOR_H;
-      }
+    slots.forEach((slot, idxNaFaixa) => {
+      const marco = marcosDoCurso.find((m) => m.ordem === slot.ordem) ?? null;
+      const marcoSide = marco ? (marcoToggle++ % 2 === 0 ? 'left' : 'right') : null;
+      rows.push({ type: 'aula', key: `${curso.id}-${slot.ordem}`, curso, slot, marco, marcoSide });
+      // Casas com marco ficam centralizadas — evita a curva sobrepor o card lateral.
+      offsets.push(marco ? 0 : WAVE[idxNaFaixa % WAVE.length]);
     });
-
-    if (cursoIdx < cursos.length - 1) {
-      blocks.push({ key: `faixaConn-${curso.id}`, height: BANNER_CONNECTOR_H, render: () => <ConnectorStub side="center" /> });
-      y += BANNER_CONNECTOR_H;
-    }
   });
 
-  const totalHeight = y;
-  const esquerda = marcos.filter((m) => m.side === 'left');
-  const direita = marcos.filter((m) => m.side === 'right');
-
   return (
-    <div className="flex justify-center gap-6">
-      <div className="hidden lg:block relative flex-shrink-0" style={{ width: GUTTER_W, height: totalHeight }}>
-        {esquerda.map((m, i) => <MarcoCallout key={i} marco={m} side="left" />)}
-      </div>
+    <div className="flex flex-col items-center">
+      {rows.map((row, i) => (
+        <div key={row.key}>
+          {row.type === 'transicao' ? (
+            <TransicaoRow curso={row.curso} primeira={row.primeira} faixaCapas={faixaCapas} />
+          ) : (
+            <AulaRow
+              curso={row.curso} slot={row.slot} marco={row.marco} marcoSide={row.marcoSide} offset={offsets[i]}
+              nav={nav} isCurrent={`${row.curso.id}:${row.slot.ordem}` === currentSlotKey} profile={profile}
+            />
+          )}
+          {i < rows.length - 1 && <Connector from={offsets[i]} to={offsets[i + 1]} />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      <div className="flex flex-col items-center flex-shrink-0" style={{ width: BOARD_W }}>
-        {blocks.map((b) => <div key={b.key}>{b.render()}</div>)}
-      </div>
+/** Curva suave (bezier em S) entre a casa anterior e a próxima — é o que dá o efeito "cobra" à trilha. */
+function Connector({ from, to }: { from: number; to: number }) {
+  const w = 200;
+  const cx = w / 2;
+  const x1 = cx + from;
+  const x2 = cx + to;
+  return (
+    <svg width={w} height={CONNECTOR_H} viewBox={`0 0 ${w} ${CONNECTOR_H}`} className="block mx-auto text-line" aria-hidden>
+      <path
+        d={`M ${x1} 0 C ${x1} ${CONNECTOR_H * 0.55}, ${x2} ${CONNECTOR_H * 0.45}, ${x2} ${CONNECTOR_H}`}
+        fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="6 6" strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
-      <div className="hidden lg:block relative flex-shrink-0" style={{ width: GUTTER_W, height: totalHeight }}>
-        {direita.map((m, i) => <MarcoCallout key={i} marco={m} side="right" />)}
+/* ── Bloco de transição de faixa: a capa do curso, um pouco maior que as
+   casas normais, mas dentro da mesma coluna — não interrompe a trilha. ── */
+function TransicaoRow({ curso, primeira, faixaCapas }: { curso: Curso; primeira: boolean; faixaCapas: Record<string, string | null> }) {
+  const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
+  return (
+    <div className="flex flex-col items-center gap-2" style={{ width: TRANSITION_TILE }}>
+      {!primeira && <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider">Próxima faixa</p>}
+      <div className="relative rounded-2xl overflow-hidden border-2 border-brand/40 shadow-ma-2" style={{ width: TRANSITION_TILE, height: TRANSITION_TILE * 0.72 }}>
+        {capa ? <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" /> : <div className="absolute inset-0 bg-brand/10" />}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={cn('w-3 h-3 rounded-full flex-shrink-0', FAIXA_DOT_CLASS[curso.faixa ?? ''] ?? 'bg-line')} />
+        <h2 className="text-fg text-sm font-medium text-center">{curso.titulo}</h2>
       </div>
     </div>
   );
 }
 
-function ConnectorStub({ side }: { side: 'left' | 'right' | 'center' }) {
-  const height = side === 'center' ? BANNER_CONNECTOR_H : ROW_CONNECTOR_H;
-  if (side === 'center') {
-    return (
-      <div className="relative" style={{ width: BOARD_W, height }}>
-        <span className="absolute top-0 bottom-0 border-l-2 border-dashed border-line" style={{ left: BOARD_W / 2 }} aria-hidden />
-      </div>
-    );
-  }
-  const colCenter = side === 'left' ? TILE_W / 2 : BOARD_W - TILE_W / 2;
+/* ── Bloco de aula, com marco lateral (desktop) ou embutido embaixo
+   (mobile), e o avatar do aluno flutuando sobre a casa atual. ── */
+function AulaRow({ curso, slot, marco, marcoSide, offset, nav, isCurrent, profile }: {
+  curso: Curso; slot: Slot; marco: Marco | null; marcoSide: 'left' | 'right' | null; offset: number;
+  nav: (path: string) => void; isCurrent: boolean;
+  profile: { nome?: string | null; email?: string; avatar_url?: string | null } | null;
+}) {
   return (
-    <div className="relative" style={{ width: BOARD_W, height }}>
-      <div className="absolute bg-panel-3 rounded-full" style={{ left: colCenter - TILE_H / 2, top: 0, width: TILE_H, height }} aria-hidden />
-    </div>
-  );
-}
+    <div>
+      <div className="flex items-center justify-center gap-3">
+        <div className="hidden lg:flex justify-end flex-shrink-0" style={{ width: GUTTER_W }}>
+          {marcoSide === 'left' && <MarcoCallout marco={marco!} side="left" />}
+        </div>
 
-function MarcoCallout({ marco, side }: { marco: MarcoPosicionado; side: 'left' | 'right' }) {
-  return (
-    <div
-      className={cn(
-        'absolute rounded-lg border border-line bg-panel-2/70 p-3 text-xs',
-        side === 'left' ? 'right-0' : 'left-0',
+        <div className="relative flex-shrink-0" style={{ width: TILE, height: TILE, transform: `translateX(${offset}px)` }}>
+          {isCurrent && (
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+              <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={34} className="ring-2 ring-brand shadow-ma-2" />
+            </div>
+          )}
+          <TileButton slot={slot} cursoId={curso.id} faixa={curso.faixa} nav={nav} isCurrent={isCurrent} />
+        </div>
+
+        <div className="hidden lg:flex justify-start flex-shrink-0" style={{ width: GUTTER_W }}>
+          {marcoSide === 'right' && <MarcoCallout marco={marco!} side="right" />}
+        </div>
+      </div>
+
+      {marco && (
+        <div className="lg:hidden mt-3 mx-auto rounded-lg border border-line bg-panel-2/70 p-3 text-xs" style={{ maxWidth: 360 }}>
+          <p className="text-fg font-semibold leading-snug mb-1">{marco.titulo}</p>
+          <p className="text-fg-3 leading-snug">{marco.desc}</p>
+        </div>
       )}
-      style={{ top: marco.yCenter, width: GUTTER_W - 16, transform: 'translateY(-50%)' }}
-    >
-      <div className={cn('flex items-center gap-1.5 mb-1', side === 'right' && 'flex-row-reverse')}>
-        {side === 'left' ? <ChevronRight className="w-3.5 h-3.5 text-brand flex-shrink-0" /> : <ChevronLeft className="w-3.5 h-3.5 text-brand flex-shrink-0" />}
-        <p className={cn('text-fg font-semibold leading-snug', side === 'right' && 'text-right')}>{marco.titulo}</p>
-      </div>
-      <p className={cn('text-fg-3 leading-snug', side === 'right' && 'text-right')}>{marco.desc}</p>
     </div>
   );
 }
 
-function TileButton({ slot, cursoId, nav, faixa, isCurrent }: {
-  slot: Slot; cursoId: string; nav: (path: string) => void; faixa: string | null; isCurrent: boolean;
+/** A seta parte da casa (borda mais próxima) e chega até o card de texto. */
+function MarcoCallout({ marco, side }: { marco: Marco; side: 'left' | 'right' }) {
+  const card = (
+    <div className="rounded-lg border border-brand/30 bg-panel-2/80 p-3 text-xs" style={{ width: GUTTER_W - 48 }}>
+      <p className="text-fg font-semibold leading-snug mb-1">{marco.titulo}</p>
+      <p className="text-fg-3 leading-snug">{marco.desc}</p>
+    </div>
+  );
+  const arrow = (
+    <div className="flex items-center flex-shrink-0" style={{ width: 32 }}>
+      {side === 'left' ? (
+        <><span className="flex-1 h-0 border-t-2 border-dashed border-brand/50" /><ChevronLeft className="w-4 h-4 text-brand flex-shrink-0" /></>
+      ) : (
+        <><ChevronRight className="w-4 h-4 text-brand flex-shrink-0" /><span className="flex-1 h-0 border-t-2 border-dashed border-brand/50" /></>
+      )}
+    </div>
+  );
+  return side === 'left' ? <>{card}{arrow}</> : <>{arrow}{card}</>;
+}
+
+function TileButton({ slot, cursoId, faixa, nav, isCurrent }: {
+  slot: Slot; cursoId: string; faixa: string | null; nav: (path: string) => void; isCurrent: boolean;
 }) {
   const available = !!slot.aula;
   const go = () => { if (available) nav(`/curso/${cursoId}?aula=${slot.aula!.id}`); };
@@ -339,18 +318,17 @@ function TileButton({ slot, cursoId, nav, faixa, isCurrent }: {
       onClick={go}
       disabled={!available}
       title={available ? (slot.aula!.titulo || `Aula ${slot.ordem}`) : 'Em breve'}
-      style={{ width: TILE_W }}
       className={cn(
-        'h-full flex-shrink-0 flex flex-col items-center justify-center gap-0.5 border-r border-black/15 last:border-r-0 transition-colors relative',
+        'w-full h-full rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-colors relative',
         available ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
-        isCurrent ? 'bg-brand/30 ring-2 ring-inset ring-brand'
-          : slot.done ? 'bg-brand text-brand-ink'
-          : available ? (FAIXA_BG_CLASS[faixa ?? ''] ?? 'bg-panel-3')
-          : 'bg-white/5',
+        isCurrent ? 'border-brand ring-4 ring-brand/25 bg-brand/20'
+          : slot.done ? 'bg-brand border-brand text-brand-ink'
+          : available ? cn('border-line', FAIXA_BG_CLASS[faixa ?? ''] ?? 'bg-panel')
+          : 'bg-white/5 border-white/10',
       )}
     >
-      {slot.done ? <Check className="w-5 h-5 text-brand-ink" /> : available ? <PlayCircle className="w-5 h-5 text-brand" /> : <Lock className="w-4 h-4 text-white/25" />}
-      <span className={cn('text-[11px] font-semibold tabular-nums', slot.done ? 'text-brand-ink' : available ? 'text-fg-2' : 'text-white/25')}>
+      {slot.done ? <Check className="w-7 h-7 text-brand-ink" /> : available ? <PlayCircle className="w-7 h-7 text-brand" /> : <Lock className="w-5 h-5 text-white/25" />}
+      <span className={cn('text-xs font-semibold tabular-nums', slot.done ? 'text-brand-ink' : available ? 'text-fg-2' : 'text-white/25')}>
         {slot.ordem}
       </span>
     </button>
