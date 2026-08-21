@@ -240,7 +240,6 @@ export default function TurmaCursoDetalhe() {
   if (loading) return <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8"><Skeleton className="h-8 w-64 mb-6" /><Skeleton className="h-64 rounded-xl" /></div>;
 
   const aulasDisponiveis = aulas.filter((a) => a.publicada).length;
-  const aulasParaExibir = isEmbaixador ? aulas.filter((a) => a.publicada) : aulas;
 
   const tabs = [
     { value: 'dashboard' as const, label: 'Dashboard' },
@@ -327,10 +326,10 @@ export default function TurmaCursoDetalhe() {
             {!isEmbaixador && <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button>}
           </div>
           {aulasLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
-            aulasParaExibir.length === 0 ? <EmptyState icon={<PlayCircle className="w-8 h-8" />} title="Nenhuma aula" description={isEmbaixador ? 'Nenhuma aula disponível ainda.' : 'Adicione a primeira aula deste curso.'} action={!isEmbaixador ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button> : undefined} /> : (
+            aulas.length === 0 ? <EmptyState icon={<PlayCircle className="w-8 h-8" />} title="Nenhuma aula" description={isEmbaixador ? 'Nenhuma aula cadastrada ainda.' : 'Adicione a primeira aula deste curso.'} action={!isEmbaixador ? <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateAulaOpen(true)}>Nova aula</Button> : undefined} /> : (
               <Card className="overflow-hidden">
                 <ul>
-                  {aulasParaExibir.map((a, i) => {
+                  {aulas.map((a, i) => {
                     const ytId = getYouTubeId(a.youtube_url);
                     return (
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
@@ -523,18 +522,14 @@ function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      // publicada ainda não está no schema gerado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-      const { data: atividades } = await sb.from('atividades').select('id,ordem,titulo,publicada').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: true });
-      const disponiveis = ((atividades ?? []) as { id: string; ordem: number; titulo: string; publicada: boolean }[]).filter((a) => a.publicada);
-      const atividadeIds = disponiveis.map((a) => a.id);
+      const { data: atividades } = await supabase.from('atividades').select('id,ordem,titulo').eq('turma_id', turmaId).eq('curso_id', cursoId).order('ordem').order('created_at', { ascending: true });
+      const atividadeIds = (atividades ?? []).map((a) => a.id);
       const { data: envios } = atividadeIds.length
         ? await supabase.from('atividade_envios').select('atividade_id,enviado_em').in('atividade_id', atividadeIds)
         : { data: [] };
       const entreguesPorAtividade: Record<string, number> = {};
       (envios ?? []).forEach((e) => { if (e.enviado_em) entreguesPorAtividade[e.atividade_id] = (entreguesPorAtividade[e.atividade_id] ?? 0) + 1; });
-      const list = disponiveis.map((a) => ({ id: a.id, ordem: a.ordem, titulo: a.titulo, entregues: entreguesPorAtividade[a.id] ?? 0 }));
+      const list = (atividades ?? []).map((a) => ({ id: a.id, ordem: a.ordem, titulo: a.titulo, entregues: entreguesPorAtividade[a.id] ?? 0 }));
       setRows(sortProjetoFinalLast(list));
       setLoading(false);
     })();
@@ -545,7 +540,7 @@ function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
   return (
     <Card className="p-5 sm:p-6">
       <h2 className="text-base mb-5">Engajamento nas Atividades</h2>
-      {rows.length === 0 ? <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade disponível" /> : (
+      {rows.length === 0 ? <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade cadastrada" /> : (
         <div className="space-y-4">
           {rows.map((r) => {
             const pct = alunosCount ? Math.round((r.entregues / alunosCount) * 100) : 0;
