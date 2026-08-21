@@ -5,16 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import AvatarUpload from '../../components/AvatarUpload';
 import { Card, Field, Input, Select, Button, Badge, Skeleton, cn, useToast } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
-import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
+import { FAIXA_OPTIONS, FAIXA_DOT_CLASS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 
 const AULAS_POR_FAIXA = 12;
-
-const FAIXA_DOT: Record<string, string> = {
-  branca: 'bg-white border border-line-strong',
-  verde: 'bg-emerald-500',
-  marrom: 'bg-amber-800',
-  preta: 'bg-neutral-900 border border-white/20',
-};
 
 type Dados = {
   nome: string; sobrenome: string; telefone: string; data_nascimento: string;
@@ -276,7 +269,7 @@ export default function Profile() {
                     )}>
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2">
-                          <span className={cn('w-3 h-3 rounded-full flex-shrink-0', FAIXA_DOT[f.faixa ?? ''] ?? 'bg-line')} />
+                          <span className={cn('w-3 h-3 rounded-full flex-shrink-0', FAIXA_DOT_CLASS[f.faixa ?? ''] ?? 'bg-line')} />
                           <span className="text-fg font-medium text-sm">{f.label}</span>
                           {f.status === 'atual' && <Badge tone="brand">Em andamento</Badge>}
                           {f.status === 'concluida' && <Badge tone="success">Concluída</Badge>}

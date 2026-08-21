@@ -17,3 +17,11 @@ export function ordemDaFaixa(faixa: string | null | undefined): number {
 export function labelDaFaixa(faixa: string | null | undefined): string | null {
   return FAIXA_OPTIONS.find((o) => o.value === faixa)?.label ?? null;
 }
+
+/** Cor sólida de cada faixa, usada no dot/badge da faixa (perfil, cronograma). */
+export const FAIXA_DOT_CLASS: Record<string, string> = {
+  branca: 'bg-white border border-line-strong',
+  verde: 'bg-emerald-500',
+  marrom: 'bg-amber-800',
+  preta: 'bg-neutral-900 border border-white/20',
+};
