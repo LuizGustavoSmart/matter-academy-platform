@@ -9,17 +9,29 @@ import { FAIXA_OPTIONS, FAIXA_DOT_CLASS, ordemDaFaixa, labelDaFaixa } from '../.
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 const AULAS_POR_FAIXA = 12;
-const COLS = 4;
+const COLS = 6;
 
 /* ── Constantes de layout — usadas tanto para renderizar quanto para
-   calcular a posição vertical exata dos marcos nas laterais. ── */
-const TILE = 72;
-const ROW_H = 96;
-const ROW_CONNECTOR_H = 28;
+   calcular a posição vertical exata dos marcos nas laterais. As casas ficam
+   coladas umas nas outras (como num tabuleiro de tipo "trilha"), formando
+   uma cápsula por linha; as curvas entre linhas são outra cápsula, do
+   tamanho da altura da casa, encaixada na borda compartilhada. ── */
+const TILE_W = 92;
+const TILE_H = 68;
+const ROW_H = TILE_H + 28;
+const ROW_CONNECTOR_H = 34;
 const BANNER_H = 168;
 const BANNER_CONNECTOR_H = 24;
-const BOARD_W = COLS * TILE + (COLS - 1) * 12;
-const GUTTER_W = 248;
+const BOARD_W = COLS * TILE_W;
+const GUTTER_W = 260;
+
+/** Fundo sutil por faixa — a mesma variedade de cor do tabuleiro de referência, dentro da paleta da plataforma. */
+const FAIXA_BG_CLASS: Record<string, string> = {
+  branca: 'bg-white/10',
+  verde: 'bg-emerald-500/15',
+  marrom: 'bg-amber-700/20',
+  preta: 'bg-zinc-400/15',
+};
 
 type Aula = { id: string; titulo: string; ordem: number };
 type Curso = { id: string; titulo: string; capaUrl: string | null; faixa: string | null };
@@ -221,9 +233,16 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, nav, faixaCapas, profile
         key: `row-${curso.id}-${linhaIdx}`, height: ROW_H,
         render: () => (
           <>
-            <div className="flex items-center justify-between" style={{ width: BOARD_W, height: ROW_H }}>
-              {linha.map((slot) => (
-                <TileButton key={slot.ordem} slot={slot} cursoId={curso.id} nav={nav} isCurrent={`${curso.id}:${slot.ordem}` === currentSlotKey} profile={profile} />
+            <div className="relative" style={{ width: BOARD_W, height: ROW_H }}>
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full overflow-hidden flex shadow-ma-1" style={{ height: TILE_H }}>
+                {linha.map((slot) => (
+                  <TileButton key={slot.ordem} slot={slot} cursoId={curso.id} nav={nav} faixa={curso.faixa} isCurrent={`${curso.id}:${slot.ordem}` === currentSlotKey} />
+                ))}
+              </div>
+              {linha.map((slot, colIdx) => (`${curso.id}:${slot.ordem}` === currentSlotKey) && (
+                <div key={slot.ordem} className="absolute -top-1 z-10" style={{ left: colIdx * TILE_W + TILE_W / 2, transform: 'translateX(-50%)' }}>
+                  <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} className="ring-2 ring-brand shadow-ma-2" />
+                </div>
               ))}
             </div>
             {marcosDaLinha.length > 0 && (
@@ -275,10 +294,18 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, nav, faixaCapas, profile
 }
 
 function ConnectorStub({ side }: { side: 'left' | 'right' | 'center' }) {
-  const left = side === 'left' ? TILE / 2 : side === 'right' ? BOARD_W - TILE / 2 : BOARD_W / 2;
+  const height = side === 'center' ? BANNER_CONNECTOR_H : ROW_CONNECTOR_H;
+  if (side === 'center') {
+    return (
+      <div className="relative" style={{ width: BOARD_W, height }}>
+        <span className="absolute top-0 bottom-0 border-l-2 border-dashed border-line" style={{ left: BOARD_W / 2 }} aria-hidden />
+      </div>
+    );
+  }
+  const colCenter = side === 'left' ? TILE_W / 2 : BOARD_W - TILE_W / 2;
   return (
-    <div className="relative" style={{ width: BOARD_W, height: side === 'center' ? BANNER_CONNECTOR_H : ROW_CONNECTOR_H }}>
-      <span className="absolute top-0 bottom-0 border-l-2 border-dashed border-line" style={{ left }} aria-hidden />
+    <div className="relative" style={{ width: BOARD_W, height }}>
+      <div className="absolute bg-panel-3 rounded-full" style={{ left: colCenter - TILE_H / 2, top: 0, width: TILE_H, height }} aria-hidden />
     </div>
   );
 }
@@ -301,38 +328,31 @@ function MarcoCallout({ marco, side }: { marco: MarcoPosicionado; side: 'left' |
   );
 }
 
-function TileButton({ slot, cursoId, nav, isCurrent, profile }: {
-  slot: Slot; cursoId: string; nav: (path: string) => void; isCurrent: boolean;
-  profile: { nome?: string | null; email?: string; avatar_url?: string | null } | null;
+function TileButton({ slot, cursoId, nav, faixa, isCurrent }: {
+  slot: Slot; cursoId: string; nav: (path: string) => void; faixa: string | null; isCurrent: boolean;
 }) {
   const available = !!slot.aula;
   const go = () => { if (available) nav(`/curso/${cursoId}?aula=${slot.aula!.id}`); };
   return (
-    <div id={`slot-${cursoId}:${slot.ordem}`} className="relative" style={{ width: TILE, height: TILE }}>
-      {isCurrent && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
-          <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={30} />
-        </div>
+    <button
+      id={`slot-${cursoId}:${slot.ordem}`}
+      onClick={go}
+      disabled={!available}
+      title={available ? (slot.aula!.titulo || `Aula ${slot.ordem}`) : 'Em breve'}
+      style={{ width: TILE_W }}
+      className={cn(
+        'h-full flex-shrink-0 flex flex-col items-center justify-center gap-0.5 border-r border-black/15 last:border-r-0 transition-colors relative',
+        available ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
+        isCurrent ? 'bg-brand/30 ring-2 ring-inset ring-brand'
+          : slot.done ? 'bg-brand text-brand-ink'
+          : available ? (FAIXA_BG_CLASS[faixa ?? ''] ?? 'bg-panel-3')
+          : 'bg-white/5',
       )}
-      <button
-        onClick={go}
-        disabled={!available}
-        title={available ? (slot.aula!.titulo || `Aula ${slot.ordem}`) : 'Em breve'}
-        className={cn(
-          'w-full h-full rounded-full border-2 grid place-items-center transition-colors relative',
-          available ? 'cursor-pointer hover:border-brand/60' : 'cursor-default',
-          isCurrent ? 'border-brand ring-4 ring-brand/25 bg-brand/15'
-            : slot.done ? 'bg-brand border-brand text-brand-ink'
-            : available ? 'bg-panel border-line'
-            : 'bg-white/5 border-white/10',
-        )}
-      >
-        {slot.done ? <Check className="w-6 h-6 text-brand-ink" /> : available ? <PlayCircle className="w-6 h-6 text-brand" /> : <Lock className="w-4 h-4 text-white/30" />}
-        <span className={cn('absolute -bottom-1 -right-1 w-5 h-5 rounded-full grid place-items-center text-[10px] font-semibold tabular-nums',
-          slot.done ? 'bg-brand-ink text-brand' : 'bg-panel-3 text-fg-3 border border-line')}>
-          {slot.ordem}
-        </span>
-      </button>
-    </div>
+    >
+      {slot.done ? <Check className="w-5 h-5 text-brand-ink" /> : available ? <PlayCircle className="w-5 h-5 text-brand" /> : <Lock className="w-4 h-4 text-white/25" />}
+      <span className={cn('text-[11px] font-semibold tabular-nums', slot.done ? 'text-brand-ink' : available ? 'text-fg-2' : 'text-white/25')}>
+        {slot.ordem}
+      </span>
+    </button>
   );
 }
