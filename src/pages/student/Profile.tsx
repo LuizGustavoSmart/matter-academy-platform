@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import AvatarUpload from '../../components/AvatarUpload';
 import { Card, Field, Input, Select, Button, Badge, Skeleton, cn, useToast } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
-import { ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
+import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 
 const AULAS_POR_FAIXA = 12;
 
@@ -117,7 +117,14 @@ export default function Profile() {
           if (!dataInicioPorCurso[r.curso_id]) dataInicioPorCurso[r.curso_id] = r.data_inicio;
         });
 
-        const cursosOrdenados = ((cursos ?? []) as { id: string; faixa: string | null }[])
+        const cursosReais = (cursos ?? []) as { id: string; faixa: string | null }[];
+        // As 4 faixas sempre aparecem — a que o aluno ainda não foi vinculado
+        // (curso/turma futuros) vira um bloco "virtual" com "Ainda não iniciada".
+        const faixasPresentes = new Set(cursosReais.map((c) => c.faixa));
+        const cursosVirtuais = FAIXA_OPTIONS.filter((o) => !faixasPresentes.has(o.value)).map((o) => ({
+          id: `virtual-${o.value}`, faixa: o.value as string | null,
+        }));
+        const cursosOrdenados = [...cursosReais, ...cursosVirtuais]
           .sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
         const base = cursosOrdenados.map((c) => {
           const done = countsPorCurso[c.id]?.done ?? 0;
