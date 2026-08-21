@@ -36,11 +36,11 @@ export const ORIGEM_TONE: Record<OrigemPresenca, 'success' | 'info' | 'warn' | '
   manual_professor: 'default',
 };
 
-/** Percentual do vídeo que precisa ser assistido para marcar presença. */
-export const LIMITE_PRESENCA_PCT = 80;
-
 /** Percentual assistido (contínuo, sem contar avanço/arrasto) para marcar a aula como concluída. */
 export const LIMITE_CONCLUSAO_PCT = 70;
+
+/** Percentual do vídeo que precisa ser assistido para marcar presença automática — mesmo limite da conclusão, para que "aula concluída" e "presente" nunca fiquem em desacordo. */
+export const LIMITE_PRESENCA_PCT = LIMITE_CONCLUSAO_PCT;
 
 /** O aluno pode entrar um pouco antes do horário marcado e ainda contar como ao vivo. */
 const TOLERANCIA_ANTES_MIN = 30;

@@ -454,6 +454,7 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
   type Row = { id: string; ordem: number; titulo: string; dataHora: string | null; presentes: number };
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aulaSelecionada, setAulaSelecionada] = useState<Row | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -489,7 +490,7 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
           {rows.map((r) => {
             const pct = alunosCount ? Math.round((r.presentes / alunosCount) * 100) : 0;
             return (
-              <div key={r.id}>
+              <button key={r.id} onClick={() => setAulaSelecionada(r)} className="block w-full text-left rounded-md -mx-2 px-2 py-1 hover:bg-panel-2/40 transition-colors">
                 <div className="flex items-center justify-between text-sm mb-1.5 gap-3">
                   <span className="text-fg-2 truncate">Aula {r.ordem}{r.dataHora ? ` – ${new Date(r.dataHora).toLocaleDateString('pt-BR')}` : ''}</span>
                   <span className="text-brand font-medium tabular-nums flex-shrink-0">{r.presentes}/{alunosCount} ({pct}%)</span>
@@ -497,10 +498,13 @@ function PresencaBarList({ turmaId, cursoId, turmaNome, alunosCount }: {
                 <div className="h-2 w-full rounded-full bg-line/50 overflow-hidden">
                   <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
+      )}
+      {aulaSelecionada && (
+        <AulaAlunosModal turmaId={turmaId} cursoId={cursoId} aula={aulaSelecionada} onClose={() => setAulaSelecionada(null)} />
       )}
     </Card>
   );
@@ -513,6 +517,7 @@ function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
   type Row = { id: string; ordem: number; titulo: string; entregues: number };
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [atividadeSelecionada, setAtividadeSelecionada] = useState<Row | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -540,18 +545,128 @@ function AtividadesEngajamento({ turmaId, cursoId, alunosCount }: {
           {rows.map((r) => {
             const pct = alunosCount ? Math.round((r.entregues / alunosCount) * 100) : 0;
             return (
-              <div key={r.id} className="flex items-center gap-4">
+              <button key={r.id} onClick={() => setAtividadeSelecionada(r)} className="flex items-center gap-4 w-full text-left rounded-md -mx-2 px-2 py-1 hover:bg-panel-2/40 transition-colors">
                 <span className="text-fg-2 text-sm w-32 sm:w-40 flex-shrink-0 truncate">{r.titulo}</span>
                 <div className="flex-1 h-2 rounded-full bg-line/50 overflow-hidden">
                   <div className="h-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
                 </div>
                 <span className="text-fg-3 text-xs tabular-nums flex-shrink-0 w-16 text-right">{r.entregues}/{alunosCount}</span>
-              </div>
+              </button>
             );
           })}
         </div>
       )}
+      {atividadeSelecionada && (
+        <AtividadeAlunosModal turmaId={turmaId} cursoId={cursoId} atividade={atividadeSelecionada} onClose={() => setAtividadeSelecionada(null)} />
+      )}
     </Card>
+  );
+}
+
+/** Busca os alunos matriculados na turma/curso, reaproveitada pelos dois modais abaixo. */
+async function carregarAlunosDaTurma(turmaId: string, cursoId: string): Promise<{ id: string; nome: string | null; email: string }[]> {
+  const { data: ut } = await supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId).eq('curso_id', cursoId);
+  const userIds = (ut ?? []).map((r) => r.user_id);
+  if (!userIds.length) return [];
+  const { data: profiles } = await supabase.from('profiles').select('id,email,nome,role').in('id', userIds);
+  return (profiles ?? []).filter((p) => p.role === 'student').map((p) => ({ id: p.id, nome: p.nome, email: p.email }));
+}
+
+/* ═══════════════════ Alunos de uma aula (embaixador) ═══════════════════ */
+function AulaAlunosModal({ turmaId, cursoId, aula, onClose }: {
+  turmaId: string; cursoId: string; aula: { id: string; ordem: number; titulo: string; dataHora: string | null }; onClose: () => void;
+}) {
+  type AlunoPresenca = { id: string; nome: string | null; email: string; presente: boolean };
+  const [alunos, setAlunos] = useState<AlunoPresenca[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [lista, { data: presencas }] = await Promise.all([
+        carregarAlunosDaTurma(turmaId, cursoId),
+        supabase.from('presencas').select('user_id,presente').eq('turma_id', turmaId).eq('aula_id', aula.id),
+      ]);
+      const presenteMap = new Map(((presencas ?? []) as { user_id: string; presente: boolean }[]).map((p) => [p.user_id, p.presente]));
+      setAlunos(lista.map((a) => ({ ...a, presente: !!presenteMap.get(a.id) })));
+      setLoading(false);
+    })();
+  }, [turmaId, cursoId, aula.id]);
+
+  const presentes = alunos.filter((a) => a.presente).length;
+
+  return (
+    <Modal open onClose={onClose} size="lg" title={`Aula ${aula.ordem} — ${aula.titulo}`}>
+      {loading ? (
+        <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>
+      ) : alunos.length === 0 ? (
+        <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" />
+      ) : (
+        <>
+          <p className="text-fg-3 text-sm mb-4">{presentes} de {alunos.length} presentes</p>
+          <ul className="-mx-5">
+            {alunos.map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-5 py-2.5 border-b border-line last:border-0">
+                <Avatar name={a.nome} email={a.email} size={28} />
+                <span className="flex-1 min-w-0 text-sm text-fg-2 truncate">{a.nome || a.email.split('@')[0]}</span>
+                <Badge tone={a.presente ? 'success' : 'default'} className="flex-shrink-0">{a.presente ? 'Presente' : 'Ausente'}</Badge>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/* ═══════════════════ Alunos de uma atividade (embaixador) ═══════════════════ */
+function AtividadeAlunosModal({ turmaId, cursoId, atividade, onClose }: {
+  turmaId: string; cursoId: string; atividade: { id: string; titulo: string }; onClose: () => void;
+}) {
+  type AlunoEnvio = { id: string; nome: string | null; email: string; enviadoEm: string | null };
+  const [alunos, setAlunos] = useState<AlunoEnvio[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [lista, { data: envios }] = await Promise.all([
+        carregarAlunosDaTurma(turmaId, cursoId),
+        supabase.from('atividade_envios').select('aluno_id,enviado_em').eq('atividade_id', atividade.id),
+      ]);
+      const envioMap = new Map(((envios ?? []) as { aluno_id: string; enviado_em: string | null }[]).map((e) => [e.aluno_id, e.enviado_em]));
+      setAlunos(lista.map((a) => ({ ...a, enviadoEm: envioMap.get(a.id) ?? null })));
+      setLoading(false);
+    })();
+  }, [turmaId, cursoId, atividade.id]);
+
+  const entregues = alunos.filter((a) => a.enviadoEm).length;
+
+  return (
+    <Modal open onClose={onClose} size="lg" title={atividade.titulo}>
+      {loading ? (
+        <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>
+      ) : alunos.length === 0 ? (
+        <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" />
+      ) : (
+        <>
+          <p className="text-fg-3 text-sm mb-4">{entregues} de {alunos.length} entregues</p>
+          <ul className="-mx-5">
+            {alunos.map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-5 py-2.5 border-b border-line last:border-0">
+                <Avatar name={a.nome} email={a.email} size={28} />
+                <span className="flex-1 min-w-0 text-sm text-fg-2 truncate">{a.nome || a.email.split('@')[0]}</span>
+                <span className="text-fg-3 text-xs flex-shrink-0">
+                  {a.enviadoEm ? `Entregue – ${new Date(a.enviadoEm).toLocaleDateString('pt-BR')}` : (
+                    <Badge tone="default">Não entregue</Badge>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Modal>
   );
 }
 
