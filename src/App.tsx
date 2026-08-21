@@ -69,6 +69,12 @@ function RootRedirect() {
   return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
 }
 
+/** /perfil é acessado por todos os papéis; renderiza o chrome (sidebar/header) certo para cada um. */
+function PerfilLayout() {
+  const { profile } = useAuth();
+  return profile?.role === 'admin' ? <AdminLayout /> : <StudentLayout />;
+}
+
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth();
   if (loading) return <Loading />;
@@ -101,7 +107,6 @@ export default function App() {
                     <Route path="/admin/aulas" element={<AdminAulas />} />
                     <Route path="/admin/faixas" element={<AdminFaixas />} />
                     <Route path="/admin/mapa-professores" element={<MapaProfessores />} />
-                    <Route path="/perfil" element={<Profile />} />
                   </Route>
                 </Route>
 
@@ -122,6 +127,11 @@ export default function App() {
                     <Route path="/turmas" element={<MinhasTurmas />} />
                     <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
                     <Route path="/turmas/:turmaId/cursos/:cursoId" element={<TurmaCursoDetalhe />} />
+                  </Route>
+                </Route>
+
+                <Route element={<RequireAuth roles={["admin", "student", "professor", "monitor", "embaixador"]} />}>
+                  <Route element={<PerfilLayout />}>
                     <Route path="/perfil" element={<Profile />} />
                   </Route>
                 </Route>
