@@ -509,7 +509,9 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
   const clipId = `clip-${item.key}`;
 
   if (item.type === 'capa') {
-    const url = capaUrls[item.curso.id];
+    // No cronograma o bloco de faixa usa sempre a arte oficial de graduação,
+    // independente da capa cadastrada no curso.
+    const url = FAIXA_CRONOGRAMA_IMG[item.curso.faixa ?? ''] ?? capaUrls[item.curso.id];
     const { x: rx, y: ry, w, h } = tile.rectBounds ?? { x: tile.centroidX, y: tile.centroidY, w: 0, h: 0 };
     // Retângulo de verdade — mesmas dimensões exatas da própria trilha nesse
     // trecho (forçado a ficar horizontal), então encosta perfeitamente nas
