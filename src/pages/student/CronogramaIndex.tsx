@@ -15,14 +15,16 @@ const AULAS_POR_FAIXA = 12;
    uma onda (seno) — nunca fica reto, sempre inclinando levemente para um
    lado ou outro, num ciclo completo a cada `WAVE_PERIOD` casas. As capas
    de faixa são casas maiores dentro da mesma tira. ── */
-const ANGLE_MAX = (26 * Math.PI) / 180;
-const WAVE_PERIOD = 14;
+const ANGLE_MAX = (29 * Math.PI) / 180;
+const WAVE_PERIOD = 40;
 const AULA_LEN = 62;
 const CAPA_LEN = 100;
 const TRACK_W = 84;
 const MARGIN = 56;
-const MARCO_GAP = 76;
-const MARCO_W = 240;
+/** Faixa lateral fixa, fora de qualquer trecho possível da trilha — os
+    marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
+const GUTTER_W = 260;
+const MARCO_W = 232;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -68,8 +70,7 @@ type SeqItem =
   | { type: 'aula'; key: string; curso: Curso; slot: Slot; marco: Marco | null };
 
 type TileGeom = {
-  pathD: string; centroidX: number; centroidY: number; dirAngle: number;
-  perpX: number; perpY: number; item: SeqItem;
+  pathD: string; centroidX: number; centroidY: number; dirAngle: number; item: SeqItem;
 };
 
 type Pt = readonly [number, number];
@@ -121,7 +122,9 @@ function buildTrack(seq: SeqItem[]) {
 
   const minX = Math.min(...leftX, ...rightX), maxX = Math.max(...leftX, ...rightX);
   const minY = Math.min(...leftY, ...rightY), maxY = Math.max(...leftY, ...rightY);
-  const ox = -minX + MARGIN, oy = -minY + MARGIN;
+  // Desloca em X por GUTTER_W (não MARGIN) — reserva as faixas laterais fixas
+  // dos marcos fora do alcance de qualquer trecho da trilha, por mais que ela balance.
+  const ox = -minX + GUTTER_W, oy = -minY + MARGIN;
   const shift = (x: number, y: number): Pt => [x + ox, y + oy];
 
   const leftPts: Pt[] = leftX.map((x, j) => shift(x, leftY[j]));
@@ -141,18 +144,16 @@ function buildTrack(seq: SeqItem[]) {
       `C ${rc2[0]},${rc2[1]} ${rc1[0]},${rc1[1]} ${rx0},${ry0}`,
       'Z',
     ].join(' ');
-    const a = dirs[i];
     return {
       pathD,
       centroidX: (lx0 + lx1 + rx0 + rx1) / 4,
       centroidY: (ly0 + ly1 + ry0 + ry1) / 4,
-      dirAngle: a,
-      perpX: Math.cos(a), perpY: Math.sin(a),
+      dirAngle: dirs[i],
       item,
     };
   });
 
-  const width = (maxX - minX) + MARGIN * 2;
+  const width = (maxX - minX) + GUTTER_W * 2;
   const height = (maxY - minY) + MARGIN * 2;
 
   // Borda externa contínua: percorre a curva esquerda inteira, cruza no fim,
@@ -311,14 +312,11 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   const track = useMemo(() => buildTrack(seq), [seq]);
 
   let marcoToggle = 0;
-  const marcoCards: { x: number; y: number; side: 'left' | 'right'; marco: Marco }[] = [];
+  const marcoCards: { y: number; side: 'left' | 'right'; marco: Marco }[] = [];
   track.tiles.forEach((tile) => {
     if (tile.item.type !== 'aula' || !tile.item.marco) return;
     const side: 'left' | 'right' = marcoToggle++ % 2 === 0 ? 'left' : 'right';
-    const dir = side === 'left' ? 1 : -1;
-    const x = tile.centroidX + tile.perpX * dir * (TRACK_W / 2 + MARCO_GAP);
-    const y = tile.centroidY + tile.perpY * dir * (TRACK_W / 2 + MARCO_GAP);
-    marcoCards.push({ x, y, side, marco: tile.item.marco });
+    marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco });
   });
 
   const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
@@ -349,8 +347,9 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
             className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-3 text-xs shadow-ma-1"
             style={{
               width: MARCO_W,
-              left: m.x, top: m.y,
-              transform: m.side === 'left' ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+              top: m.y,
+              ...(m.side === 'left' ? { right: `calc(100% - ${GUTTER_W - 12}px)` } : { left: `calc(100% - ${GUTTER_W - 12}px)` }),
+              transform: 'translateY(-50%)',
             }}
           >
             <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
