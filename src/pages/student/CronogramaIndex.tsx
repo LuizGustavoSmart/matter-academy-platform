@@ -11,18 +11,18 @@ const AULAS_POR_FAIXA = 12;
 /* ── Geometria da trilha ──────────────────────────────────────────────
    A trilha é UMA ÚNICA tira poligonal contínua: cada casa é um trapézio
    que compartilha a aresta exata com a casa vizinha (sem gaps, sem
-   conectores separados). A tira avança sempre para cima, alternando a
-   inclinação para a esquerda/direita a cada `RUN_LEN` casas — é essa
-   mudança de ângulo, embutida na própria casa da virada, que forma a
-   curva. As capas de faixa são casas maiores dentro da mesma tira. ── */
-const ANGLE = (58 * Math.PI) / 180;
-const AULA_LEN = 84;
-const CAPA_LEN = 132;
-const TRACK_W = 108;
-const RUN_LEN = 7;
+   conectores separados). O ângulo de cada casa varia continuamente, como
+   uma onda (seno) — nunca fica reto, sempre inclinando levemente para um
+   lado ou outro, num ciclo completo a cada `WAVE_PERIOD` casas. As capas
+   de faixa são casas maiores dentro da mesma tira. ── */
+const ANGLE_MAX = (26 * Math.PI) / 180;
+const WAVE_PERIOD = 14;
+const AULA_LEN = 62;
+const CAPA_LEN = 100;
+const TRACK_W = 84;
 const MARGIN = 56;
-const MARCO_GAP = 18;
-const MARCO_W = 250;
+const MARCO_GAP = 76;
+const MARCO_W = 240;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -97,13 +97,10 @@ function catmullRomSegments(pts: Pt[]): BezierSeg[] {
 function buildTrack(seq: SeqItem[]) {
   const n = seq.length;
   const lens = seq.map((it) => (it.type === 'capa' ? CAPA_LEN : AULA_LEN));
+  // Onda contínua — o ângulo nunca fica constante por muitas casas, então o
+  // caminho nunca parece reto, só ondula suavemente de um lado para o outro.
   const dirs: number[] = [];
-  let sign = 1, sinceTurn = 0;
-  for (let i = 0; i < n; i++) {
-    dirs.push(sign * ANGLE);
-    sinceTurn++;
-    if (sinceTurn >= RUN_LEN) { sign *= -1; sinceTurn = 0; }
-  }
+  for (let i = 0; i < n; i++) dirs.push(ANGLE_MAX * Math.sin((2 * Math.PI * i) / WAVE_PERIOD));
   const jointAngle: number[] = new Array(n + 1);
   jointAngle[0] = dirs[0];
   jointAngle[n] = dirs[n - 1];
