@@ -1,35 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, PlayCircle, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getSignedUrl } from '../../lib/storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Avatar, cn } from '../../components/ui';
-import { SignedImage } from '../../components/SignedImage';
-import { FAIXA_OPTIONS, FAIXA_DOT_CLASS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
-import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
+import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 
 const AULAS_POR_FAIXA = 12;
 
-/* ── Constantes de layout — a trilha agora é uma coluna vertical única, então
-   cada linha se auto-alinha no fluxo normal do documento; não é preciso
-   calcular posições em pixel para os marcos, já que eles ficam na MESMA
-   linha do bloco a que se referem. ── */
-const TILE = 108;
-const TRANSITION_TILE = 156;
-const CONNECTOR_H = 48;
-const GUTTER_W = 288;
+/* ── Geometria da trilha ──────────────────────────────────────────────
+   A trilha é UMA ÚNICA tira poligonal contínua: cada casa é um trapézio
+   que compartilha a aresta exata com a casa vizinha (sem gaps, sem
+   conectores separados). A tira avança sempre para cima, alternando a
+   inclinação para a esquerda/direita a cada `RUN_LEN` casas — é essa
+   mudança de ângulo, embutida na própria casa da virada, que forma a
+   curva. As capas de faixa são casas maiores dentro da mesma tira. ── */
+const ANGLE = (58 * Math.PI) / 180;
+const AULA_LEN = 84;
+const CAPA_LEN = 132;
+const TRACK_W = 108;
+const RUN_LEN = 7;
+const MARGIN = 56;
+const MARCO_GAP = 18;
+const MARCO_W = 250;
 
-/** Deslocamento horizontal (px) de cada casa, em ciclo — o "efeito cobra":
-    a trilha ondula suavemente para os lados em vez de subir reta. Reinicia
-    em 0 a cada troca de faixa (o bloco de transição fica centralizado). */
-const WAVE = [0, 56, 80, 56, 0, -56, -80, -56];
-
-/** Fundo sutil por faixa — mesma variedade de cor do tabuleiro de referência, dentro da paleta da plataforma. */
-const FAIXA_BG_CLASS: Record<string, string> = {
-  branca: 'bg-white/10',
-  verde: 'bg-emerald-500/15',
-  marrom: 'bg-amber-700/20',
-  preta: 'bg-zinc-400/15',
+const FAIXA_FILL: Record<string, string> = {
+  branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
+};
+const FAIXA_CAPA_FILL: Record<string, string> = {
+  branca: 'fill-white/20', verde: 'fill-emerald-500/45', marrom: 'fill-amber-700/55', preta: 'fill-zinc-400/45',
 };
 
 type Aula = { id: string; titulo: string; ordem: number };
@@ -64,13 +63,80 @@ const MARCOS: Record<string, { ordem: number; titulo: string; desc: string }[]> 
   ],
 };
 
+type SeqItem =
+  | { type: 'capa'; key: string; curso: Curso }
+  | { type: 'aula'; key: string; curso: Curso; slot: Slot; marco: Marco | null };
+
+type TileGeom = {
+  points: string; centroidX: number; centroidY: number; dirAngle: number;
+  perpX: number; perpY: number; item: SeqItem;
+};
+
+/** Divide a sequência em trapézios contíguos — cada casa compartilha a aresta exata com a próxima. */
+function buildTrack(seq: SeqItem[]) {
+  const n = seq.length;
+  const lens = seq.map((it) => (it.type === 'capa' ? CAPA_LEN : AULA_LEN));
+  const dirs: number[] = [];
+  let sign = 1, sinceTurn = 0;
+  for (let i = 0; i < n; i++) {
+    dirs.push(sign * ANGLE);
+    sinceTurn++;
+    if (sinceTurn >= RUN_LEN) { sign *= -1; sinceTurn = 0; }
+  }
+  const jointAngle: number[] = new Array(n + 1);
+  jointAngle[0] = dirs[0];
+  jointAngle[n] = dirs[n - 1];
+  for (let j = 1; j < n; j++) jointAngle[j] = (dirs[j - 1] + dirs[j]) / 2;
+
+  const cx = [0], cy = [0];
+  for (let i = 0; i < n; i++) {
+    cx.push(cx[i] + Math.sin(dirs[i]) * lens[i]);
+    cy.push(cy[i] - Math.cos(dirs[i]) * lens[i]);
+  }
+  const leftX: number[] = [], leftY: number[] = [], rightX: number[] = [], rightY: number[] = [];
+  for (let j = 0; j <= n; j++) {
+    const a = jointAngle[j];
+    const px = Math.cos(a), py = Math.sin(a);
+    leftX.push(cx[j] + (px * TRACK_W) / 2); leftY.push(cy[j] + (py * TRACK_W) / 2);
+    rightX.push(cx[j] - (px * TRACK_W) / 2); rightY.push(cy[j] - (py * TRACK_W) / 2);
+  }
+
+  const minX = Math.min(...leftX, ...rightX), maxX = Math.max(...leftX, ...rightX);
+  const minY = Math.min(...leftY, ...rightY), maxY = Math.max(...leftY, ...rightY);
+  const ox = -minX + MARGIN, oy = -minY + MARGIN;
+  const shift = (x: number, y: number) => [x + ox, y + oy] as const;
+
+  const tiles: TileGeom[] = seq.map((item, i) => {
+    const [lx0, ly0] = shift(leftX[i], leftY[i]);
+    const [lx1, ly1] = shift(leftX[i + 1], leftY[i + 1]);
+    const [rx1, ry1] = shift(rightX[i + 1], rightY[i + 1]);
+    const [rx0, ry0] = shift(rightX[i], rightY[i]);
+    const a = dirs[i];
+    return {
+      points: `${lx0},${ly0} ${lx1},${ly1} ${rx1},${ry1} ${rx0},${ry0}`,
+      centroidX: (lx0 + lx1 + rx0 + rx1) / 4,
+      centroidY: (ly0 + ly1 + ry0 + ry1) / 4,
+      dirAngle: a,
+      perpX: Math.cos(a), perpY: Math.sin(a),
+      item,
+    };
+  });
+
+  const leftPts = leftX.map((x, j) => shift(x, leftY[j]));
+  const rightPts = rightX.map((x, j) => shift(x, rightY[j]));
+  const width = (maxX - minX) + MARGIN * 2;
+  const height = (maxY - minY) + MARGIN * 2;
+
+  return { tiles, leftPts, rightPts, width, height };
+}
+
 export default function CronogramaIndex() {
   const { profile } = useAuth();
-  const faixaCapas = useFaixaCapas();
   const nav = useNavigate();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [slotsPorCurso, setSlotsPorCurso] = useState<Record<string, Slot[]>>({});
   const [currentSlotKey, setCurrentSlotKey] = useState<string | null>(null);
+  const [capaUrls, setCapaUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const scrolledRef = useRef(false);
 
@@ -92,14 +158,18 @@ export default function CronogramaIndex() {
       const cursosReais: Curso[] = ((cs ?? []) as { id: string; titulo: string; capa_url: string | null; faixa: string | null }[])
         .map((c) => ({ id: c.id, titulo: c.titulo, capaUrl: c.capa_url, faixa: c.faixa }));
 
-      // As 4 faixas sempre aparecem — a que ainda não existe na plataforma
-      // vira um bloco "virtual" sem aulas (mostrado como "em breve").
       const faixasPresentes = new Set(cursosReais.map((c) => c.faixa));
       const cursosVirtuais: Curso[] = FAIXA_OPTIONS
         .filter((o) => !faixasPresentes.has(o.value))
         .map((o) => ({ id: `virtual-${o.value}`, titulo: labelDaFaixa(o.value) ?? o.label, capaUrl: null, faixa: o.value }));
 
       const cursosOrdenados: Curso[] = [...cursosReais, ...cursosVirtuais].sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
+
+      const urls: Record<string, string> = {};
+      await Promise.all(cursosOrdenados.map(async (c) => {
+        if (!c.capaUrl) return;
+        try { const u = await getSignedUrl('capas', c.capaUrl); if (u) urls[c.id] = u; } catch { /* sem capa */ }
+      }));
 
       const cursoIdsReais = cursosReais.map((c) => c.id);
       // lessons_public é uma view não tipada no schema gerado
@@ -125,8 +195,7 @@ export default function CronogramaIndex() {
         const slots: Slot[] = [];
         for (let ordem = 1; ordem <= total; ordem++) {
           const aula = porOrdem.get(ordem) ?? null;
-          const done = aula ? doneSet.has(aula.id) : false;
-          slots.push({ ordem, aula, done });
+          slots.push({ ordem, aula, done: aula ? doneSet.has(aula.id) : false });
         }
         map[curso.id] = slots;
         if (!currentKey) {
@@ -136,6 +205,7 @@ export default function CronogramaIndex() {
       }
 
       setCursos(cursosOrdenados);
+      setCapaUrls(urls);
       setSlotsPorCurso(map);
       setCurrentSlotKey(currentKey);
       setLoading(false);
@@ -151,8 +221,8 @@ export default function CronogramaIndex() {
   }, [loading, currentSlotKey]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-      <header className="mb-8 text-center">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <header className="mb-6 text-center">
         <h1 className="mb-0.5">Cronograma</h1>
         <p className="text-fg-3 text-sm">Sua trilha de aulas — avance faixa por faixa, como num tabuleiro.</p>
       </header>
@@ -162,175 +232,150 @@ export default function CronogramaIndex() {
       ) : cursos.length === 0 ? (
         <p className="text-fg-3 text-sm text-center">Aguarde o administrador liberar conteúdo para suas turmas.</p>
       ) : (
-        <Board cursos={cursos} slotsPorCurso={slotsPorCurso} currentSlotKey={currentSlotKey} nav={nav} faixaCapas={faixaCapas} profile={profile} />
+        <Board cursos={cursos} slotsPorCurso={slotsPorCurso} currentSlotKey={currentSlotKey} capaUrls={capaUrls} nav={nav} profile={profile} />
       )}
     </div>
   );
 }
 
-/* ─────────────────── Board: uma única coluna vertical ─────────────────── */
-
-type Row =
-  | { type: 'transicao'; key: string; curso: Curso; primeira: boolean }
-  | { type: 'aula'; key: string; curso: Curso; slot: Slot; marco: Marco | null; marcoSide: 'left' | 'right' | null };
-
-function Board({ cursos, slotsPorCurso, currentSlotKey, nav, faixaCapas, profile }: {
-  cursos: Curso[]; slotsPorCurso: Record<string, Slot[]>; currentSlotKey: string | null;
-  nav: (path: string) => void; faixaCapas: Record<string, string | null>;
+function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }: {
+  cursos: Curso[]; slotsPorCurso: Record<string, Slot[]>; currentSlotKey: string | null; capaUrls: Record<string, string>;
+  nav: (path: string) => void;
   profile: { nome?: string | null; email?: string; avatar_url?: string | null } | null;
 }) {
-  const rows: Row[] = [];
-  const offsets: number[] = [];
-  let marcoToggle = 0;
-  cursos.forEach((curso, cursoIdx) => {
-    rows.push({ type: 'transicao', key: `transicao-${curso.id}`, curso, primeira: cursoIdx === 0 });
-    offsets.push(0); // o bloco de transição fica sempre centralizado
-    const marcosDoCurso = curso.faixa ? MARCOS[curso.faixa] ?? [] : [];
-    const slots = slotsPorCurso[curso.id] ?? [];
-    slots.forEach((slot, idxNaFaixa) => {
-      const marco = marcosDoCurso.find((m) => m.ordem === slot.ordem) ?? null;
-      const marcoSide = marco ? (marcoToggle++ % 2 === 0 ? 'left' : 'right') : null;
-      rows.push({ type: 'aula', key: `${curso.id}-${slot.ordem}`, curso, slot, marco, marcoSide });
-      // Casas com marco ficam centralizadas — evita a curva sobrepor o card lateral.
-      offsets.push(marco ? 0 : WAVE[idxNaFaixa % WAVE.length]);
+  const seq: SeqItem[] = useMemo(() => {
+    const list: SeqItem[] = [];
+    cursos.forEach((curso) => {
+      list.push({ type: 'capa', key: `capa-${curso.id}`, curso });
+      const marcosDoCurso = curso.faixa ? MARCOS[curso.faixa] ?? [] : [];
+      (slotsPorCurso[curso.id] ?? []).forEach((slot) => {
+        const marco = marcosDoCurso.find((m) => m.ordem === slot.ordem) ?? null;
+        list.push({ type: 'aula', key: `${curso.id}-${slot.ordem}`, curso, slot, marco });
+      });
     });
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursos, slotsPorCurso]);
+
+  const track = useMemo(() => buildTrack(seq), [seq]);
+
+  let marcoToggle = 0;
+  const marcoCards: { x: number; y: number; side: 'left' | 'right'; marco: Marco }[] = [];
+  track.tiles.forEach((tile) => {
+    if (tile.item.type !== 'aula' || !tile.item.marco) return;
+    const side: 'left' | 'right' = marcoToggle++ % 2 === 0 ? 'left' : 'right';
+    const dir = side === 'left' ? 1 : -1;
+    const x = tile.centroidX + tile.perpX * dir * (TRACK_W / 2 + MARCO_GAP);
+    const y = tile.centroidY + tile.perpY * dir * (TRACK_W / 2 + MARCO_GAP);
+    marcoCards.push({ x, y, side, marco: tile.item.marco });
   });
 
+  const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
+
+  const dividerLines = track.leftPts.slice(1, -1).map((_, j) => {
+    const i = j + 1;
+    return `M ${track.leftPts[i][0]},${track.leftPts[i][1]} L ${track.rightPts[i][0]},${track.rightPts[i][1]}`;
+  }).join(' ');
+  const borderPath = [
+    `M ${track.leftPts[0][0]},${track.leftPts[0][1]}`,
+    ...track.leftPts.slice(1).map(([x, y]) => `L ${x},${y}`),
+    `L ${track.rightPts[track.rightPts.length - 1][0]},${track.rightPts[track.rightPts.length - 1][1]}`,
+    ...track.rightPts.slice(0, -1).reverse().map(([x, y]) => `L ${x},${y}`),
+    'Z',
+  ].join(' ');
+
   return (
-    <div className="flex flex-col items-center">
-      {rows.map((row, i) => (
-        <div key={row.key}>
-          {row.type === 'transicao' ? (
-            <TransicaoRow curso={row.curso} primeira={row.primeira} faixaCapas={faixaCapas} />
-          ) : (
-            <AulaRow
-              curso={row.curso} slot={row.slot} marco={row.marco} marcoSide={row.marcoSide} offset={offsets[i]}
-              nav={nav} isCurrent={`${row.curso.id}:${row.slot.ordem}` === currentSlotKey} profile={profile}
-            />
+    <div className="overflow-x-auto">
+      <div className="relative mx-auto" style={{ width: track.width, height: track.height }}>
+        <svg width={track.width} height={track.height} viewBox={`0 0 ${track.width} ${track.height}`} className="block">
+          <path d={borderPath} className="fill-panel stroke-line" strokeWidth={2} />
+          {track.tiles.map((tile) => (
+            <TileShape key={tile.item.key} tile={tile} capaUrls={capaUrls} isCurrent={tile === current} nav={nav} />
+          ))}
+          <path d={dividerLines} className="stroke-black/20" strokeWidth={1.5} fill="none" />
+          {current && (
+            <polygon points={current.points} className="fill-none stroke-brand" strokeWidth={3} />
           )}
-          {i < rows.length - 1 && <Connector from={offsets[i]} to={offsets[i + 1]} />}
-        </div>
-      ))}
-    </div>
-  );
-}
+        </svg>
 
-/** Curva suave (bezier em S) entre a casa anterior e a próxima — é o que dá o efeito "cobra" à trilha. */
-function Connector({ from, to }: { from: number; to: number }) {
-  const w = 200;
-  const cx = w / 2;
-  const x1 = cx + from;
-  const x2 = cx + to;
-  return (
-    <svg width={w} height={CONNECTOR_H} viewBox={`0 0 ${w} ${CONNECTOR_H}`} className="block mx-auto text-line" aria-hidden>
-      <path
-        d={`M ${x1} 0 C ${x1} ${CONNECTOR_H * 0.55}, ${x2} ${CONNECTOR_H * 0.45}, ${x2} ${CONNECTOR_H}`}
-        fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="6 6" strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+        {current && (
+          <div className="absolute z-10" style={{ left: current.centroidX, top: current.centroidY - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }}>
+            <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={36} className="ring-2 ring-brand shadow-ma-2" />
+          </div>
+        )}
 
-/* ── Bloco de transição de faixa: a capa do curso, um pouco maior que as
-   casas normais, mas dentro da mesma coluna — não interrompe a trilha. ── */
-function TransicaoRow({ curso, primeira, faixaCapas }: { curso: Curso; primeira: boolean; faixaCapas: Record<string, string | null> }) {
-  const capa = resolveCapaUrl(curso.capaUrl, curso.faixa, faixaCapas);
-  return (
-    <div className="flex flex-col items-center gap-2" style={{ width: TRANSITION_TILE }}>
-      {!primeira && <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider">Próxima faixa</p>}
-      <div className="relative rounded-2xl overflow-hidden border-2 border-brand/40 shadow-ma-2" style={{ width: TRANSITION_TILE, height: TRANSITION_TILE * 0.72 }}>
-        {capa ? <SignedImage bucket="capas" path={capa} className="absolute inset-0 w-full h-full object-cover" alt="" /> : <div className="absolute inset-0 bg-brand/10" />}
+        {marcoCards.map((m, i) => (
+          <div
+            key={i}
+            className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-3 text-xs shadow-ma-1"
+            style={{
+              width: MARCO_W,
+              left: m.x, top: m.y,
+              transform: m.side === 'left' ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+            }}
+          >
+            <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
+            <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
+          </div>
+        ))}
       </div>
-      <div className="flex items-center gap-2">
-        <span className={cn('w-3 h-3 rounded-full flex-shrink-0', FAIXA_DOT_CLASS[curso.faixa ?? ''] ?? 'bg-line')} />
-        <h2 className="text-fg text-sm font-medium text-center">{curso.titulo}</h2>
+
+      {/* Em telas menores os marcos ficam listados abaixo do tabuleiro, já que não há espaço lateral. */}
+      <div className="lg:hidden max-w-xl mx-auto mt-6 space-y-2">
+        {marcoCards.map((m, i) => (
+          <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3 text-xs">
+            <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
+            <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-/* ── Bloco de aula, com marco lateral (desktop) ou embutido embaixo
-   (mobile), e o avatar do aluno flutuando sobre a casa atual. ── */
-function AulaRow({ curso, slot, marco, marcoSide, offset, nav, isCurrent, profile }: {
-  curso: Curso; slot: Slot; marco: Marco | null; marcoSide: 'left' | 'right' | null; offset: number;
-  nav: (path: string) => void; isCurrent: boolean;
-  profile: { nome?: string | null; email?: string; avatar_url?: string | null } | null;
+function TileShape({ tile, capaUrls, isCurrent, nav }: {
+  tile: TileGeom; capaUrls: Record<string, string>; isCurrent: boolean; nav: (path: string) => void;
 }) {
-  return (
-    <div>
-      <div className="flex items-center justify-center gap-3">
-        <div className="hidden lg:flex justify-end flex-shrink-0" style={{ width: GUTTER_W }}>
-          {marcoSide === 'left' && <MarcoCallout marco={marco!} side="left" />}
-        </div>
+  const { item } = tile;
+  const clipId = `clip-${item.key}`;
 
-        <div className="relative flex-shrink-0" style={{ width: TILE, height: TILE, transform: `translateX(${offset}px)` }}>
-          {isCurrent && (
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
-              <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={34} className="ring-2 ring-brand shadow-ma-2" />
-            </div>
-          )}
-          <TileButton slot={slot} cursoId={curso.id} faixa={curso.faixa} nav={nav} isCurrent={isCurrent} />
-        </div>
+  if (item.type === 'capa') {
+    const url = capaUrls[item.curso.id];
+    return (
+      <g>
+        <defs><clipPath id={clipId}><polygon points={tile.points} /></clipPath></defs>
+        <polygon points={tile.points} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
+        {url && (
+          <image
+            href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice"
+            x={tile.centroidX - CAPA_LEN} y={tile.centroidY - CAPA_LEN} width={CAPA_LEN * 2} height={CAPA_LEN * 2}
+          />
+        )}
+        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[13px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
+          {item.curso.titulo}
+        </text>
+      </g>
+    );
+  }
 
-        <div className="hidden lg:flex justify-start flex-shrink-0" style={{ width: GUTTER_W }}>
-          {marcoSide === 'right' && <MarcoCallout marco={marco!} side="right" />}
-        </div>
-      </div>
-
-      {marco && (
-        <div className="lg:hidden mt-3 mx-auto rounded-lg border border-line bg-panel-2/70 p-3 text-xs" style={{ maxWidth: 360 }}>
-          <p className="text-fg font-semibold leading-snug mb-1">{marco.titulo}</p>
-          <p className="text-fg-3 leading-snug">{marco.desc}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A seta parte da casa (borda mais próxima) e chega até o card de texto. */
-function MarcoCallout({ marco, side }: { marco: Marco; side: 'left' | 'right' }) {
-  const card = (
-    <div className="rounded-lg border border-brand/30 bg-panel-2/80 p-3 text-xs" style={{ width: GUTTER_W - 48 }}>
-      <p className="text-fg font-semibold leading-snug mb-1">{marco.titulo}</p>
-      <p className="text-fg-3 leading-snug">{marco.desc}</p>
-    </div>
-  );
-  const arrow = (
-    <div className="flex items-center flex-shrink-0" style={{ width: 32 }}>
-      {side === 'left' ? (
-        <><span className="flex-1 h-0 border-t-2 border-dashed border-brand/50" /><ChevronLeft className="w-4 h-4 text-brand flex-shrink-0" /></>
-      ) : (
-        <><ChevronRight className="w-4 h-4 text-brand flex-shrink-0" /><span className="flex-1 h-0 border-t-2 border-dashed border-brand/50" /></>
-      )}
-    </div>
-  );
-  return side === 'left' ? <>{card}{arrow}</> : <>{arrow}{card}</>;
-}
-
-function TileButton({ slot, cursoId, faixa, nav, isCurrent }: {
-  slot: Slot; cursoId: string; faixa: string | null; nav: (path: string) => void; isCurrent: boolean;
-}) {
+  const { slot } = item;
   const available = !!slot.aula;
-  const go = () => { if (available) nav(`/curso/${cursoId}?aula=${slot.aula!.id}`); };
+  const go = () => { if (available) nav(`/curso/${item.curso.id}?aula=${slot.aula!.id}`); };
+  const fillClass = isCurrent
+    ? 'fill-brand/35'
+    : slot.done ? 'fill-brand'
+    : available ? (FAIXA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3')
+    : 'fill-white/5';
+
   return (
-    <button
-      id={`slot-${cursoId}:${slot.ordem}`}
-      onClick={go}
-      disabled={!available}
-      title={available ? (slot.aula!.titulo || `Aula ${slot.ordem}`) : 'Em breve'}
-      className={cn(
-        'w-full h-full rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-colors relative',
-        available ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
-        isCurrent ? 'border-brand ring-4 ring-brand/25 bg-brand/20'
-          : slot.done ? 'bg-brand border-brand text-brand-ink'
-          : available ? cn('border-line', FAIXA_BG_CLASS[faixa ?? ''] ?? 'bg-panel')
-          : 'bg-white/5 border-white/10',
-      )}
-    >
-      {slot.done ? <Check className="w-7 h-7 text-brand-ink" /> : available ? <PlayCircle className="w-7 h-7 text-brand" /> : <Lock className="w-5 h-5 text-white/25" />}
-      <span className={cn('text-xs font-semibold tabular-nums', slot.done ? 'text-brand-ink' : available ? 'text-fg-2' : 'text-white/25')}>
-        {slot.ordem}
-      </span>
-    </button>
+    <g id={`slot-${item.curso.id}:${slot.ordem}`} onClick={go} className={available ? 'cursor-pointer' : 'cursor-default'}>
+      <polygon points={tile.points} className={fillClass} />
+      <text
+        x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle"
+        className={cn('text-[15px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : available ? 'fill-fg' : 'fill-white/25')}
+      >
+        {slot.done ? '✓' : slot.ordem}
+      </text>
+    </g>
   );
 }
