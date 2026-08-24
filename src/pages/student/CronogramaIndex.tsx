@@ -11,22 +11,23 @@ const AULAS_POR_FAIXA = 12;
 /* ── Geometria da trilha ──────────────────────────────────────────────
    A trilha é UMA ÚNICA tira poligonal contínua: cada casa é um trapézio
    que compartilha a aresta exata com a casa vizinha (sem gaps, sem
-   conectores separados). O ângulo de cada casa varia continuamente, como
-   uma onda (seno) — nunca fica reto, sempre inclinando levemente para um
-   lado ou outro, num ciclo completo a cada `WAVE_PERIOD` casas. As capas
-   de faixa são casas maiores dentro da mesma tira. ── */
-// Amplitude alta o bastante para que o giro total de um extremo a outro
-// (2×ANGLE_MAX) passe de 130° — nos picos a trilha fica quase horizontal.
-const ANGLE_MAX = (70 * Math.PI) / 180;
+   conectores separados). O ângulo segue uma onda "trapezoidal": longos
+   trechos quase horizontais (perto de ±ANGLE_MAX) ligados por uma curva
+   curta e mais abrupta — não uma senoide suave — o que aproxima as
+   linhas horizontais umas das outras verticalmente. As capas de faixa
+   são casas maiores dentro da mesma tira. ── */
+// Giro total de um extremo a outro (2×ANGLE_MAX) próximo de 170°.
+const ANGLE_MAX = (82 * Math.PI) / 180;
 const WAVE_PERIOD = 40;
-const AULA_LEN = 62;
-const CAPA_LEN = 100;
-const TRACK_W = 84;
+const TRANSITION_LEN = 6;
+const AULA_LEN = 72;
+const CAPA_LEN = 112;
+const TRACK_W = 96;
 const MARGIN = 56;
 /** Faixa lateral fixa, fora de qualquer trecho possível da trilha — os
     marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
-const GUTTER_W = 260;
-const MARCO_W = 232;
+const GUTTER_W = 280;
+const MARCO_W = 250;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -101,10 +102,18 @@ function catmullRomSegments(pts: Pt[]): BezierSeg[] {
 function buildTrack(seq: SeqItem[]) {
   const n = seq.length;
   const lens = seq.map((it) => (it.type === 'capa' ? CAPA_LEN : AULA_LEN));
-  // Onda contínua — o ângulo nunca fica constante por muitas casas, então o
-  // caminho nunca parece reto, só ondula suavemente de um lado para o outro.
+  // Onda trapezoidal: sobe/desce rápido entre -ANGLE_MAX e +ANGLE_MAX em
+  // TRANSITION_LEN casas (a curva), depois mantém o ângulo quase constante
+  // (o trecho "horizontal") até a próxima curva.
+  const halfP = WAVE_PERIOD / 2;
+  const angleAt = (phase: number) => {
+    if (phase < TRANSITION_LEN) return ANGLE_MAX * (2 * (phase / TRANSITION_LEN) - 1);
+    if (phase < halfP) return ANGLE_MAX;
+    if (phase < halfP + TRANSITION_LEN) return ANGLE_MAX * (1 - 2 * ((phase - halfP) / TRANSITION_LEN));
+    return -ANGLE_MAX;
+  };
   const dirs: number[] = [];
-  for (let i = 0; i < n; i++) dirs.push(ANGLE_MAX * Math.sin((2 * Math.PI * i) / WAVE_PERIOD));
+  for (let i = 0; i < n; i++) dirs.push(angleAt(i % WAVE_PERIOD));
   const jointAngle: number[] = new Array(n + 1);
   jointAngle[0] = dirs[0];
   jointAngle[n] = dirs[n - 1];
@@ -321,8 +330,17 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   track.tiles.forEach((tile) => {
     if (tile.item.type !== 'aula' || !tile.item.marco) return;
     const side: 'left' | 'right' = marcoToggle++ % 2 === 0 ? 'left' : 'right';
-    // A seta aponta para a borda lateral da casa (do mesmo lado do marco), não para o centro.
-    const [ex, ey] = side === 'left' ? tile.edgeLeft : tile.edgeRight;
+    // A seta aponta para a borda da casa que fica do MESMO lado da tela em
+    // que a casa está (não do lado do marco) — "edgeLeft"/"edgeRight" seguem
+    // a convenção interna da geometria (perpendicular à direção da casa),
+    // que não corresponde à esquerda/direita real conforme a trilha vira;
+    // por isso comparamos as coordenadas X de fato e a posição da casa em
+    // relação ao centro do tabuleiro.
+    const [screenLeft, screenRight] = tile.edgeLeft[0] <= tile.edgeRight[0]
+      ? [tile.edgeLeft, tile.edgeRight]
+      : [tile.edgeRight, tile.edgeLeft];
+    const tileOnRight = tile.centroidX > track.width / 2;
+    const [ex, ey] = tileOnRight ? screenRight : screenLeft;
     marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileEdgeX: ex, tileEdgeY: ey });
   });
 
@@ -381,7 +399,7 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
         {marcoCards.map((m, i) => (
           <div
             key={i}
-            className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-3 text-xs shadow-ma-1"
+            className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-3.5 text-sm shadow-ma-1"
             style={{
               width: MARCO_W,
               top: m.y,
@@ -389,8 +407,8 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
               transform: 'translateY(-50%)',
             }}
           >
-            <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
-            <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
+            <p className="text-fg font-semibold leading-snug mb-1.5">{m.marco.titulo}</p>
+            <p className="text-fg-3 text-[13px] leading-snug">{m.marco.desc}</p>
           </div>
         ))}
       </div>
@@ -399,9 +417,9 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
     {/* Em telas menores os marcos ficam listados abaixo do tabuleiro, já que não há espaço lateral. */}
     <div className="lg:hidden max-w-xl mx-auto mt-6 space-y-2">
       {marcoCards.map((m, i) => (
-        <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3 text-xs">
-          <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
-          <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
+        <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3.5 text-sm">
+          <p className="text-fg font-semibold leading-snug mb-1.5">{m.marco.titulo}</p>
+          <p className="text-fg-3 text-[13px] leading-snug">{m.marco.desc}</p>
         </div>
       ))}
     </div>
@@ -427,7 +445,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
             x={tile.centroidX - CAPA_LEN} y={tile.centroidY - CAPA_LEN} width={CAPA_LEN * 2} height={CAPA_LEN * 2}
           />
         )}
-        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[13px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
+        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[15px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
           {item.curso.titulo}
         </text>
       </g>
@@ -449,7 +467,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
       <path d={tile.pathD} className={fillClass} />
       <text
         x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle"
-        className={cn('text-[15px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : 'fill-fg')}
+        className={cn('text-[19px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : 'fill-fg')}
       >
         {slot.done ? '✓' : slot.ordem}
       </text>
