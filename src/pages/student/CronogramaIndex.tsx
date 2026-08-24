@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Avatar, cn } from '../../components/ui';
 import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
+import { FAIXA_CRONOGRAMA_IMG } from '../../lib/faixaCronogramaImgs';
 
 const AULAS_POR_FAIXA = 12;
 
