@@ -11,23 +11,24 @@ const AULAS_POR_FAIXA = 12;
 /* ── Geometria da trilha ──────────────────────────────────────────────
    A trilha é UMA ÚNICA tira poligonal contínua: cada casa é um trapézio
    que compartilha a aresta exata com a casa vizinha (sem gaps, sem
-   conectores separados). O ângulo segue uma onda "trapezoidal": longos
-   trechos quase horizontais (perto de ±ANGLE_MAX) ligados por uma curva
-   curta e mais abrupta — não uma senoide suave — o que aproxima as
-   linhas horizontais umas das outras verticalmente. As capas de faixa
-   são casas maiores dentro da mesma tira. ── */
-// Giro total de um extremo a outro (2×ANGLE_MAX) próximo de 170°.
-const ANGLE_MAX = (82 * Math.PI) / 180;
-const WAVE_PERIOD = 40;
-const TRANSITION_LEN = 6;
-const AULA_LEN = 72;
-const CAPA_LEN = 112;
-const TRACK_W = 96;
-const MARGIN = 56;
+   conectores separados). O ângulo segue uma onda contínua (senoide) —
+   nunca fica reto por várias casas seguidas, sempre curvando. O período é
+   curto de propósito: o board inteiro é escalado para caber na largura da
+   tela, então quanto menor o alcance horizontal do balanço, maior cada
+   casa aparece renderizada. A amplitude passa de 90°, então em alguns
+   trechos a trilha chega a inclinar de volta "para baixo" por um instante,
+   como uma curva bem fechada de rio. As capas de faixa são casas maiores
+   dentro da mesma tira. ── */
+const ANGLE_MAX = (98 * Math.PI) / 180;
+const WAVE_PERIOD = 18;
+const AULA_LEN = 108;
+const CAPA_LEN = 160;
+const TRACK_W = 132;
+const MARGIN = 64;
 /** Faixa lateral fixa, fora de qualquer trecho possível da trilha — os
     marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
-const GUTTER_W = 280;
-const MARCO_W = 250;
+const GUTTER_W = 230;
+const MARCO_W = 202;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -102,18 +103,12 @@ function catmullRomSegments(pts: Pt[]): BezierSeg[] {
 function buildTrack(seq: SeqItem[]) {
   const n = seq.length;
   const lens = seq.map((it) => (it.type === 'capa' ? CAPA_LEN : AULA_LEN));
-  // Onda trapezoidal: sobe/desce rápido entre -ANGLE_MAX e +ANGLE_MAX em
-  // TRANSITION_LEN casas (a curva), depois mantém o ângulo quase constante
-  // (o trecho "horizontal") até a próxima curva.
-  const halfP = WAVE_PERIOD / 2;
-  const angleAt = (phase: number) => {
-    if (phase < TRANSITION_LEN) return ANGLE_MAX * (2 * (phase / TRANSITION_LEN) - 1);
-    if (phase < halfP) return ANGLE_MAX;
-    if (phase < halfP + TRANSITION_LEN) return ANGLE_MAX * (1 - 2 * ((phase - halfP) / TRANSITION_LEN));
-    return -ANGLE_MAX;
-  };
+  // Onda contínua — o ângulo nunca fica constante por várias casas seguidas,
+  // então o caminho nunca parece reto, só ondula de um lado para o outro
+  // (a amplitude passa de 90°, então nos picos a trilha chega a apontar de
+  // volta "para baixo" por um instante, como uma curva bem fechada de rio).
   const dirs: number[] = [];
-  for (let i = 0; i < n; i++) dirs.push(angleAt(i % WAVE_PERIOD));
+  for (let i = 0; i < n; i++) dirs.push(ANGLE_MAX * Math.sin((2 * Math.PI * i) / WAVE_PERIOD));
   const jointAngle: number[] = new Array(n + 1);
   jointAngle[0] = dirs[0];
   jointAngle[n] = dirs[n - 1];
@@ -445,7 +440,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
             x={tile.centroidX - CAPA_LEN} y={tile.centroidY - CAPA_LEN} width={CAPA_LEN * 2} height={CAPA_LEN * 2}
           />
         )}
-        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[15px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
+        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[20px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
           {item.curso.titulo}
         </text>
       </g>
@@ -467,7 +462,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
       <path d={tile.pathD} className={fillClass} />
       <text
         x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle"
-        className={cn('text-[19px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : 'fill-fg')}
+        className={cn('text-[26px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : 'fill-fg')}
       >
         {slot.done ? '✓' : slot.ordem}
       </text>
