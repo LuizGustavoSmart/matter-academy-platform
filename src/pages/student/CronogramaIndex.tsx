@@ -5,6 +5,7 @@ import { getSignedUrl } from '../../lib/storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { Skeleton, Avatar, cn } from '../../components/ui';
 import { FAIXA_OPTIONS, ordemDaFaixa, labelDaFaixa } from '../../lib/faixa';
+import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
 const AULAS_POR_FAIXA = 12;
 
@@ -24,7 +25,9 @@ const WAVE_PERIOD = 18;
 const AULA_LEN = 108;
 const CAPA_LEN = 160;
 const TRACK_W = 132;
-const MARGIN = 64;
+const MARGIN = 140;
+const INICIO_R = TRACK_W * 0.62;
+const INICIO_GAP = 18;
 /** Faixa lateral fixa, fora de qualquer trecho possível da trilha — os
     marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
 const GUTTER_W = 230;
@@ -42,30 +45,24 @@ type Curso = { id: string; titulo: string; capaUrl: string | null; faixa: string
 type Slot = { ordem: number; aula: Aula | null; done: boolean };
 type Marco = { titulo: string; desc: string };
 
+// Só as aulas 6 e 12 (final) marcam um momento — cada texto já incorpora as
+// características que antes estavam nas aulas 3 e 9, condensadas.
 const MARCOS: Record<string, { ordem: number; titulo: string; desc: string }[]> = {
   branca: [
-    { ordem: 3, titulo: 'Aula 3 — Usuário Profissional de IA', desc: 'Usa IA generativa de forma profissional, dominando os fundamentos, o ChatGPT e a lógica necessária para transformar tarefas do dia a dia em resultados melhores.' },
-    { ordem: 6, titulo: 'Aula 6 — Especialista em Prompt & Pesquisa', desc: 'Estrutura interações mais sofisticadas com IA, utilizando técnicas avançadas de prompting para pesquisar, sintetizar informações e produzir relatórios com mais qualidade e precisão.' },
-    { ordem: 9, titulo: 'Aula 9 — Criador Multimídia com IA', desc: 'Amplia a IA para diferentes formatos de trabalho, criando conteúdos visuais e apresentações e utilizando IA para interpretar, explorar e analisar dados.' },
-    { ordem: 12, titulo: 'Final — Profissional AI-First', desc: 'Integra IA à sua rotina de trabalho, organizando sua produtividade, estruturando diferentes ferramentas e aplicando princípios de uso responsável para transformar tarefas em fluxos mais eficientes.' },
+    { ordem: 6, titulo: 'Aula 6 — Usuário Profissional & Especialista em Prompt', desc: 'Domina os fundamentos da IA generativa e o ChatGPT, e já estrutura prompts avançados para pesquisar, sintetizar e produzir relatórios com mais qualidade.' },
+    { ordem: 12, titulo: 'Final — Criador Multimídia & Profissional AI-First', desc: 'Cria conteúdos visuais, apresentações e análises de dados com IA, e integra tudo à rotina de trabalho com produtividade e uso responsável.' },
   ],
   verde: [
-    { ordem: 3, titulo: 'Aula 3 — Profissional Multi-IA', desc: 'Combina diferentes ferramentas de IA para pesquisar, analisar e tomar decisões, entendendo como aplicar IA para aumentar produtividade e gerar retorno nos processos de trabalho.' },
-    { ordem: 6, titulo: 'Aula 6 — Arquiteto de Processos AI-First', desc: 'Redesenha processos incorporando agentes e múltiplas IAs, transformando atividades tradicionais em fluxos AI-First e criando protótipos de novas formas de trabalhar.' },
-    { ordem: 9, titulo: 'Aula 9 — Construtor de Automações', desc: 'Transforma processos redesenhados em automações integradas, conectando ferramentas como Zapier, Make, n8n e Power Automate para reduzir tarefas manuais e fazer diferentes sistemas trabalharem juntos.' },
-    { ordem: 12, titulo: 'Final — Profissional AI-First de Processos', desc: 'Projeta, automatiza e avalia processos de ponta a ponta, equilibrando produtividade, integração, governança e limites da automação para gerar ganhos reais e sustentáveis.' },
+    { ordem: 6, titulo: 'Aula 6 — Multi-IA & Arquiteto de Processos', desc: 'Combina ferramentas de IA para pesquisar e decidir com mais produtividade, e já redesenha processos com agentes e múltiplas IAs em fluxos AI-First.' },
+    { ordem: 12, titulo: 'Final — Automações & Profissional AI-First de Processos', desc: 'Conecta ferramentas como Zapier, Make e n8n em automações integradas, e projeta processos de ponta a ponta com governança e ganhos sustentáveis.' },
   ],
   marrom: [
-    { ordem: 3, titulo: 'Aula 3 — Construtor de Agentes', desc: 'Cria agentes de IA especializados, definindo seu propósito e incorporando conhecimento para resolver problemas específicos de forma mais consistente.' },
-    { ordem: 6, titulo: 'Aula 6 — Prototipador de Produtos AI', desc: 'Transforma agentes em produtos funcionais, utilizando vibe coding, dados vivos e diferentes componentes para construir soluções que vão além de uma simples conversa com IA.' },
-    { ordem: 9, titulo: 'Aula 9 — Construtor de Produtos Autônomos', desc: 'Cria produtos capazes de interagir com o mundo e executar ações, conectando-se a sistemas e dados externos com maior autonomia, qualidade e robustez.' },
-    { ordem: 12, titulo: 'Final — Criador de Negócios com IA', desc: 'Transforma uma solução de IA em uma proposta de produto viável, entendendo arquitetura, custos e business case e demonstrando seu funcionamento em um produto real.' },
+    { ordem: 6, titulo: 'Aula 6 — Construtor de Agentes & Prototipador', desc: 'Cria agentes de IA especializados e já transforma esses agentes em produtos funcionais, usando vibe coding e dados vivos além de uma simples conversa.' },
+    { ordem: 12, titulo: 'Final — Produtos Autônomos & Criador de Negócios com IA', desc: 'Constrói produtos que interagem com o mundo e executam ações com autonomia, e transforma essa solução em uma proposta de negócio viável e real.' },
   ],
   preta: [
-    { ordem: 3, titulo: 'Aula 3 — Estrategista de IA', desc: 'Enxerga IA a partir da perspectiva do negócio, avaliando a maturidade da organização e construindo uma narrativa estratégica para orientar sua transformação.' },
-    { ordem: 6, titulo: 'Aula 6 — Líder da Transformação AI-First', desc: 'Cria as bases para uma transformação organizacional, estruturando governança, cultura e capacitação para que a adoção de IA aconteça de forma consistente e em escala.' },
-    { ordem: 9, titulo: 'Aula 9 — Orquestrador da Transformação', desc: 'Transforma estratégia em prioridades e ação, mobilizando stakeholders, conduzindo a mudança e estabelecendo métricas para acompanhar o impacto das iniciativas de IA.' },
-    { ordem: 12, titulo: 'Final — Líder Estratégico de IA', desc: 'Constrói e defende uma estratégia de IA para a organização, conectando visão de futuro, prioridades, governança, cultura, capacitação e métricas em um plano estratégico executável.' },
+    { ordem: 6, titulo: 'Aula 6 — Estrategista & Líder da Transformação', desc: 'Avalia a maturidade da organização e constrói a narrativa estratégica, estruturando governança, cultura e capacitação para a adoção de IA em escala.' },
+    { ordem: 12, titulo: 'Final — Orquestrador & Líder Estratégico de IA', desc: 'Mobiliza stakeholders e conduz a mudança com métricas de impacto, construindo e defendendo um plano estratégico de IA executável para a organização.' },
   ],
 };
 
@@ -188,12 +185,31 @@ function buildTrack(seq: SeqItem[]) {
     return `M ${leftPts[i][0]},${leftPts[i][1]} L ${rightPts[i][0]},${rightPts[i][1]}`;
   }).join(' ');
 
-  return { tiles, width, height, borderPath, dividerLines };
+  const startMid: Pt = [(leftPts[0][0] + rightPts[0][0]) / 2, (leftPts[0][1] + rightPts[0][1]) / 2];
+  const startForward: Pt = [Math.sin(dirs[0]), -Math.cos(dirs[0])];
+
+  return { tiles, width, height, borderPath, dividerLines, startMid, startForward };
+}
+
+/** Semicírculo — usado só no bloco decorativo "Início". A metade cortada
+    (o diâmetro) fica virada para `forward`; o arco arredondado bojeia para
+    o lado oposto (para trás, longe da primeira casa). */
+function semicirclePath(center: Pt, radius: number, forward: Pt): string {
+  const af = Math.atan2(forward[1], forward[0]);
+  const start = af + Math.PI / 2;
+  const steps = 24;
+  const pts: Pt[] = [];
+  for (let s = 0; s <= steps; s++) {
+    const t = start + (Math.PI * s) / steps;
+    pts.push([center[0] + radius * Math.cos(t), center[1] + radius * Math.sin(t)]);
+  }
+  return `M ${pts.map((p) => p.join(',')).join(' L ')} Z`;
 }
 
 export default function CronogramaIndex() {
   const { profile } = useAuth();
   const nav = useNavigate();
+  const faixaCapas = useFaixaCapas();
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [slotsPorCurso, setSlotsPorCurso] = useState<Record<string, Slot[]>>({});
   const [currentSlotKey, setCurrentSlotKey] = useState<string | null>(null);
@@ -226,10 +242,13 @@ export default function CronogramaIndex() {
 
       const cursosOrdenados: Curso[] = [...cursosReais, ...cursosVirtuais].sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
 
+      // Usa a capa do próprio curso; se ele ainda não tiver uma, cai para a
+      // capa padrão já cadastrada para aquela faixa (faixa_capas).
       const urls: Record<string, string> = {};
       await Promise.all(cursosOrdenados.map(async (c) => {
-        if (!c.capaUrl) return;
-        try { const u = await getSignedUrl('capas', c.capaUrl); if (u) urls[c.id] = u; } catch { /* sem capa */ }
+        const path = resolveCapaUrl(c.capaUrl, c.faixa, faixaCapas);
+        if (!path) return;
+        try { const u = await getSignedUrl('capas', path); if (u) urls[c.id] = u; } catch { /* sem capa */ }
       }));
 
       const cursoIdsReais = cursosReais.map((c) => c.id);
@@ -271,7 +290,9 @@ export default function CronogramaIndex() {
       setCurrentSlotKey(currentKey);
       setLoading(false);
     })();
-  }, [profile]);
+    // faixaCapas carrega de forma assíncrona (cache compartilhado); reprocessa
+    // as capas quando ele chegar, para não perder o fallback por faixa.
+  }, [profile, faixaCapas]);
 
   useEffect(() => {
     if (loading || scrolledRef.current || !currentSlotKey) return;
@@ -307,12 +328,14 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   const seq: SeqItem[] = useMemo(() => {
     const list: SeqItem[] = [];
     cursos.forEach((curso) => {
-      list.push({ type: 'capa', key: `capa-${curso.id}`, curso });
+      // A capa agora vem DEPOIS das 12 aulas — funciona como a "graduação"
+      // daquela faixa, não mais como a introdução antes da aula 1.
       const marcosDoCurso = curso.faixa ? MARCOS[curso.faixa] ?? [] : [];
       (slotsPorCurso[curso.id] ?? []).forEach((slot) => {
         const marco = marcosDoCurso.find((m) => m.ordem === slot.ordem) ?? null;
         list.push({ type: 'aula', key: `${curso.id}-${slot.ordem}`, curso, slot, marco });
       });
+      list.push({ type: 'capa', key: `capa-${curso.id}`, curso });
     });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,6 +387,26 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
             </marker>
           </defs>
           <path d={track.borderPath} className="fill-panel stroke-line" strokeWidth={2} />
+          {/* Bloco decorativo "Início" — meio círculo colado antes da primeira casa,
+              com um pequeno vão entre as duas formas (não faz parte da tira contígua). */}
+          {(() => {
+            const center: Pt = [
+              track.startMid[0] - track.startForward[0] * INICIO_GAP,
+              track.startMid[1] - track.startForward[1] * INICIO_GAP,
+            ];
+            const labelCenter: Pt = [
+              center[0] - track.startForward[0] * INICIO_R * 0.5,
+              center[1] - track.startForward[1] * INICIO_R * 0.5,
+            ];
+            return (
+              <g>
+                <path d={semicirclePath(center, INICIO_R, track.startForward)} className="fill-brand/25 stroke-brand" strokeWidth={2} />
+                <text x={labelCenter[0]} y={labelCenter[1]} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[18px] font-bold">
+                  Início
+                </text>
+              </g>
+            );
+          })()}
           {track.tiles.map((tile) => (
             <TileShape key={tile.item.key} tile={tile} capaUrls={capaUrls} isCurrent={tile === current} nav={nav} />
           ))}
@@ -435,14 +478,12 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
         <defs><clipPath id={clipId}><path d={tile.pathD} /></clipPath></defs>
         <path d={tile.pathD} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
         {url && (
+          // "meet" (não "slice") — a imagem inteira sempre aparece, sem cortes.
           <image
-            href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice"
+            href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid meet"
             x={tile.centroidX - CAPA_LEN} y={tile.centroidY - CAPA_LEN} width={CAPA_LEN * 2} height={CAPA_LEN * 2}
           />
         )}
-        <text x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[20px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'rgba(11,12,14,0.65)', strokeWidth: 4 }}>
-          {item.curso.titulo}
-        </text>
       </g>
     );
   }
