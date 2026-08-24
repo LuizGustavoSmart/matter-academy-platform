@@ -15,7 +15,9 @@ const AULAS_POR_FAIXA = 12;
    uma onda (seno) — nunca fica reto, sempre inclinando levemente para um
    lado ou outro, num ciclo completo a cada `WAVE_PERIOD` casas. As capas
    de faixa são casas maiores dentro da mesma tira. ── */
-const ANGLE_MAX = (29 * Math.PI) / 180;
+// Amplitude alta o bastante para que o giro total de um extremo a outro
+// (2×ANGLE_MAX) passe de 130° — nos picos a trilha fica quase horizontal.
+const ANGLE_MAX = (70 * Math.PI) / 180;
 const WAVE_PERIOD = 40;
 const AULA_LEN = 62;
 const CAPA_LEN = 100;
@@ -312,11 +314,11 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   const track = useMemo(() => buildTrack(seq), [seq]);
 
   let marcoToggle = 0;
-  const marcoCards: { y: number; side: 'left' | 'right'; marco: Marco }[] = [];
+  const marcoCards: { y: number; side: 'left' | 'right'; marco: Marco; tileX: number; tileY: number }[] = [];
   track.tiles.forEach((tile) => {
     if (tile.item.type !== 'aula' || !tile.item.marco) return;
     const side: 'left' | 'right' = marcoToggle++ % 2 === 0 ? 'left' : 'right';
-    marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco });
+    marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileX: tile.centroidX, tileY: tile.centroidY });
   });
 
   const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
@@ -324,7 +326,12 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   return (
     <div className="overflow-x-auto">
       <div className="relative mx-auto" style={{ width: track.width, height: track.height }}>
-        <svg width={track.width} height={track.height} viewBox={`0 0 ${track.width} ${track.height}`} className="block">
+        <svg width={track.width} height={track.height} viewBox={`0 0 ${track.width} ${track.height}`} className="block overflow-visible">
+          <defs>
+            <marker id="marco-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 Z" className="fill-brand" />
+            </marker>
+          </defs>
           <path d={track.borderPath} className="fill-panel stroke-line" strokeWidth={2} />
           {track.tiles.map((tile) => (
             <TileShape key={tile.item.key} tile={tile} capaUrls={capaUrls} isCurrent={tile === current} nav={nav} />
@@ -333,6 +340,18 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
           {current && (
             <path d={current.pathD} className="fill-none stroke-brand" strokeWidth={3} />
           )}
+          {/* Seta ligando cada marco lateral à casa exata que ele descreve. */}
+          {marcoCards.map((m, i) => {
+            const anchorX = m.side === 'left' ? GUTTER_W - 12 : track.width - GUTTER_W + 12;
+            return (
+              <path
+                key={i}
+                d={`M ${anchorX},${m.y} L ${m.tileX},${m.tileY}`}
+                className="hidden lg:block stroke-brand/60"
+                strokeWidth={1.5} strokeDasharray="5 4" fill="none" markerEnd="url(#marco-arrow)"
+              />
+            );
+          })}
         </svg>
 
         {current && (
