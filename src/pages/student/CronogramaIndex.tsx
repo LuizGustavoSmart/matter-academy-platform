@@ -30,8 +30,14 @@ const INICIO_R = TRACK_W * 0.62;
 const INICIO_GAP = 18;
 /** Faixa lateral fixa, fora de qualquer trecho possível da trilha — os
     marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
-const GUTTER_W = 230;
-const MARCO_W = 202;
+const GUTTER_W = 250;
+const MARCO_W = 222;
+/** Bloco da capa/graduação: um retângulo comum (sem curva/angulação),
+    desenhado por cima do trecho curvo da trilha — as casas antes e depois
+    continuam com o formato de sempre. */
+const CAPA_RECT_W = 300;
+const CAPA_RECT_H = 224;
+const CAPA_RECT_RX = 18;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -179,11 +185,16 @@ function buildTrack(seq: SeqItem[]) {
   borderParts.push('Z');
   const borderPath = borderParts.join(' ');
 
-  // Divisórias internas entre casas — traços retos, como cortes transversais no rio.
+  // Divisórias internas entre casas — traços retos, como cortes transversais no
+  // rio. Pulamos as junções que tocam um bloco de capa: ele é desenhado como um
+  // retângulo comum por cima da trilha, e essas linhas cruzariam por dentro dele.
+  const skipJoints = new Set<number>();
+  seq.forEach((it, i) => { if (it.type === 'capa') { skipJoints.add(i); skipJoints.add(i + 1); } });
   const dividerLines = leftPts.slice(1, -1).map((_, j) => {
     const i = j + 1;
+    if (skipJoints.has(i)) return '';
     return `M ${leftPts[i][0]},${leftPts[i][1]} L ${rightPts[i][0]},${rightPts[i][1]}`;
-  }).join(' ');
+  }).filter(Boolean).join(' ');
 
   const startMid: Pt = [(leftPts[0][0] + rightPts[0][0]) / 2, (leftPts[0][1] + rightPts[0][1]) / 2];
   const startForward: Pt = [Math.sin(dirs[0]), -Math.cos(dirs[0])];
@@ -357,7 +368,11 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
     const [screenLeft, screenRight] = tile.edgeLeft[0] <= tile.edgeRight[0]
       ? [tile.edgeLeft, tile.edgeRight]
       : [tile.edgeRight, tile.edgeLeft];
-    const tileOnRight = tile.centroidX > track.width / 2;
+    let tileOnRight = tile.centroidX > track.width / 2;
+    // Lado invertido a pedido, para estes dois marcos específicos.
+    const { faixa } = tile.item.curso;
+    const { ordem } = tile.item.slot;
+    if ((faixa === 'preta' && ordem === 6) || (faixa === 'marrom' && ordem === 12)) tileOnRight = !tileOnRight;
     const [ex, ey] = tileOnRight ? screenRight : screenLeft;
     marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileEdgeX: ex, tileEdgeY: ey });
   });
@@ -430,14 +445,14 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
 
         {current && (
           <div className="absolute z-10" style={{ left: current.centroidX, top: current.centroidY - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }}>
-            <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={36} className="ring-2 ring-brand shadow-ma-2" />
+            <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={48} className="ring-2 ring-brand shadow-ma-2" />
           </div>
         )}
 
         {marcoCards.map((m, i) => (
           <div
             key={i}
-            className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-3.5 text-sm shadow-ma-1"
+            className="hidden lg:block absolute rounded-lg border border-brand/30 bg-panel-2/90 p-4 text-base shadow-ma-1"
             style={{
               width: MARCO_W,
               top: m.y,
@@ -446,7 +461,7 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
             }}
           >
             <p className="text-fg font-semibold leading-snug mb-1.5">{m.marco.titulo}</p>
-            <p className="text-fg-3 text-[13px] leading-snug">{m.marco.desc}</p>
+            <p className="text-fg-3 text-[15px] leading-snug">{m.marco.desc}</p>
           </div>
         ))}
       </div>
@@ -455,9 +470,9 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
     {/* Em telas menores os marcos ficam listados abaixo do tabuleiro, já que não há espaço lateral. */}
     <div className="lg:hidden max-w-xl mx-auto mt-6 space-y-2">
       {marcoCards.map((m, i) => (
-        <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3.5 text-sm">
+        <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-4 text-base">
           <p className="text-fg font-semibold leading-snug mb-1.5">{m.marco.titulo}</p>
-          <p className="text-fg-3 text-[13px] leading-snug">{m.marco.desc}</p>
+          <p className="text-fg-3 text-[15px] leading-snug">{m.marco.desc}</p>
         </div>
       ))}
     </div>
@@ -473,15 +488,18 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
 
   if (item.type === 'capa') {
     const url = capaUrls[item.curso.id];
+    // Retângulo comum (sem seguir a curva/ângulo da trilha) — desenhado por
+    // cima do trecho curvo; as casas vizinhas continuam com o formato normal.
+    const rx = tile.centroidX - CAPA_RECT_W / 2, ry = tile.centroidY - CAPA_RECT_H / 2;
     return (
       <g>
-        <defs><clipPath id={clipId}><path d={tile.pathD} /></clipPath></defs>
-        <path d={tile.pathD} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
+        <defs><clipPath id={clipId}><rect x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H} rx={CAPA_RECT_RX} /></clipPath></defs>
+        <rect x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H} rx={CAPA_RECT_RX} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
         {url && (
           // "meet" (não "slice") — a imagem inteira sempre aparece, sem cortes.
           <image
             href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid meet"
-            x={tile.centroidX - CAPA_LEN} y={tile.centroidY - CAPA_LEN} width={CAPA_LEN * 2} height={CAPA_LEN * 2}
+            x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H}
           />
         )}
       </g>
