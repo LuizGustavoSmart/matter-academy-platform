@@ -23,7 +23,8 @@ const AULAS_POR_FAIXA = 12;
 const ANGLE_MAX = (98 * Math.PI) / 180;
 const WAVE_PERIOD = 18;
 const AULA_LEN = 108;
-const CAPA_LEN = 160;
+// Proporção ~4:3, igual à arte das capas — preenche o retângulo sem sobrar margem.
+const CAPA_LEN = 176;
 const TRACK_W = 132;
 const MARGIN = 140;
 const INICIO_R = TRACK_W * 0.62;
@@ -32,12 +33,7 @@ const INICIO_GAP = 18;
     marcos ficam sempre aqui, nunca sobrepondo as casas do tabuleiro. */
 const GUTTER_W = 250;
 const MARCO_W = 222;
-/** Bloco da capa/graduação: um retângulo comum (sem curva/angulação),
-    desenhado por cima do trecho curvo da trilha — as casas antes e depois
-    continuam com o formato de sempre. */
-const CAPA_RECT_W = 300;
-const CAPA_RECT_H = 224;
-const CAPA_RECT_RX = 18;
+const CAPA_RX = 16;
 
 const FAIXA_FILL: Record<string, string> = {
   branca: 'fill-white/10', verde: 'fill-emerald-500/25', marrom: 'fill-amber-700/30', preta: 'fill-zinc-400/25',
@@ -79,6 +75,7 @@ type SeqItem =
 type TileGeom = {
   pathD: string; centroidX: number; centroidY: number; dirAngle: number; item: SeqItem;
   edgeLeft: Pt; edgeRight: Pt;
+  rectBounds: { x: number; y: number; w: number; h: number } | null;
 };
 
 type Pt = readonly [number, number];
@@ -112,10 +109,25 @@ function buildTrack(seq: SeqItem[]) {
   // volta "para baixo" por um instante, como uma curva bem fechada de rio).
   const dirs: number[] = [];
   for (let i = 0; i < n; i++) dirs.push(ANGLE_MAX * Math.sin((2 * Math.PI * i) / WAVE_PERIOD));
+  // Um bloco de capa vira uma casa puramente horizontal (±90°), para que os
+  // dois cortes (entrada/saída) fiquem verticais — exatamente as laterais de
+  // um retângulo comum. Mantém o sentido (esquerda/direita) que a onda já
+  // tinha naquele ponto, só "achata" o ângulo em vez de trocar de lado.
+  const capaIndexes: number[] = [];
+  seq.forEach((it, i) => {
+    if (it.type !== 'capa') return;
+    capaIndexes.push(i);
+    dirs[i] = dirs[i] >= 0 ? Math.PI / 2 : -Math.PI / 2;
+  });
+
   const jointAngle: number[] = new Array(n + 1);
   jointAngle[0] = dirs[0];
   jointAngle[n] = dirs[n - 1];
   for (let j = 1; j < n; j++) jointAngle[j] = (dirs[j - 1] + dirs[j]) / 2;
+  // Força os dois cortes da capa a ficarem exatamente no ângulo horizontal
+  // da própria capa (não a média com a casa vizinha) — sem isso, a aresta
+  // compartilhada ficaria levemente inclinada e o retângulo não fecharia certo.
+  capaIndexes.forEach((i) => { jointAngle[i] = dirs[i]; jointAngle[i + 1] = dirs[i]; });
 
   const cx = [0], cy = [0];
   for (let i = 0; i < n; i++) {
@@ -145,15 +157,18 @@ function buildTrack(seq: SeqItem[]) {
   const tiles: TileGeom[] = seq.map((item, i) => {
     const [lx0, ly0] = leftPts[i]; const [lx1, ly1] = leftPts[i + 1];
     const [rx0, ry0] = rightPts[i]; const [rx1, ry1] = rightPts[i + 1];
-    const lc1 = leftSegs[i].c1, lc2 = leftSegs[i].c2;
-    const rc1 = rightSegs[i].c1, rc2 = rightSegs[i].c2;
-    const pathD = [
-      `M ${lx0},${ly0}`,
-      `C ${lc1[0]},${lc1[1]} ${lc2[0]},${lc2[1]} ${lx1},${ly1}`,
-      `L ${rx1},${ry1}`,
-      `C ${rc2[0]},${rc2[1]} ${rc1[0]},${rc1[1]} ${rx0},${ry0}`,
-      'Z',
-    ].join(' ');
+    // O bloco de capa é um retângulo de verdade (cantos/arestas retos) — como
+    // os dois cortes já foram forçados a ficar verticais acima, um contorno
+    // reto aqui fecha exatamente igual a um <rect>, sem precisar de curva.
+    const pathD = item.type === 'capa'
+      ? `M ${lx0},${ly0} L ${lx1},${ly1} L ${rx1},${ry1} L ${rx0},${ry0} Z`
+      : [
+        `M ${lx0},${ly0}`,
+        `C ${leftSegs[i].c1[0]},${leftSegs[i].c1[1]} ${leftSegs[i].c2[0]},${leftSegs[i].c2[1]} ${lx1},${ly1}`,
+        `L ${rx1},${ry1}`,
+        `C ${rightSegs[i].c2[0]},${rightSegs[i].c2[1]} ${rightSegs[i].c1[0]},${rightSegs[i].c1[1]} ${rx0},${ry0}`,
+        'Z',
+      ].join(' ');
     return {
       pathD,
       centroidX: (lx0 + lx1 + rx0 + rx1) / 4,
@@ -162,25 +177,32 @@ function buildTrack(seq: SeqItem[]) {
       item,
       edgeLeft: [(lx0 + lx1) / 2, (ly0 + ly1) / 2] as Pt,
       edgeRight: [(rx0 + rx1) / 2, (ry0 + ry1) / 2] as Pt,
+      rectBounds: item.type === 'capa'
+        ? { x: Math.min(lx0, lx1, rx0, rx1), y: Math.min(ly0, ly1, ry0, ry1), w: Math.abs(lx1 - lx0) || Math.abs(rx1 - rx0), h: Math.abs(ry0 - ly0) || Math.abs(ry1 - ly1) }
+        : null,
     };
   });
 
   const width = (maxX - minX) + GUTTER_W * 2;
   const height = (maxY - minY) + MARGIN * 2;
 
+  const isCapaSeg = (i: number) => seq[i]?.type === 'capa';
+
   // Borda externa contínua: percorre a curva esquerda inteira, cruza no fim,
   // volta pela curva direita inteira (na direção inversa) e cruza no início.
+  // Nos trechos de capa usa linha reta, para casar exatamente com o retângulo
+  // desenhado por cima (senão a curva "vazaria" um pouco atrás dele).
   const borderParts = [`M ${leftPts[0][0]},${leftPts[0][1]}`];
   leftSegs.forEach((seg, i) => {
     const [x, y] = leftPts[i + 1];
-    borderParts.push(`C ${seg.c1[0]},${seg.c1[1]} ${seg.c2[0]},${seg.c2[1]} ${x},${y}`);
+    borderParts.push(isCapaSeg(i) ? `L ${x},${y}` : `C ${seg.c1[0]},${seg.c1[1]} ${seg.c2[0]},${seg.c2[1]} ${x},${y}`);
   });
   const lastRight = rightPts[rightPts.length - 1];
   borderParts.push(`L ${lastRight[0]},${lastRight[1]}`);
   for (let i = rightSegs.length - 1; i >= 0; i--) {
     const seg = rightSegs[i];
     const [x, y] = rightPts[i];
-    borderParts.push(`C ${seg.c2[0]},${seg.c2[1]} ${seg.c1[0]},${seg.c1[1]} ${x},${y}`);
+    borderParts.push(isCapaSeg(i) ? `L ${x},${y}` : `C ${seg.c2[0]},${seg.c2[1]} ${seg.c1[0]},${seg.c1[1]} ${x},${y}`);
   }
   borderParts.push('Z');
   const borderPath = borderParts.join(' ');
@@ -488,18 +510,20 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
 
   if (item.type === 'capa') {
     const url = capaUrls[item.curso.id];
-    // Retângulo comum (sem seguir a curva/ângulo da trilha) — desenhado por
-    // cima do trecho curvo; as casas vizinhas continuam com o formato normal.
-    const rx = tile.centroidX - CAPA_RECT_W / 2, ry = tile.centroidY - CAPA_RECT_H / 2;
+    const { x: rx, y: ry, w, h } = tile.rectBounds ?? { x: tile.centroidX, y: tile.centroidY, w: 0, h: 0 };
+    // Retângulo de verdade — mesmas dimensões exatas da própria trilha nesse
+    // trecho (forçado a ficar horizontal), então encosta perfeitamente nas
+    // casas vizinhas, sem sobrepor nem deixar vão.
     return (
       <g>
-        <defs><clipPath id={clipId}><rect x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H} rx={CAPA_RECT_RX} /></clipPath></defs>
-        <rect x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H} rx={CAPA_RECT_RX} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
+        <defs><clipPath id={clipId}><rect x={rx} y={ry} width={w} height={h} rx={CAPA_RX} /></clipPath></defs>
+        <rect x={rx} y={ry} width={w} height={h} rx={CAPA_RX} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
         {url && (
-          // "meet" (não "slice") — a imagem inteira sempre aparece, sem cortes.
+          // "slice" preenche o retângulo por completo, sem sobrar margem —
+          // CAPA_LEN/TRACK_W já foram calibrados perto da proporção real da arte.
           <image
-            href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid meet"
-            x={rx} y={ry} width={CAPA_RECT_W} height={CAPA_RECT_H}
+            href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice"
+            x={rx} y={ry} width={w} height={h}
           />
         )}
       </g>
