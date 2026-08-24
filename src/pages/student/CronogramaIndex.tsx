@@ -73,6 +73,7 @@ type SeqItem =
 
 type TileGeom = {
   pathD: string; centroidX: number; centroidY: number; dirAngle: number; item: SeqItem;
+  edgeLeft: Pt; edgeRight: Pt;
 };
 
 type Pt = readonly [number, number];
@@ -152,6 +153,8 @@ function buildTrack(seq: SeqItem[]) {
       centroidY: (ly0 + ly1 + ry0 + ry1) / 4,
       dirAngle: dirs[i],
       item,
+      edgeLeft: [(lx0 + lx1) / 2, (ly0 + ly1) / 2] as Pt,
+      edgeRight: [(rx0 + rx1) / 2, (ry0 + ry1) / 2] as Pt,
     };
   });
 
@@ -314,18 +317,33 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
   const track = useMemo(() => buildTrack(seq), [seq]);
 
   let marcoToggle = 0;
-  const marcoCards: { y: number; side: 'left' | 'right'; marco: Marco; tileX: number; tileY: number }[] = [];
+  const marcoCards: { y: number; side: 'left' | 'right'; marco: Marco; tileEdgeX: number; tileEdgeY: number }[] = [];
   track.tiles.forEach((tile) => {
     if (tile.item.type !== 'aula' || !tile.item.marco) return;
     const side: 'left' | 'right' = marcoToggle++ % 2 === 0 ? 'left' : 'right';
-    marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileX: tile.centroidX, tileY: tile.centroidY });
+    // A seta aponta para a borda lateral da casa (do mesmo lado do marco), não para o centro.
+    const [ex, ey] = side === 'left' ? tile.edgeLeft : tile.edgeRight;
+    marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileEdgeX: ex, tileEdgeY: ey });
   });
 
   const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
 
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => setScale(Math.min(1, el.clientWidth / track.width));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [track.width]);
+
   return (
-    <div className="overflow-x-auto">
-      <div className="relative mx-auto" style={{ width: track.width, height: track.height }}>
+    <>
+    <div ref={outerRef} className="w-full" style={{ height: track.height * scale }}>
+      <div className="relative mx-auto" style={{ width: track.width, height: track.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <svg width={track.width} height={track.height} viewBox={`0 0 ${track.width} ${track.height}`} className="block overflow-visible">
           <defs>
             <marker id="marco-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -346,7 +364,7 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
             return (
               <path
                 key={i}
-                d={`M ${anchorX},${m.y} L ${m.tileX},${m.tileY}`}
+                d={`M ${anchorX},${m.y} L ${m.tileEdgeX},${m.tileEdgeY}`}
                 className="hidden lg:block stroke-brand/60"
                 strokeWidth={1.5} strokeDasharray="5 4" fill="none" markerEnd="url(#marco-arrow)"
               />
@@ -376,17 +394,18 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
           </div>
         ))}
       </div>
-
-      {/* Em telas menores os marcos ficam listados abaixo do tabuleiro, já que não há espaço lateral. */}
-      <div className="lg:hidden max-w-xl mx-auto mt-6 space-y-2">
-        {marcoCards.map((m, i) => (
-          <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3 text-xs">
-            <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
-            <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
-          </div>
-        ))}
-      </div>
     </div>
+
+    {/* Em telas menores os marcos ficam listados abaixo do tabuleiro, já que não há espaço lateral. */}
+    <div className="lg:hidden max-w-xl mx-auto mt-6 space-y-2">
+      {marcoCards.map((m, i) => (
+        <div key={i} className="rounded-lg border border-line bg-panel-2/70 p-3 text-xs">
+          <p className="text-fg font-semibold leading-snug mb-1">{m.marco.titulo}</p>
+          <p className="text-fg-3 leading-snug">{m.marco.desc}</p>
+        </div>
+      ))}
+    </div>
+    </>
   );
 }
 
@@ -418,18 +437,19 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
   const { slot } = item;
   const available = !!slot.aula;
   const go = () => { if (available) nav(`/curso/${item.curso.id}?aula=${slot.aula!.id}`); };
+  // Todas as casas da faixa usam a mesma cor de fundo, disponível ou não —
+  // só "concluída" e "atual" (progresso do aluno) mudam a cor da casa.
   const fillClass = isCurrent
     ? 'fill-brand/35'
     : slot.done ? 'fill-brand'
-    : available ? (FAIXA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3')
-    : 'fill-white/5';
+    : FAIXA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3';
 
   return (
     <g id={`slot-${item.curso.id}:${slot.ordem}`} onClick={go} className={available ? 'cursor-pointer' : 'cursor-default'}>
       <path d={tile.pathD} className={fillClass} />
       <text
         x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle"
-        className={cn('text-[15px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : available ? 'fill-fg' : 'fill-white/25')}
+        className={cn('text-[15px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : 'fill-fg')}
       >
         {slot.done ? '✓' : slot.ordem}
       </text>
