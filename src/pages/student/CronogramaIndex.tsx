@@ -68,9 +68,30 @@ type SeqItem =
   | { type: 'aula'; key: string; curso: Curso; slot: Slot; marco: Marco | null };
 
 type TileGeom = {
-  points: string; centroidX: number; centroidY: number; dirAngle: number;
+  pathD: string; centroidX: number; centroidY: number; dirAngle: number;
   perpX: number; perpY: number; item: SeqItem;
 };
+
+type Pt = readonly [number, number];
+type BezierSeg = { c1: Pt; c2: Pt };
+
+/** Spline Catmull-Rom convertida em Béziers — dá o contorno arredondado "de rio",
+    com continuidade de tangente exata entre segmentos vizinhos (sem quebras nas junções). */
+function catmullRomSegments(pts: Pt[]): BezierSeg[] {
+  const n = pts.length;
+  const segs: BezierSeg[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = pts[Math.max(i - 1, 0)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(i + 2, n - 1)];
+    segs.push({
+      c1: [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6],
+      c2: [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6],
+    });
+  }
+  return segs;
+}
 
 /** Divide a sequência em trapézios contíguos — cada casa compartilha a aresta exata com a próxima. */
 function buildTrack(seq: SeqItem[]) {
@@ -104,16 +125,28 @@ function buildTrack(seq: SeqItem[]) {
   const minX = Math.min(...leftX, ...rightX), maxX = Math.max(...leftX, ...rightX);
   const minY = Math.min(...leftY, ...rightY), maxY = Math.max(...leftY, ...rightY);
   const ox = -minX + MARGIN, oy = -minY + MARGIN;
-  const shift = (x: number, y: number) => [x + ox, y + oy] as const;
+  const shift = (x: number, y: number): Pt => [x + ox, y + oy];
+
+  const leftPts: Pt[] = leftX.map((x, j) => shift(x, leftY[j]));
+  const rightPts: Pt[] = rightX.map((x, j) => shift(x, rightY[j]));
+  const leftSegs = catmullRomSegments(leftPts);
+  const rightSegs = catmullRomSegments(rightPts);
 
   const tiles: TileGeom[] = seq.map((item, i) => {
-    const [lx0, ly0] = shift(leftX[i], leftY[i]);
-    const [lx1, ly1] = shift(leftX[i + 1], leftY[i + 1]);
-    const [rx1, ry1] = shift(rightX[i + 1], rightY[i + 1]);
-    const [rx0, ry0] = shift(rightX[i], rightY[i]);
+    const [lx0, ly0] = leftPts[i]; const [lx1, ly1] = leftPts[i + 1];
+    const [rx0, ry0] = rightPts[i]; const [rx1, ry1] = rightPts[i + 1];
+    const lc1 = leftSegs[i].c1, lc2 = leftSegs[i].c2;
+    const rc1 = rightSegs[i].c1, rc2 = rightSegs[i].c2;
+    const pathD = [
+      `M ${lx0},${ly0}`,
+      `C ${lc1[0]},${lc1[1]} ${lc2[0]},${lc2[1]} ${lx1},${ly1}`,
+      `L ${rx1},${ry1}`,
+      `C ${rc2[0]},${rc2[1]} ${rc1[0]},${rc1[1]} ${rx0},${ry0}`,
+      'Z',
+    ].join(' ');
     const a = dirs[i];
     return {
-      points: `${lx0},${ly0} ${lx1},${ly1} ${rx1},${ry1} ${rx0},${ry0}`,
+      pathD,
       centroidX: (lx0 + lx1 + rx0 + rx1) / 4,
       centroidY: (ly0 + ly1 + ry0 + ry1) / 4,
       dirAngle: a,
@@ -122,12 +155,33 @@ function buildTrack(seq: SeqItem[]) {
     };
   });
 
-  const leftPts = leftX.map((x, j) => shift(x, leftY[j]));
-  const rightPts = rightX.map((x, j) => shift(x, rightY[j]));
   const width = (maxX - minX) + MARGIN * 2;
   const height = (maxY - minY) + MARGIN * 2;
 
-  return { tiles, leftPts, rightPts, width, height };
+  // Borda externa contínua: percorre a curva esquerda inteira, cruza no fim,
+  // volta pela curva direita inteira (na direção inversa) e cruza no início.
+  const borderParts = [`M ${leftPts[0][0]},${leftPts[0][1]}`];
+  leftSegs.forEach((seg, i) => {
+    const [x, y] = leftPts[i + 1];
+    borderParts.push(`C ${seg.c1[0]},${seg.c1[1]} ${seg.c2[0]},${seg.c2[1]} ${x},${y}`);
+  });
+  const lastRight = rightPts[rightPts.length - 1];
+  borderParts.push(`L ${lastRight[0]},${lastRight[1]}`);
+  for (let i = rightSegs.length - 1; i >= 0; i--) {
+    const seg = rightSegs[i];
+    const [x, y] = rightPts[i];
+    borderParts.push(`C ${seg.c2[0]},${seg.c2[1]} ${seg.c1[0]},${seg.c1[1]} ${x},${y}`);
+  }
+  borderParts.push('Z');
+  const borderPath = borderParts.join(' ');
+
+  // Divisórias internas entre casas — traços retos, como cortes transversais no rio.
+  const dividerLines = leftPts.slice(1, -1).map((_, j) => {
+    const i = j + 1;
+    return `M ${leftPts[i][0]},${leftPts[i][1]} L ${rightPts[i][0]},${rightPts[i][1]}`;
+  }).join(' ');
+
+  return { tiles, width, height, borderPath, dividerLines };
 }
 
 export default function CronogramaIndex() {
@@ -272,29 +326,17 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
 
   const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
 
-  const dividerLines = track.leftPts.slice(1, -1).map((_, j) => {
-    const i = j + 1;
-    return `M ${track.leftPts[i][0]},${track.leftPts[i][1]} L ${track.rightPts[i][0]},${track.rightPts[i][1]}`;
-  }).join(' ');
-  const borderPath = [
-    `M ${track.leftPts[0][0]},${track.leftPts[0][1]}`,
-    ...track.leftPts.slice(1).map(([x, y]) => `L ${x},${y}`),
-    `L ${track.rightPts[track.rightPts.length - 1][0]},${track.rightPts[track.rightPts.length - 1][1]}`,
-    ...track.rightPts.slice(0, -1).reverse().map(([x, y]) => `L ${x},${y}`),
-    'Z',
-  ].join(' ');
-
   return (
     <div className="overflow-x-auto">
       <div className="relative mx-auto" style={{ width: track.width, height: track.height }}>
         <svg width={track.width} height={track.height} viewBox={`0 0 ${track.width} ${track.height}`} className="block">
-          <path d={borderPath} className="fill-panel stroke-line" strokeWidth={2} />
+          <path d={track.borderPath} className="fill-panel stroke-line" strokeWidth={2} />
           {track.tiles.map((tile) => (
             <TileShape key={tile.item.key} tile={tile} capaUrls={capaUrls} isCurrent={tile === current} nav={nav} />
           ))}
-          <path d={dividerLines} className="stroke-black/20" strokeWidth={1.5} fill="none" />
+          <path d={track.dividerLines} className="stroke-black/20" strokeWidth={1.5} fill="none" />
           {current && (
-            <polygon points={current.points} className="fill-none stroke-brand" strokeWidth={3} />
+            <path d={current.pathD} className="fill-none stroke-brand" strokeWidth={3} />
           )}
         </svg>
 
@@ -343,8 +385,8 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
     const url = capaUrls[item.curso.id];
     return (
       <g>
-        <defs><clipPath id={clipId}><polygon points={tile.points} /></clipPath></defs>
-        <polygon points={tile.points} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
+        <defs><clipPath id={clipId}><path d={tile.pathD} /></clipPath></defs>
+        <path d={tile.pathD} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
         {url && (
           <image
             href={url} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice"
@@ -369,7 +411,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
 
   return (
     <g id={`slot-${item.curso.id}:${slot.ordem}`} onClick={go} className={available ? 'cursor-pointer' : 'cursor-default'}>
-      <polygon points={tile.points} className={fillClass} />
+      <path d={tile.pathD} className={fillClass} />
       <text
         x={tile.centroidX} y={tile.centroidY} textAnchor="middle" dominantBaseline="middle"
         className={cn('text-[15px] font-bold tabular-nums select-none', slot.done ? 'fill-brand-ink' : available ? 'fill-fg' : 'fill-white/25')}
