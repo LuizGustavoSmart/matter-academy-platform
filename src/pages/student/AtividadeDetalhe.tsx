@@ -67,7 +67,7 @@ export default function AtividadeDetalhe() {
       setLoading(true);
       const a = await loadAtividade();
       if (a) {
-        const staff = await isStaffOfTurma(profile, a.turma_id);
+        const staff = await isStaffOfTurma(profile, a.turma_id, a.curso_id);
         setIsProfessor(staff);
         if (staff) await loadProfessor(a); else await loadAluno(a);
       }

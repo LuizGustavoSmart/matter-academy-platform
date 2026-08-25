@@ -33,7 +33,7 @@ export default function DuvidaDetalhe() {
     const { data } = await supabase.from('duvidas').select('*').eq('id', duvidaId!).maybeSingle();
     setDuvida(data as Duvida | null);
     setResposta(data?.resposta ?? '');
-    const staff = await isStaffOfTurma(profile, data?.turma_id ?? null);
+    const staff = await isStaffOfTurma(profile, data?.turma_id ?? null, data?.curso_id ?? null);
     setIsStaff(staff);
     if (data?.aula_id) { const { data: aula } = await supabase.from('aulas').select('titulo').eq('id', data.aula_id).maybeSingle(); setAulaTitulo(aula?.titulo ?? ''); }
     if (data?.aluno_id && staff) { const { data: aluno } = await supabase.from('profiles').select('nome,email').eq('id', data.aluno_id).maybeSingle(); setAlunoLabel(aluno?.nome || aluno?.email || ''); }

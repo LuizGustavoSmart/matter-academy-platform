@@ -24,7 +24,7 @@ export default function AtividadesLista() {
   const { profile } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const isProfessor = useIsStaffOfTurma(profile, turmaId) ?? false;
+  const isProfessor = useIsStaffOfTurma(profile, turmaId, cursoId) ?? false;
 
   const [turmaNome, setTurmaNome] = useState('');
   const [cursoTitulo, setCursoTitulo] = useState('');
