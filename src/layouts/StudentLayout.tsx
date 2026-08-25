@@ -37,6 +37,7 @@ export default function StudentLayout() {
     : isStaff
     ? [
         {
+          title: 'Área do Aluno',
           items: [
             { to: '/dashboard', label: 'Menu', icon: Home, match: (p) => p === '/dashboard' },
             { to: '/aulas', label: 'Aulas', icon: BookOpen, match: (p) => p.startsWith('/aulas') || p.startsWith('/curso/') },

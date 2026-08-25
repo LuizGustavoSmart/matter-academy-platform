@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle, ClipboardList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
@@ -31,6 +31,7 @@ export default function StudentCourse() {
   const [loading, setLoading] = useState(true);
   const [duvidaOpen, setDuvidaOpen] = useState(false);
   const [daysSince, setDaysSince] = useState<number | null>(null);
+  const [atividadeId, setAtividadeId] = useState<string | null>(null);
 
   // Contexto de presença: turma do aluno neste curso, horários agendados de
   // cada aula e duração da aula (para saber se o acesso é ao vivo ou gravação).
@@ -83,6 +84,17 @@ export default function StudentCourse() {
 
   const current = useMemo(() => aulas.find((a) => a.id === currentId) ?? null, [aulas, currentId]);
   const currentIdx = useMemo(() => aulas.findIndex((a) => a.id === currentId), [aulas, currentId]);
+
+  // Atividade vinculada à aula atual (se houver), para o atalho ao lado de "Tirar dúvida".
+  useEffect(() => {
+    if (!currentId || !turmaId) { setAtividadeId(null); return; }
+    let active = true;
+    // atividades ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('atividades').select('id').eq('aula_id', currentId).eq('turma_id', turmaId).maybeSingle()
+      .then(({ data }: { data: { id: string } | null }) => { if (active) setAtividadeId(data?.id ?? null); });
+    return () => { active = false; };
+  }, [currentId, turmaId]);
 
   /** Lista de exibição preenchida até 12 aulas — as ainda não lançadas aparecem como placeholder. */
   const slots = useMemo(() => {
@@ -261,8 +273,11 @@ export default function StudentCourse() {
                 <div className="min-w-0"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0 sm:items-center">
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
+                  {atividadeId && (
+                    <Button variant="secondary" onClick={() => nav(`/atividade/${atividadeId}`)} icon={<ClipboardList className="w-4 h-4" />}>Ver atividade</Button>
+                  )}
                   <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
-                    <Check className="w-4 h-4" />{isDone ? 'Concluída' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
+                    {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
                   </span>
                 </div>
               </div>

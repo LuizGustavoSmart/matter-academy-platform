@@ -175,13 +175,23 @@ export function DropdownMenu({
   align?: 'left' | 'right';
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; right: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
 
   const place = useCallback(() => {
     const r = btnRef.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 6, left: r.left, right: window.innerWidth - r.right });
-  }, []);
+    if (!r) return;
+    // Estimativa da altura do menu (linhas + separadores/labels) para decidir
+    // se abre para baixo (padrão) ou para cima, quando não há espaço embaixo
+    // (ex.: últimas linhas de uma lista longa) — evita o menu sair da tela.
+    const estimatedHeight = items.reduce((h, it) => h + ('type' in it && it.type === 'separator' ? 9 : 'type' in it && it.type === 'label' ? 30 : 36), 8);
+    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceAbove = r.top;
+    const openUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    setPos(openUp
+      ? { bottom: window.innerHeight - r.top + 6, left: r.left, right: window.innerWidth - r.right }
+      : { top: r.bottom + 6, left: r.left, right: window.innerWidth - r.right });
+  }, [items]);
 
   const toggle = () => { if (!open) place(); setOpen((o) => !o); };
 
@@ -211,7 +221,10 @@ export function DropdownMenu({
             <motion.div
               role="menu"
               className="fixed z-[60] min-w-[184px] py-1 rounded-lg ma-glass"
-              style={align === 'right' ? { top: pos.top, right: pos.right } : { top: pos.top, left: pos.left }}
+              style={{
+                ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
+                ...(align === 'right' ? { right: pos.right } : { left: pos.left }),
+              }}
               variants={popIn}
               initial="hidden"
               animate="visible"
