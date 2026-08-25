@@ -56,7 +56,8 @@ export function UserFormDrawer({
   useEffect(() => {
     if (!open) return;
     setPhase('form'); setErrors({}); setServerErr(null); setResult(null); setCopied(false);
-    loadCoursesByTurma().then(setCoursesByTurma);
+    const coursesPromise = loadCoursesByTurma();
+    coursesPromise.then(setCoursesByTurma);
 
     if (mode === 'edit' && user) {
       setNome(user.nome ?? ''); setSobrenome(user.sobrenome ?? '');
@@ -64,18 +65,23 @@ export function UserFormDrawer({
       setRole(user.role); setSendInvite(false);
       // is_embaixador/is_staff ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from('user_turmas').select('turma_id,curso_id,is_embaixador,is_staff').eq('user_id', user.id).then(({ data }: { data: { turma_id: string; curso_id: string | null; is_embaixador?: boolean; is_staff?: boolean }[] | null }) => {
-        const grouped: Record<string, { curso_ids: string[]; embaixador_curso_ids: string[]; is_staff?: boolean }> = {};
-        (data ?? []).forEach((r) => {
-          const g = (grouped[r.turma_id] ??= { curso_ids: [], embaixador_curso_ids: [], is_staff: undefined });
-          if (r.curso_id) {
-            g.curso_ids.push(r.curso_id);
-            if (r.is_embaixador) g.embaixador_curso_ids.push(r.curso_id);
-          }
-          if (r.is_staff !== undefined && r.is_staff !== null) g.is_staff = r.is_staff;
+      Promise.all([(supabase as any).from('user_turmas').select('turma_id,curso_id,is_embaixador,is_staff').eq('user_id', user.id), coursesPromise])
+        .then(([{ data }, coursesByTurmaMap]: [{ data: { turma_id: string; curso_id: string | null; is_embaixador?: boolean; is_staff?: boolean }[] | null }, Record<string, CursoInfo[]>]) => {
+          const grouped: Record<string, { curso_ids: string[]; embaixador_curso_ids: string[]; staff_curso_ids: string[] }> = {};
+          (data ?? []).forEach((r) => {
+            const g = (grouped[r.turma_id] ??= { curso_ids: [], embaixador_curso_ids: [], staff_curso_ids: [] });
+            if (r.curso_id) {
+              g.curso_ids.push(r.curso_id);
+              if (r.is_embaixador) g.embaixador_curso_ids.push(r.curso_id);
+              if (r.is_staff) g.staff_curso_ids.push(r.curso_id);
+            } else if (r.is_staff) {
+              // Linha legada (staff da turma inteira, de antes do toggle por curso) —
+              // expande para todos os cursos da turma, marcados como "dá aula".
+              (coursesByTurmaMap[r.turma_id] ?? []).forEach((c) => { g.curso_ids.push(c.id); g.staff_curso_ids.push(c.id); });
+            }
+          });
+          setSelection(Object.entries(grouped).map(([turma_id, g]) => ({ turma_id, curso_ids: g.curso_ids, embaixador_curso_ids: g.embaixador_curso_ids, staff_curso_ids: g.staff_curso_ids })));
         });
-        setSelection(Object.entries(grouped).map(([turma_id, g]) => ({ turma_id, curso_ids: g.curso_ids, embaixador_curso_ids: g.embaixador_curso_ids, is_staff: g.is_staff })));
-      });
     } else {
       setNome(''); setSobrenome(''); setEmail(''); setTelefone(''); setEmpresa('');
       setRole('student'); setSelection([]); setSendInvite(true);
@@ -107,12 +113,7 @@ export function UserFormDrawer({
       return { ...base, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid, is_embaixador: !!s.embaixador_curso_ids?.includes(cid) }))) };
     }
     if (isProfessorOrMonitor) {
-      return {
-        ...base, turma_cursos: selection.flatMap((s): { turma_id: string; curso_id: string | null; is_staff: boolean }[] => {
-          if (s.is_staff !== false) return [{ turma_id: s.turma_id, curso_id: null, is_staff: true }];
-          return s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid, is_staff: false }));
-        }),
-      };
+      return { ...base, turma_cursos: selection.flatMap((s) => s.curso_ids.map((cid) => ({ turma_id: s.turma_id, curso_id: cid, is_staff: !!s.staff_curso_ids?.includes(cid) }))) };
     }
     if (needsTurmas) return { ...base, turma_ids: selection.map((s) => s.turma_id) };
     return { ...base, turma_ids: [] as string[] };
@@ -200,8 +201,11 @@ export function UserFormDrawer({
     const cursos = (coursesByTurma[s.turma_id] ?? []).filter((c) => s.curso_ids.includes(c.id));
     return {
       nome: t?.nome ?? '—',
-      isStaffTurma: s.is_staff !== false,
-      cursos: cursos.map((c) => ({ titulo: c.titulo, isEmbaixador: !!s.embaixador_curso_ids?.includes(c.id) })),
+      cursos: cursos.map((c) => ({
+        titulo: c.titulo,
+        isEmbaixador: !!s.embaixador_curso_ids?.includes(c.id),
+        isStaff: !!s.staff_curso_ids?.includes(c.id),
+      })),
     };
   });
 
@@ -247,7 +251,7 @@ export function UserFormDrawer({
             </Field>
             {needsTurmas ? (
               <Field label={showCourses ? 'Turmas e cursos' : 'Turmas'} error={errors.turmas}
-                hint={isEmbaixador ? 'Marque, por curso, se o usuário acompanha como embaixador ou participa como aluno normal.' : isStudent ? 'O aluno terá acesso somente aos cursos selecionados.' : isProfessorOrMonitor ? 'Marque, por turma, se o usuário dá aula (staff) ou participa como aluno normal.' : 'Vínculo de acompanhamento das turmas.'}>
+                hint={isEmbaixador ? 'Marque, por curso, se o usuário acompanha como embaixador ou participa como aluno normal.' : isStudent ? 'O aluno terá acesso somente aos cursos selecionados.' : isProfessorOrMonitor ? 'Marque, por curso, se o usuário dá aula (staff) ou participa como aluno normal.' : 'Vínculo de acompanhamento das turmas.'}>
                 <TurmaCoursePicker turmas={turmas} coursesByTurma={coursesByTurma} value={selection} onChange={(v) => { setSelection(v); clearErr('turmas'); }} showCourses={showCourses} showEmbaixadorToggle={isEmbaixador} showStaffToggle={isProfessorOrMonitor} />
               </Field>
             ) : (
@@ -287,15 +291,14 @@ export function UserFormDrawer({
               <div className="space-y-2">
                 {summaryTurmas.map((t, i) => (
                   <div key={i} className="rounded-lg border border-line p-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-fg text-sm font-medium">{t.nome}</p>
-                      {isProfessorOrMonitor && <Badge tone={t.isStaffTurma ? 'brand' : 'default'}>{t.isStaffTurma ? 'Dá aula' : 'Aluno normal'}</Badge>}
-                    </div>
-                    {showCourses && !(isProfessorOrMonitor && t.isStaffTurma) && (
+                    <p className="text-fg text-sm font-medium">{t.nome}</p>
+                    {showCourses && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
                         {t.cursos.length ? t.cursos.map((c) => (
-                          <Badge key={c.titulo} tone={isEmbaixador && c.isEmbaixador ? 'brand' : 'default'}>
-                            {c.titulo}{isEmbaixador ? ` · ${c.isEmbaixador ? 'Embaixador' : 'Aluno normal'}` : ''}
+                          <Badge key={c.titulo} tone={(isEmbaixador && c.isEmbaixador) || (isProfessorOrMonitor && c.isStaff) ? 'brand' : 'default'}>
+                            {c.titulo}
+                            {isEmbaixador ? ` · ${c.isEmbaixador ? 'Embaixador' : 'Aluno normal'}` : ''}
+                            {isProfessorOrMonitor ? ` · ${c.isStaff ? 'Dá aula' : 'Aluno normal'}` : ''}
                           </Badge>
                         )) : <span className="text-fg-3 text-xs">Sem cursos</span>}
                       </div>
