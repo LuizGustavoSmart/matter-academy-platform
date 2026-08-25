@@ -139,6 +139,8 @@ export function UserFormDrawer({
     setLoading(true); setServerErr(null);
     try {
       const payload = buildPayload();
+      // DEBUG TEMPORÁRIO — remover depois de diagnosticar o bug do is_staff
+      if (isProfessorOrMonitor) window.alert('DEBUG turma_cursos: ' + JSON.stringify((payload as { turma_cursos: unknown }).turma_cursos, null, 2));
       await callFn('admin-users', 'update', {
         user_id: user.id,
         email: payload.email !== user.email ? payload.email : undefined,
