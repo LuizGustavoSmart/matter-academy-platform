@@ -18,13 +18,21 @@ import { fadeScrim, scaleIn, popIn, slideFromRight, toastIn } from './motion';
 function useDismiss(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // onClose quase sempre chega como uma arrow function nova a cada render do
+  // componente pai (ex.: onClose={() => setX(null)}). Guardamos a versão mais
+  // recente numa ref em vez de listar `onClose` como dependência abaixo — do
+  // contrário, o efeito reabria (e reagendava o autofoco) a cada nova
+  // instância de onClose, inclusive a cada tecla digitada em qualquer campo
+  // do modal, "roubando" o foco de volta para o primeiro campo 30ms depois.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
 
   useEffect(() => {
     // Reabertura antes do exit anterior terminar: finaliza o cleanup pendente primeiro.
     cleanupRef.current?.();
     cleanupRef.current = null;
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -37,7 +45,7 @@ function useDismiss(open: boolean, onClose: () => void) {
       document.body.style.overflow = prev;
     };
     return () => clearTimeout(t);
-  }, [open, onClose]);
+  }, [open]);
 
   // Unmount real (ex.: navegação de rota) — não depende do fim da animação de saída.
   useEffect(() => () => cleanupRef.current?.(), []);

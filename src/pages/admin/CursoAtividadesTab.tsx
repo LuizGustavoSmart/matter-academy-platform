@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, ClipboardList, Pencil, Trash2, MoreHorizontal, ArrowUp, ArrowDown, Paperclip } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, StatTile, Badge, Avatar, Modal, EmptyState, Skeleton, Switch,
-  Field, Input, Textarea, DropdownMenu, useToast, useConfirm,
+  Field, Input, Textarea, Select, SearchInput, DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { FileLink } from '../../components/FileLink';
 import CriarAtividadeModal, { type AtividadeEditavel } from '../student/CriarAtividadeModal';
@@ -180,6 +180,27 @@ function GradeModal({ atividade, alunos, envios, readOnly = false, onClose, onSa
     Object.fromEntries(alunos.map((al) => [al.id, { nota: envios[al.id]?.nota != null ? String(envios[al.id].nota) : '', comentario: envios[al.id]?.comentario_professor ?? '' }]))
   );
   const [saving, setSaving] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'envio_recente' | 'envio_antigo' | 'status'>('nome_az');
+
+  const alunosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const nomeDe = (al: AlunoRow) => al.nome || al.email.split('@')[0];
+    const statusOrdem = (al: AlunoRow) => {
+      const e = envios[al.id];
+      return e?.corrigido_em ? 2 : e?.enviado_em ? 1 : 0;
+    };
+    return alunos
+      .filter((al) => !termo || nomeDe(al).toLowerCase().includes(termo) || al.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (ordem === 'nome_az') return nomeDe(a).localeCompare(nomeDe(b));
+        if (ordem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
+        if (ordem === 'status') return statusOrdem(b) - statusOrdem(a);
+        const da = envios[a.id]?.enviado_em ? new Date(envios[a.id].enviado_em!).getTime() : 0;
+        const db = envios[b.id]?.enviado_em ? new Date(envios[b.id].enviado_em!).getTime() : 0;
+        return ordem === 'envio_recente' ? db - da : da - db;
+      });
+  }, [alunos, envios, busca, ordem]);
 
   const salvarNota = async (alunoId: string) => {
     const draft = drafts[alunoId];
@@ -199,8 +220,20 @@ function GradeModal({ atividade, alunos, envios, readOnly = false, onClose, onSa
     <>
       <Modal open onClose={onClose} title={`Respostas — ${atividade.titulo}`} size="lg">
         {alunos.length === 0 ? <EmptyState title="Nenhum aluno nesta turma/curso" /> : (
+          <>
+            <div className="flex items-center gap-2 mb-3">
+              <SearchInput value={busca} onChange={setBusca} placeholder="Buscar aluno…" className="flex-1" />
+              <Select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="w-auto flex-shrink-0">
+                <option value="nome_az">Nome A-Z</option>
+                <option value="nome_za">Nome Z-A</option>
+                <option value="envio_recente">Envio mais recente</option>
+                <option value="envio_antigo">Envio mais antigo</option>
+                <option value="status">Status (corrigida primeiro)</option>
+              </Select>
+            </div>
+            {alunosFiltrados.length === 0 ? <EmptyState title="Nenhum aluno encontrado" /> : (
           <ul className="-mx-5">
-            {alunos.map((al) => {
+            {alunosFiltrados.map((al) => {
               const envio = envios[al.id];
               const respStatus = envio?.corrigido_em ? { label: 'Corrigida', tone: 'success' as const } : envio?.enviado_em ? { label: 'Enviada', tone: 'warn' as const } : { label: 'Não enviada', tone: 'default' as const };
               return (
@@ -216,6 +249,8 @@ function GradeModal({ atividade, alunos, envios, readOnly = false, onClose, onSa
               );
             })}
           </ul>
+            )}
+          </>
         )}
       </Modal>
 

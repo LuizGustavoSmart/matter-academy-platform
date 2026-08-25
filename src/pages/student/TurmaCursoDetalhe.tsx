@@ -3,7 +3,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal, HelpCircle, ClipboardList, Percent, Clock, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, useToast, useConfirm } from '../../components/ui';
+import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, Select, SearchInput, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
@@ -60,6 +60,8 @@ export default function TurmaCursoDetalhe() {
   const [alunosResumo, setAlunosResumo] = useState<AlunoResumo[]>([]);
   const [alunosLoading, setAlunosLoading] = useState(false);
   const [alunosTotais, setAlunosTotais] = useState({ aulas: 0, atividades: 0 });
+  const [alunosBusca, setAlunosBusca] = useState('');
+  const [alunosOrdem, setAlunosOrdem] = useState<'nome_az' | 'nome_za' | 'aulas_desc' | 'aulas_asc' | 'atividades_desc' | 'atividades_asc'>('nome_az');
 
   const [embDash, setEmbDash] = useState<EmbDashboard | null>(null);
   const [embDashLoading, setEmbDashLoading] = useState(false);
@@ -235,6 +237,21 @@ export default function TurmaCursoDetalhe() {
   };
 
   const maxOrdem = useMemo(() => aulas.reduce((m, a) => Math.max(m, a.ordem), 0), [aulas]);
+
+  const alunosFiltrados = useMemo(() => {
+    const termo = alunosBusca.trim().toLowerCase();
+    const nomeDe = (a: AlunoResumo) => a.nome || a.email.split('@')[0];
+    return alunosResumo
+      .filter((a) => !termo || nomeDe(a).toLowerCase().includes(termo) || a.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (alunosOrdem === 'nome_az') return nomeDe(a).localeCompare(nomeDe(b));
+        if (alunosOrdem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
+        if (alunosOrdem === 'aulas_desc') return b.aulasAssistidas - a.aulasAssistidas;
+        if (alunosOrdem === 'aulas_asc') return a.aulasAssistidas - b.aulasAssistidas;
+        if (alunosOrdem === 'atividades_desc') return b.atividadesEnviadas - a.atividadesEnviadas;
+        return a.atividadesEnviadas - b.atividadesEnviadas;
+      });
+  }, [alunosResumo, alunosBusca, alunosOrdem]);
 
   if (profile && !canView) return <Navigate to="/dashboard" replace />;
   if (loading) return <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8"><Skeleton className="h-8 w-64 mb-6" /><Skeleton className="h-64 rounded-xl" /></div>;
@@ -412,9 +429,22 @@ export default function TurmaCursoDetalhe() {
         <div>
           {alunosLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
             alunosResumo.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" /> : (
+              <>
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <SearchInput value={alunosBusca} onChange={setAlunosBusca} placeholder="Buscar aluno..." className="flex-1" />
+                  <Select value={alunosOrdem} onChange={(e) => setAlunosOrdem(e.target.value as typeof alunosOrdem)} className="sm:w-64">
+                    <option value="nome_az">Nome A-Z</option>
+                    <option value="nome_za">Nome Z-A</option>
+                    <option value="aulas_desc">Mais aulas assistidas</option>
+                    <option value="aulas_asc">Menos aulas assistidas</option>
+                    <option value="atividades_desc">Mais atividades enviadas</option>
+                    <option value="atividades_asc">Menos atividades enviadas</option>
+                  </Select>
+                </div>
+                {alunosFiltrados.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno encontrado" /> : (
               <Card className="overflow-hidden">
                 <ul>
-                  {alunosResumo.map((a) => {
+                  {alunosFiltrados.map((a) => {
                     const pctAulas = alunosTotais.aulas ? Math.round((a.aulasAssistidas / alunosTotais.aulas) * 100) : 0;
                     const pctAtividades = alunosTotais.atividades ? Math.round((a.atividadesEnviadas / alunosTotais.atividades) * 100) : 0;
                     return (
@@ -431,6 +461,8 @@ export default function TurmaCursoDetalhe() {
                   })}
                 </ul>
               </Card>
+                )}
+              </>
             )}
         </div>
       )}
@@ -589,6 +621,8 @@ function AulaAlunosModal({ turmaId, cursoId, aula, onClose }: {
   type AlunoPresenca = { id: string; nome: string | null; email: string; presente: boolean };
   const [alunos, setAlunos] = useState<AlunoPresenca[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'presentes_primeiro' | 'ausentes_primeiro'>('nome_az');
 
   useEffect(() => {
     (async () => {
@@ -605,6 +639,19 @@ function AulaAlunosModal({ turmaId, cursoId, aula, onClose }: {
 
   const presentes = alunos.filter((a) => a.presente).length;
 
+  const alunosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const nomeDe = (a: AlunoPresenca) => a.nome || a.email.split('@')[0];
+    return alunos
+      .filter((a) => !termo || nomeDe(a).toLowerCase().includes(termo) || a.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (ordem === 'nome_az') return nomeDe(a).localeCompare(nomeDe(b));
+        if (ordem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
+        if (ordem === 'presentes_primeiro') return Number(b.presente) - Number(a.presente);
+        return Number(a.presente) - Number(b.presente);
+      });
+  }, [alunos, busca, ordem]);
+
   return (
     <Modal open onClose={onClose} size="lg" title={`Aula ${aula.ordem} — ${aula.titulo}`}>
       {loading ? (
@@ -614,8 +661,18 @@ function AulaAlunosModal({ turmaId, cursoId, aula, onClose }: {
       ) : (
         <>
           <p className="text-fg-3 text-sm mb-4">{presentes} de {alunos.length} presentes</p>
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+            <SearchInput value={busca} onChange={setBusca} placeholder="Buscar aluno..." className="flex-1" />
+            <Select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="sm:w-52">
+              <option value="nome_az">Nome A-Z</option>
+              <option value="nome_za">Nome Z-A</option>
+              <option value="presentes_primeiro">Presentes primeiro</option>
+              <option value="ausentes_primeiro">Ausentes primeiro</option>
+            </Select>
+          </div>
+          {alunosFiltrados.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno encontrado" /> : (
           <ul className="-mx-5">
-            {alunos.map((a) => (
+            {alunosFiltrados.map((a) => (
               <li key={a.id} className="flex items-center gap-3 px-5 py-2.5 border-b border-line last:border-0">
                 <Avatar name={a.nome} email={a.email} size={28} />
                 <span className="flex-1 min-w-0 text-sm text-fg-2 truncate">{a.nome || a.email.split('@')[0]}</span>
@@ -623,6 +680,7 @@ function AulaAlunosModal({ turmaId, cursoId, aula, onClose }: {
               </li>
             ))}
           </ul>
+          )}
         </>
       )}
     </Modal>
@@ -636,6 +694,8 @@ function AtividadeAlunosModal({ turmaId, cursoId, atividade, onClose }: {
   type AlunoEnvio = { id: string; nome: string | null; email: string; enviadoEm: string | null };
   const [alunos, setAlunos] = useState<AlunoEnvio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'envio_recente' | 'envio_antigo' | 'entregues_primeiro' | 'pendentes_primeiro'>('nome_az');
 
   useEffect(() => {
     (async () => {
@@ -652,6 +712,22 @@ function AtividadeAlunosModal({ turmaId, cursoId, atividade, onClose }: {
 
   const entregues = alunos.filter((a) => a.enviadoEm).length;
 
+  const alunosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const nomeDe = (a: AlunoEnvio) => a.nome || a.email.split('@')[0];
+    return alunos
+      .filter((a) => !termo || nomeDe(a).toLowerCase().includes(termo) || a.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (ordem === 'nome_az') return nomeDe(a).localeCompare(nomeDe(b));
+        if (ordem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
+        if (ordem === 'entregues_primeiro') return Number(!!b.enviadoEm) - Number(!!a.enviadoEm);
+        if (ordem === 'pendentes_primeiro') return Number(!!a.enviadoEm) - Number(!!b.enviadoEm);
+        const da = a.enviadoEm ? new Date(a.enviadoEm).getTime() : 0;
+        const db = b.enviadoEm ? new Date(b.enviadoEm).getTime() : 0;
+        return ordem === 'envio_recente' ? db - da : da - db;
+      });
+  }, [alunos, busca, ordem]);
+
   return (
     <Modal open onClose={onClose} size="lg" title={atividade.titulo}>
       {loading ? (
@@ -661,8 +737,20 @@ function AtividadeAlunosModal({ turmaId, cursoId, atividade, onClose }: {
       ) : (
         <>
           <p className="text-fg-3 text-sm mb-4">{entregues} de {alunos.length} entregues</p>
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+            <SearchInput value={busca} onChange={setBusca} placeholder="Buscar aluno..." className="flex-1" />
+            <Select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="sm:w-52">
+              <option value="nome_az">Nome A-Z</option>
+              <option value="nome_za">Nome Z-A</option>
+              <option value="envio_recente">Envio mais recente</option>
+              <option value="envio_antigo">Envio mais antigo</option>
+              <option value="entregues_primeiro">Entregues primeiro</option>
+              <option value="pendentes_primeiro">Pendentes primeiro</option>
+            </Select>
+          </div>
+          {alunosFiltrados.length === 0 ? <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhum aluno encontrado" /> : (
           <ul className="-mx-5">
-            {alunos.map((a) => (
+            {alunosFiltrados.map((a) => (
               <li key={a.id} className="flex items-center gap-3 px-5 py-2.5 border-b border-line last:border-0">
                 <Avatar name={a.nome} email={a.email} size={28} />
                 <span className="flex-1 min-w-0 text-sm text-fg-2 truncate">{a.nome || a.email.split('@')[0]}</span>
@@ -674,6 +762,7 @@ function AtividadeAlunosModal({ turmaId, cursoId, atividade, onClose }: {
               </li>
             ))}
           </ul>
+          )}
         </>
       )}
     </Modal>

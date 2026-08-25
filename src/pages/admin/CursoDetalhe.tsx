@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Use
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
-  Field, Input, Textarea, Select, Alert, DropdownMenu, useToast, useConfirm,
+  Field, Input, Textarea, Select, SearchInput, Alert, DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
@@ -68,6 +68,8 @@ export default function CursoDetalhe() {
 
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [alunosLoading, setAlunosLoading] = useState(false);
+  const [alunosBusca, setAlunosBusca] = useState('');
+  const [alunosOrdem, setAlunosOrdem] = useState<'email_az' | 'email_za' | 'progresso_desc' | 'progresso_asc'>('email_az');
 
   const loadBase = async () => {
     // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
@@ -171,6 +173,19 @@ export default function CursoDetalhe() {
   };
 
   const maxOrdem = useMemo(() => aulas.reduce((m, a) => Math.max(m, a.ordem), 0), [aulas]);
+
+  const alunosFiltrados = useMemo(() => {
+    const termo = alunosBusca.trim().toLowerCase();
+    return alunos
+      .filter((a) => !termo || a.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (alunosOrdem === 'email_az') return a.email.localeCompare(b.email);
+        if (alunosOrdem === 'email_za') return b.email.localeCompare(a.email);
+        const pctA = a.total > 0 ? a.concluidas / a.total : 0;
+        const pctB = b.total > 0 ? b.concluidas / b.total : 0;
+        return alunosOrdem === 'progresso_desc' ? pctB - pctA : pctA - pctB;
+      });
+  }, [alunos, alunosBusca, alunosOrdem]);
 
   return (
     <div>
@@ -279,9 +294,20 @@ export default function CursoDetalhe() {
           <p className="text-fg-3 text-sm mb-4">Progresso dos alunos neste curso.</p>
           {alunosLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div> :
             alunos.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma em Usuários." /> : (
+              <>
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <SearchInput value={alunosBusca} onChange={setAlunosBusca} placeholder="Buscar aluno..." className="flex-1" />
+                  <Select value={alunosOrdem} onChange={(e) => setAlunosOrdem(e.target.value as typeof alunosOrdem)} className="sm:w-56">
+                    <option value="email_az">E-mail A-Z</option>
+                    <option value="email_za">E-mail Z-A</option>
+                    <option value="progresso_desc">Maior progresso</option>
+                    <option value="progresso_asc">Menor progresso</option>
+                  </Select>
+                </div>
+                {alunosFiltrados.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno encontrado" /> : (
               <Card className="overflow-hidden">
                 <ul>
-                  {alunos.map((a) => {
+                  {alunosFiltrados.map((a) => {
                     const pct = a.total > 0 ? Math.round((a.concluidas / a.total) * 100) : 0;
                     return (
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0">
@@ -296,6 +322,8 @@ export default function CursoDetalhe() {
                   })}
                 </ul>
               </Card>
+                )}
+              </>
             )}
         </div>
       )}

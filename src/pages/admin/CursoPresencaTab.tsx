@@ -3,7 +3,7 @@ import { CheckCircle2, PlayCircle, Users, Percent, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  Card, StatTile, Badge, Avatar, Modal, EmptyState, Skeleton, Switch, Button, useToast,
+  Card, StatTile, Badge, Avatar, Modal, EmptyState, Skeleton, Switch, Button, Select, SearchInput, useToast,
 } from '../../components/ui';
 import { ORIGEM_LABEL, ORIGEM_TONE, type OrigemPresenca, type Presenca } from '../../lib/presenca';
 import PresencaTeamsImportModal from './PresencaTeamsImportModal';
@@ -132,8 +132,11 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
   const [alunos, setAlunos] = useState<AlunoRow[]>([]);
   const [presencas, setPresencas] = useState<Record<string, Presenca>>({});
   const [loading, setLoading] = useState(true);
-  const [salvando, setSalvando] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // Marcações feitas nesta sessão do modal, ainda não gravadas no banco —
+  // só o clique em "Lançar presenças" (ou fechar o modal) as envia de fato.
+  const [pendentes, setPendentes] = useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true);
@@ -145,44 +148,91 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
     ]);
     setAlunos(lista);
     setPresencas(Object.fromEntries(((ps ?? []) as Presenca[]).map((p) => [p.user_id, p])));
+    setPendentes({});
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [turmaId, cursoId, aula.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * A edição manual altera só o `presente`: a origem original é preservada
-   * para não perder de onde veio o registro. Sem registro prévio, nasce como
-   * lançamento do professor.
-   */
-  const marcar = async (aluno: AlunoRow, presente: boolean) => {
-    if (!profile) return;
-    const anterior = presencas[aluno.id];
-    setSalvando(aluno.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { data, error } = await sb.from('presencas').upsert({
-      aula_id: aula.id,
-      user_id: aluno.id,
-      turma_id: turmaId,
-      presente,
-      origem: (anterior?.origem ?? 'manual_professor') satisfies OrigemPresenca,
-      percentual_assistido: anterior?.percentual_assistido ?? null,
-      editado_por: profile.id,
-      atualizado_em: new Date().toISOString(),
-    }, { onConflict: 'aula_id,user_id,turma_id' }).select().single();
-    setSalvando(null);
-    if (error) { toast.error(error.message); return; }
-    setPresencas((prev) => ({ ...prev, [aluno.id]: data as Presenca }));
-    onSaved?.();
+  /** Só atualiza o estado local — nada é gravado até "Lançar presenças". */
+  const marcar = (aluno: AlunoRow, presente: boolean) => {
+    setPendentes((prev) => ({ ...prev, [aluno.id]: presente }));
   };
 
-  const presentes = alunos.filter((a) => presencas[a.id]?.presente).length;
+  /**
+   * Grava de uma vez só todas as marcações pendentes. A edição manual altera
+   * só o `presente`: a origem original é preservada para não perder de onde
+   * veio o registro. Sem registro prévio, nasce como lançamento do professor.
+   */
+  const lancar = async (): Promise<boolean> => {
+    const pendentesIds = Object.keys(pendentes);
+    if (!pendentesIds.length || !profile) return true;
+    setSalvando(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const rows = pendentesIds.map((alunoId) => {
+      const anterior = presencas[alunoId];
+      return {
+        aula_id: aula.id,
+        user_id: alunoId,
+        turma_id: turmaId,
+        presente: pendentes[alunoId],
+        origem: (anterior?.origem ?? 'manual_professor') satisfies OrigemPresenca,
+        percentual_assistido: anterior?.percentual_assistido ?? null,
+        editado_por: profile.id,
+        atualizado_em: new Date().toISOString(),
+      };
+    });
+    const { data, error } = await sb.from('presencas').upsert(rows, { onConflict: 'aula_id,user_id,turma_id' }).select();
+    setSalvando(false);
+    if (error) { toast.error(error.message); return false; }
+    setPresencas((prev) => {
+      const next = { ...prev };
+      ((data ?? []) as Presenca[]).forEach((p) => { next[p.user_id] = p; });
+      return next;
+    });
+    setPendentes({});
+    toast.success('Presenças lançadas.');
+    onSaved?.();
+    return true;
+  };
+
+  /** Rede de proteção: fechar o modal (X, Esc, clique fora) lança as marcações pendentes antes. */
+  const fecharComProtecao = async () => {
+    if (Object.keys(pendentes).length) await lancar();
+    onClose();
+  };
+
+  const efetivaPresenca = (alunoId: string) => pendentes[alunoId] ?? presencas[alunoId]?.presente ?? false;
+  const presentes = alunos.filter((a) => efetivaPresenca(a.id)).length;
+  const temPendentes = Object.keys(pendentes).length > 0;
+
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'presentes_primeiro' | 'ausentes_primeiro'>('nome_az');
+  const alunosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return alunos
+      .filter((al) => !termo || nomeDe(al).toLowerCase().includes(termo) || al.email.toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (ordem === 'nome_az') return nomeDe(a).localeCompare(nomeDe(b));
+        if (ordem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
+        const pa = efetivaPresenca(a.id) ? 1 : 0, pb = efetivaPresenca(b.id) ? 1 : 0;
+        return ordem === 'presentes_primeiro' ? pb - pa : pa - pb;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alunos, busca, ordem, pendentes, presencas]);
 
   return (
-    <Modal open onClose={onClose} size="lg"
+    <Modal open onClose={fecharComProtecao} size="lg"
       title={`Chamada — ${aula.ordem}. ${aula.titulo}`}
-      footer={<Button variant="secondary" onClick={onClose}>Fechar</Button>}>
+      footer={readOnly ? <Button variant="secondary" onClick={onClose}>Fechar</Button> : (
+        <>
+          <Button variant="secondary" onClick={fecharComProtecao}>Fechar</Button>
+          <Button variant="primary" onClick={lancar} loading={salvando} disabled={!temPendentes}>
+            {temPendentes ? `Lançar presenças (${Object.keys(pendentes).length})` : 'Lançar presenças'}
+          </Button>
+        </>
+      )}>
       {loading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
       ) : alunos.length === 0 ? (
@@ -193,6 +243,7 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-ok" />
               <span className="text-fg-2"><strong className="text-fg">{presentes}</strong> de {alunos.length} presentes</span>
+              {temPendentes && <Badge tone="warn">Não lançado</Badge>}
             </div>
             {!readOnly && (
               <Button variant="secondary" size="sm" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
@@ -200,10 +251,20 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
               </Button>
             )}
           </div>
+          <div className="flex items-center gap-2 mb-3">
+            <SearchInput value={busca} onChange={setBusca} placeholder="Buscar aluno…" className="flex-1" />
+            <Select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="w-auto flex-shrink-0">
+              <option value="nome_az">Nome A-Z</option>
+              <option value="nome_za">Nome Z-A</option>
+              <option value="presentes_primeiro">Presentes primeiro</option>
+              <option value="ausentes_primeiro">Ausentes primeiro</option>
+            </Select>
+          </div>
+          {alunosFiltrados.length === 0 ? <EmptyState title="Nenhum aluno encontrado" /> : (
           <ul className="-mx-5">
-            {alunos.map((al) => {
+            {alunosFiltrados.map((al) => {
               const p = presencas[al.id];
-              const presente = !!p?.presente;
+              const presente = efetivaPresenca(al.id);
               return (
                 <li key={al.id} className="flex items-center gap-3 px-5 py-3 border-b border-line last:border-0">
                   <Avatar name={al.nome} email={al.email} size={32} />
@@ -224,13 +285,14 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
                   {readOnly ? (
                     <Badge tone={presente ? 'success' : 'default'} className="flex-shrink-0">{presente ? 'Presente' : 'Ausente'}</Badge>
                   ) : (
-                    <Switch checked={presente} disabled={salvando === al.id} onChange={(v) => marcar(al, v)}
+                    <Switch checked={presente} onChange={(v) => marcar(al, v)}
                       label={<span className="text-xs whitespace-nowrap w-14 inline-block">{presente ? 'Presente' : 'Ausente'}</span>} />
                   )}
                 </li>
               );
             })}
           </ul>
+          )}
 
           {!readOnly && importOpen && (
             <PresencaTeamsImportModal turmaId={turmaId} aulaId={aula.id} alunos={alunos}
