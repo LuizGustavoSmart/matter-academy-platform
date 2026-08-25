@@ -6,9 +6,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button, Card, Badge, Skeleton, EmptyState, Field, Textarea, useToast } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { FileLink } from '../../components/FileLink';
+import { isStaffOfTurma } from '../../lib/turmaStaff';
 
 type Duvida = {
-  id: string; aula_id: string; curso_id: string; titulo: string; descricao: string | null;
+  id: string; aula_id: string; curso_id: string; turma_id: string; titulo: string; descricao: string | null;
   anexo_url: string | null; anexo_nome: string | null; status: 'aberta' | 'resolvida';
   resposta: string | null; created_at: string; aluno_id: string;
 };
@@ -18,7 +19,7 @@ export default function DuvidaDetalhe() {
   const nav = useNavigate();
   const { profile } = useAuth();
   const toast = useToast();
-  const isStaff = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
+  const [isStaff, setIsStaff] = useState(false);
 
   const [duvida, setDuvida] = useState<Duvida | null>(null);
   const [aulaTitulo, setAulaTitulo] = useState('');
@@ -32,11 +33,13 @@ export default function DuvidaDetalhe() {
     const { data } = await supabase.from('duvidas').select('*').eq('id', duvidaId!).maybeSingle();
     setDuvida(data as Duvida | null);
     setResposta(data?.resposta ?? '');
+    const staff = await isStaffOfTurma(profile, data?.turma_id ?? null);
+    setIsStaff(staff);
     if (data?.aula_id) { const { data: aula } = await supabase.from('aulas').select('titulo').eq('id', data.aula_id).maybeSingle(); setAulaTitulo(aula?.titulo ?? ''); }
-    if (data?.aluno_id && isStaff) { const { data: aluno } = await supabase.from('profiles').select('nome,email').eq('id', data.aluno_id).maybeSingle(); setAlunoLabel(aluno?.nome || aluno?.email || ''); }
+    if (data?.aluno_id && staff) { const { data: aluno } = await supabase.from('profiles').select('nome,email').eq('id', data.aluno_id).maybeSingle(); setAlunoLabel(aluno?.nome || aluno?.email || ''); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, [duvidaId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [duvidaId, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const responder = async () => {
     if (!duvida || !profile || !resposta.trim()) return;
@@ -54,7 +57,7 @@ export default function DuvidaDetalhe() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader
-        breadcrumbs={[{ label: 'Dúvidas', to: '/duvidas' }, { label: duvida.titulo }]}
+        breadcrumbs={[{ label: 'Dúvidas', to: isStaff ? '/gestao/duvidas' : '/duvidas' }, { label: duvida.titulo }]}
         title={duvida.titulo}
         subtitle={`${alunoLabel ? `${alunoLabel} · ` : ''}Enviada em ${new Date(duvida.created_at).toLocaleString('pt-BR')}`}
         actions={<Badge tone={duvida.status === 'resolvida' ? 'success' : 'warn'} dot>{duvida.status === 'resolvida' ? 'Resolvida' : 'Aberta'}</Badge>}

@@ -17,120 +17,66 @@ export default function AtividadesIndex() {
   const nav = useNavigate();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
-  const isStaff = profile?.role === 'professor' || profile?.role === 'monitor';
 
   useEffect(() => {
     if (!profile) { setLoading(false); return; }
     (async () => {
-      if (isStaff) {
-        const { data: ut } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id);
-        const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
-        if (!turmaIds.length) { setBlocks([]); setLoading(false); return; }
-        const [{ data: turmas }, { data: cts }] = await Promise.all([
-          supabase.from('turmas').select('id,nome').in('id', turmaIds),
-          supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds),
-        ]);
-        const cursoIds = [...new Set((cts ?? []).map((r) => r.curso_id))];
-        // faixa/capa_url ainda não estão no schema gerado
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        type CursoRow = { id: string; titulo: string; capa_url: string | null; faixa: string | null };
-        const { data: cursos } = cursoIds.length
-          ? await (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds)
-          : { data: [] as CursoRow[] };
-        const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
-        const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
-        const pairs = (cts ?? []).map((r) => ({ turma_id: r.turma_id, curso_id: r.curso_id }));
-        const { data: atividades } = pairs.length ? await supabase.from('atividades').select('id,turma_id,curso_id').in('turma_id', turmaIds) : { data: [] };
-        const atividadeIds = (atividades ?? []).map((a) => a.id);
-        const { data: envios } = atividadeIds.length ? await supabase.from('atividade_envios').select('atividade_id,enviado_em,nota').in('atividade_id', atividadeIds) : { data: [] };
-        const pendMap: Record<string, number> = {};
-        (atividades ?? []).forEach((a) => {
-          const key = `${a.turma_id}:${a.curso_id}`;
-          const pend = (envios ?? []).filter((e) => e.atividade_id === a.id && e.enviado_em && e.nota === null).length;
-          pendMap[key] = (pendMap[key] ?? 0) + pend;
-        });
-        const list: Block[] = pairs
-          .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-          .map((p) => ({
-            turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
-            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, faixa: cursoMap.get(p.curso_id)!.faixa,
-            pendencias: pendMap[`${p.turma_id}:${p.curso_id}`] ?? 0, matriculado: true,
-          }))
-          .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || ordemDaFaixa(cursoMap.get(a.cursoId)?.faixa) - ordemDaFaixa(cursoMap.get(b.cursoId)?.faixa));
-        setBlocks(list);
-      } else {
-        const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
-        const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null }[];
-        const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
-        if (!turmaIds.length) { setBlocks([]); setLoading(false); return; }
-        const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id).map((p) => p.curso_id as string));
+      const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
+      const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null }[];
+      const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
+      if (!turmaIds.length) { setBlocks([]); setLoading(false); return; }
+      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id).map((p) => p.curso_id as string));
 
-        // Todos os cursos das turmas do aluno — os que ele não está matriculado
-        // especificamente aparecem bloqueados.
-        const { data: ctRows } = await supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds);
-        const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
-        // faixa/capa_url ainda não estão no schema gerado
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const [{ data: turmas }, { data: cursos }] = await Promise.all([
-          supabase.from('turmas').select('id,nome').in('id', turmaIds),
-          cursoIds.length ? (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds) : Promise.resolve({ data: [] }),
-        ]);
-        type CursoRow = { id: string; titulo: string; capa_url: string | null; faixa: string | null };
-        const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
-        const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
-        // Um bloco por turma+curso realmente vinculados via curso_turmas.
-        const pares = (ctRows ?? []).map((r) => ({ turma_id: r.turma_id, curso_id: r.curso_id }));
-        const list: Block[] = pares
-          .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-          .map((p) => ({
-            turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
-            cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, faixa: cursoMap.get(p.curso_id)!.faixa,
-            pendencias: 0, matriculado: enrolledCursoIds.has(p.curso_id),
-          }));
+      // Todos os cursos das turmas do aluno — os que ele não está matriculado
+      // especificamente aparecem bloqueados.
+      const { data: ctRows } = await supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds);
+      const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
+      // faixa/capa_url ainda não estão no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const [{ data: turmas }, { data: cursos }] = await Promise.all([
+        supabase.from('turmas').select('id,nome').in('id', turmaIds),
+        cursoIds.length ? (supabase as any).from('cursos').select('id,titulo,capa_url,faixa').in('id', cursoIds) : Promise.resolve({ data: [] }),
+      ]);
+      type CursoRow = { id: string; titulo: string; capa_url: string | null; faixa: string | null };
+      const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
+      const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
+      // Um bloco por turma+curso realmente vinculados via curso_turmas.
+      const pares = (ctRows ?? []).map((r) => ({ turma_id: r.turma_id, curso_id: r.curso_id }));
+      const list: Block[] = pares
+        .filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
+        .map((p) => ({
+          turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id,
+          cursoTitulo: cursoMap.get(p.curso_id)!.titulo, capaUrl: cursoMap.get(p.curso_id)!.capa_url, faixa: cursoMap.get(p.curso_id)!.faixa,
+          pendencias: 0, matriculado: enrolledCursoIds.has(p.curso_id),
+        }));
 
-        // As 4 faixas sempre aparecem — a que ainda não tiver curso criado vira bloco bloqueado "virtual".
-        turmaIds.forEach((tId) => {
-          if (!turmaMap.has(tId)) return;
-          const faixasDaTurma = new Set(list.filter((b) => b.turmaId === tId).map((b) => b.faixa));
-          FAIXA_OPTIONS.filter((o) => !faixasDaTurma.has(o.value)).forEach((o) => {
-            list.push({
-              turmaId: tId, turmaNome: turmaMap.get(tId)!.nome, cursoId: `virtual-${tId}-${o.value}`,
-              cursoTitulo: labelDaFaixa(o.value) ?? o.label, capaUrl: null, faixa: o.value, pendencias: 0, matriculado: false,
-            });
+      // As 4 faixas sempre aparecem — a que ainda não tiver curso criado vira bloco bloqueado "virtual".
+      turmaIds.forEach((tId) => {
+        if (!turmaMap.has(tId)) return;
+        const faixasDaTurma = new Set(list.filter((b) => b.turmaId === tId).map((b) => b.faixa));
+        FAIXA_OPTIONS.filter((o) => !faixasDaTurma.has(o.value)).forEach((o) => {
+          list.push({
+            turmaId: tId, turmaNome: turmaMap.get(tId)!.nome, cursoId: `virtual-${tId}-${o.value}`,
+            cursoTitulo: labelDaFaixa(o.value) ?? o.label, capaUrl: null, faixa: o.value, pendencias: 0, matriculado: false,
           });
         });
+      });
 
-        list.sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
-        setBlocks(list);
-      }
+      list.sort((a, b) => ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
+      setBlocks(list);
       setLoading(false);
     })();
-  }, [profile, isStaff]);
-
-  const turmaIds = [...new Set(blocks.map((b) => b.turmaId))];
-  const multiTurma = turmaIds.length > 1;
+  }, [profile]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-      <PageHeader title="Atividades" subtitle={isStaff ? 'Selecione uma turma para ver e corrigir as atividades.' : 'Selecione uma faixa para ver suas atividades.'} />
+      <PageHeader title="Atividades" subtitle="Selecione uma faixa para ver suas atividades." />
 
       {loading ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div> :
         blocks.length === 0 ? (
-          <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade disponível" description={isStaff ? 'Você ainda não está atribuído a nenhuma turma.' : 'Aguarde o administrador liberar conteúdo para suas turmas.'} />
-        ) : (isStaff && multiTurma) ? (
-          <div className="space-y-8">
-            {turmaIds.map((tId) => {
-              const group = blocks.filter((b) => b.turmaId === tId);
-              return (
-                <div key={tId}>
-                  <p className="text-fg-3 text-[11px] font-semibold uppercase tracking-wider mb-3">{group[0].turmaNome}</p>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{group.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} showPend={isStaff} nav={nav} faixaCapas={faixaCapas} />)}</div>
-                </div>
-              );
-            })}
-          </div>
+          <EmptyState icon={<ClipboardList className="w-8 h-8" />} title="Nenhuma atividade disponível" description="Aguarde o administrador liberar conteúdo para suas turmas." />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{blocks.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={isStaff ? `${b.turmaNome} · ${b.cursoTitulo}` : b.cursoTitulo} showPend={isStaff} nav={nav} faixaCapas={faixaCapas} />)}</div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{blocks.map((b) => <BlockCard key={`${b.turmaId}:${b.cursoId}`} b={b} label={b.cursoTitulo} nav={nav} faixaCapas={faixaCapas} />)}</div>
         )}
     </div>
   );

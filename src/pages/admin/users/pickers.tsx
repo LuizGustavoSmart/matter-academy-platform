@@ -3,7 +3,7 @@ import { Checkbox, Switch } from '../../../components/ui';
 
 export type Turma = { id: string; nome: string };
 export type CursoInfo = { id: string; titulo: string };
-export type TurmaSelection = { turma_id: string; curso_ids: string[]; embaixador_curso_ids?: string[] };
+export type TurmaSelection = { turma_id: string; curso_ids: string[]; embaixador_curso_ids?: string[]; is_staff?: boolean };
 
 /** Carrega os cursos de cada turma via curso_turmas. */
 export async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>> {
@@ -23,7 +23,7 @@ export async function loadCoursesByTurma(): Promise<Record<string, CursoInfo[]>>
 
 /** Seletor aninhado Turma › Cursos, usado na criação/edição e na importação. */
 export function TurmaCoursePicker({
-  turmas, coursesByTurma, value, onChange, showCourses, showEmbaixadorToggle = false,
+  turmas, coursesByTurma, value, onChange, showCourses, showEmbaixadorToggle = false, showStaffToggle = false,
 }: {
   turmas: Turma[];
   coursesByTurma: Record<string, CursoInfo[]>;
@@ -31,14 +31,20 @@ export function TurmaCoursePicker({
   onChange: (v: TurmaSelection[]) => void;
   showCourses: boolean;
   showEmbaixadorToggle?: boolean;
+  /** Para professor/monitor: alterna, por turma, entre "dá aula" (staff) e "aluno normal" (participante). */
+  showStaffToggle?: boolean;
 }) {
   const isTurmaSelected = (tid: string) => value.some((v) => v.turma_id === tid);
   const getCursoIds = (tid: string) => value.find((v) => v.turma_id === tid)?.curso_ids ?? [];
   const isEmbaixadorCurso = (tid: string, cid: string) => !!value.find((v) => v.turma_id === tid)?.embaixador_curso_ids?.includes(cid);
+  const isStaffTurma = (tid: string) => value.find((v) => v.turma_id === tid)?.is_staff !== false;
 
   const toggleTurma = (tid: string) => {
     if (isTurmaSelected(tid)) onChange(value.filter((v) => v.turma_id !== tid));
-    else onChange([...value, { turma_id: tid, curso_ids: [], embaixador_curso_ids: [] }]);
+    else onChange([...value, { turma_id: tid, curso_ids: [], embaixador_curso_ids: [], is_staff: true }]);
+  };
+  const toggleStaffTurma = (tid: string) => {
+    onChange(value.map((v) => (v.turma_id !== tid ? v : { ...v, is_staff: !isStaffTurma(tid), curso_ids: [] })));
   };
   const toggleCurso = (tid: string, cid: string) => {
     onChange(value.map((v) => {
@@ -71,14 +77,20 @@ export function TurmaCoursePicker({
         const selected = isTurmaSelected(t.id);
         const courses = coursesByTurma[t.id] ?? [];
         const selectedCursoIds = getCursoIds(t.id);
-        const missingCourse = showCourses && selected && selectedCursoIds.length === 0;
+        const staffTurma = isStaffTurma(t.id);
+        const coursesVisible = showStaffToggle ? (selected && !staffTurma) : (selected && showCourses);
+        const missingCourse = coursesVisible && selectedCursoIds.length === 0;
         return (
           <div key={t.id} className={selected ? 'rounded-md bg-panel-2/60 p-1.5 -mx-0.5' : ''}>
             <div className="flex items-center gap-2 flex-wrap">
               <Checkbox checked={selected} onChange={() => toggleTurma(t.id)} label={<span className="text-fg font-medium">{t.nome}</span>} />
+              {selected && showStaffToggle && (
+                <Switch checked={staffTurma} onChange={() => toggleStaffTurma(t.id)}
+                  label={<span className="text-xs whitespace-nowrap">{staffTurma ? 'Dá aula' : 'Aluno normal'}</span>} />
+              )}
               {missingCourse && <span className="text-danger text-xs">selecione ao menos 1 curso</span>}
             </div>
-            {selected && showCourses && (
+            {coursesVisible && (
               <div className="ml-6 mt-1.5 space-y-1.5 pb-1">
                 {courses.length === 0 ? (
                   <p className="text-fg-3 text-xs italic">Nenhum curso vinculado a esta turma.</p>

@@ -34,6 +34,8 @@ import MinhaTurmaDetalhe from './pages/student/MinhaTurmaDetalhe';
 import TurmaCursoDetalhe from './pages/student/TurmaCursoDetalhe';
 import Profile from './pages/student/Profile';
 import PresencaCurso from './pages/student/PresencaCurso';
+import DuvidasGestao from './pages/professor/DuvidasGestao';
+import ComunidadeGestao from './pages/professor/ComunidadeGestao';
 
 function Loading() {
   return <div className="min-h-screen grid place-items-center"><p className="meta">Carregando...</p></div>;
@@ -127,6 +129,8 @@ export default function App() {
                     <Route path="/turmas" element={<MinhasTurmas />} />
                     <Route path="/turmas/:turmaId" element={<MinhaTurmaDetalhe />} />
                     <Route path="/turmas/:turmaId/cursos/:cursoId" element={<TurmaCursoDetalhe />} />
+                    <Route path="/gestao/duvidas" element={<DuvidasGestao />} />
+                    <Route path="/gestao/comunidade" element={<ComunidadeGestao />} />
                   </Route>
                 </Route>
 

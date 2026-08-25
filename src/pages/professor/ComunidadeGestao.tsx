@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Paperclip, Send, X, ArrowLeft } from 'lucide-react';
+import { MessageSquare, Paperclip, Send, ChevronDown, ChevronRight as ChevronRightIcon, X, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadComunidadeFile } from '../../lib/storage';
@@ -13,13 +13,15 @@ type Message = {
   created_at: string; profiles: { email: string; nome: string | null; avatar_url?: string | null } | null;
 };
 
-export default function Comunidade() {
+/** Visão de gestão de "Comunidade" para professor/monitor — chats das turmas onde dá aula, agrupados por turma. */
+export default function ComunidadeGestao() {
   const { profile } = useAuth();
   const toast = useToast();
 
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Pair | null>(null);
+  const [expandedTurma, setExpandedTurma] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [text, setText] = useState('');
@@ -30,19 +32,22 @@ export default function Comunidade() {
   useEffect(() => {
     if (!profile) { setLoading(false); return; }
     (async () => {
-      const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id).not('curso_id', 'is', null);
-      const rawPairs = (ut ?? []) as { turma_id: string; curso_id: string }[];
-      if (!rawPairs.length) { setPairs([]); setLoading(false); return; }
-      const turmaIds = [...new Set(rawPairs.map((p) => p.turma_id))];
-      const cursoIds = [...new Set(rawPairs.map((p) => p.curso_id))];
-      const [{ data: turmas }, { data: cursos }] = await Promise.all([
+      // is_staff ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_staff', true);
+      const turmaIds = [...new Set<string>((ut ?? []).map((r: { turma_id: string }) => r.turma_id))];
+      if (!turmaIds.length) { setPairs([]); setLoading(false); return; }
+      const [{ data: turmas }, { data: cts }] = await Promise.all([
         supabase.from('turmas').select('id,nome').in('id', turmaIds),
-        supabase.from('cursos').select('id,titulo').in('id', cursoIds),
+        supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds),
       ]);
+      const cursoIds = [...new Set((cts ?? []).map((r) => r.curso_id))];
+      const { data: cursos } = cursoIds.length ? await supabase.from('cursos').select('id,titulo').in('id', cursoIds) : { data: [] };
       const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
       const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c]));
-      setPairs(rawPairs.filter((p) => turmaMap.has(p.turma_id) && cursoMap.has(p.curso_id))
-        .map((p) => ({ turmaId: p.turma_id, turmaNome: turmaMap.get(p.turma_id)!.nome, cursoId: p.curso_id, cursoTitulo: cursoMap.get(p.curso_id)!.titulo })));
+      setPairs((cts ?? []).filter((r) => turmaMap.has(r.turma_id) && cursoMap.has(r.curso_id))
+        .map((r) => ({ turmaId: r.turma_id, turmaNome: turmaMap.get(r.turma_id)!.nome, cursoId: r.curso_id, cursoTitulo: cursoMap.get(r.curso_id)!.titulo }))
+        .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || a.cursoTitulo.localeCompare(b.cursoTitulo)));
       setLoading(false);
     })();
   }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -62,7 +67,6 @@ export default function Comunidade() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_messages', filter: `curso_id=eq.${selected.cursoId}` }, (payload) => {
         const row = payload.new as Message;
         if (row.turma_id !== selected.turmaId) return;
-        // Evita duplicar mensagem já inserida de forma otimista pelo próprio remetente.
         setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
         requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
       }).subscribe();
@@ -81,13 +85,13 @@ export default function Comunidade() {
         .select('*, profiles(email,nome,avatar_url)')
         .single();
       if (error) throw error;
-      // Mostra a mensagem na hora, sem esperar o round-trip do realtime.
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current!.scrollHeight, behavior: 'smooth' }));
       setText(''); setFile(null);
     } catch (e) { toast.error((e as Error).message); } finally { setSending(false); }
   };
 
+  const turmaGroups = [...new Map(pairs.map((p) => [p.turmaId, p.turmaNome])).entries()];
   const isSel = (p: Pair) => selected?.turmaId === p.turmaId && selected?.cursoId === p.cursoId;
 
   return (
@@ -96,9 +100,7 @@ export default function Comunidade() {
         className={cn(
           'border-r border-line flex flex-col flex-shrink-0 overflow-y-auto scrollbar-thin bg-panel',
           'lg:w-72 lg:static',
-          selected
-            ? 'hidden lg:flex'
-            : 'flex w-full lg:w-72',
+          selected ? 'hidden lg:flex' : 'flex w-full lg:w-72',
         )}
       >
         <div className="p-4 border-b border-line flex-shrink-0"><h2 className="text-fg text-base font-medium">Comunidade</h2></div>
@@ -110,15 +112,31 @@ export default function Comunidade() {
           <div className="text-center px-5 py-8">
             <span className="w-10 h-10 rounded-full bg-panel-2 grid place-items-center mb-3 mx-auto"><MessageSquare className="w-5 h-5 text-fg-3" /></span>
             <p className="text-fg-2 text-sm font-medium mb-1">Nenhuma comunidade</p>
-            <p className="text-fg-3 text-xs leading-relaxed">Aguarde o administrador liberar turmas e cursos para você.</p>
+            <p className="text-fg-3 text-xs leading-relaxed">Você ainda não está atribuído a turmas com cursos vinculados.</p>
           </div>
         ) : (
-            <div className="p-2 space-y-0.5">
-              {pairs.map((p) => (
-                <button key={`${p.turmaId}:${p.cursoId}`} onClick={() => setSelected(p)} className={cn('w-full text-left px-3 py-2.5 rounded-md text-sm transition-colors', isSel(p) ? 'bg-brand text-brand-ink font-medium' : 'text-fg-2 hover:bg-panel-2')}>{p.cursoTitulo}</button>
-              ))}
-            </div>
-          )}
+          <div className="p-2">
+            {turmaGroups.map(([turmaId, turmaNome]) => {
+              const isOpen = expandedTurma === turmaId;
+              const courses = pairs.filter((p) => p.turmaId === turmaId);
+              return (
+                <div key={turmaId} className="mb-1">
+                  <button onClick={() => setExpandedTurma(isOpen ? null : turmaId)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md text-sm text-fg-2 hover:bg-panel-2 transition-colors">
+                    <span className="font-medium truncate">{turmaNome}</span>
+                    {isOpen ? <ChevronDown className="w-4 h-4 flex-shrink-0" /> : <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />}
+                  </button>
+                  {isOpen && (
+                    <div className="ml-3 border-l border-line pl-2 space-y-0.5 mt-1">
+                      {courses.map((p) => (
+                        <button key={p.cursoId} onClick={() => setSelected(p)} className={cn('w-full text-left px-3 py-2 rounded-md text-sm transition-colors', isSel(p) ? 'bg-brand text-brand-ink font-medium' : 'text-fg-2 hover:bg-panel-2')}>{p.cursoTitulo}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </aside>
 
       <section className={cn('flex-1 flex-col min-w-0 bg-canvas', selected ? 'flex' : 'hidden lg:flex')}>

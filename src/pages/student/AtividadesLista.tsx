@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button, IconButton, Card, Badge, EmptyState, Skeleton, Switch, DropdownMenu, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import CriarAtividadeModal, { type AtividadeEditavel } from './CriarAtividadeModal';
+import { useIsStaffOfTurma } from '../../lib/turmaStaff';
 
 type Atividade = AtividadeEditavel & { publicada: boolean; ordem: number };
 type Envio = { atividade_id: string; enviado_em: string | null; nota: number | null; corrigido_em: string | null };
@@ -23,7 +24,7 @@ export default function AtividadesLista() {
   const { profile } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const isProfessor = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
+  const isProfessor = useIsStaffOfTurma(profile, turmaId) ?? false;
 
   const [turmaNome, setTurmaNome] = useState('');
   const [cursoTitulo, setCursoTitulo] = useState('');
@@ -61,7 +62,7 @@ export default function AtividadesLista() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [turmaId, cursoId, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [turmaId, cursoId, profile, isProfessor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePublicada = async (a: Atividade) => {
     setAtividades((prev) => prev.map((x) => (x.id === a.id ? { ...x, publicada: !a.publicada } : x)));

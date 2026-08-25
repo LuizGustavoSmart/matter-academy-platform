@@ -7,6 +7,7 @@ import { uploadAtividadeFile } from '../../lib/storage';
 import { Button, Card, Badge, Avatar, Modal, Skeleton, EmptyState, Field, Input, Textarea, useToast } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { FileLink } from '../../components/FileLink';
+import { isStaffOfTurma } from '../../lib/turmaStaff';
 
 type Atividade = {
   id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
@@ -21,7 +22,7 @@ export default function AtividadeDetalhe() {
   const nav = useNavigate();
   const { profile } = useAuth();
   const toast = useToast();
-  const isProfessor = profile?.role === 'professor' || profile?.role === 'monitor' || profile?.role === 'admin';
+  const [isProfessor, setIsProfessor] = useState(false);
 
   const [atividade, setAtividade] = useState<Atividade | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +66,11 @@ export default function AtividadeDetalhe() {
     (async () => {
       setLoading(true);
       const a = await loadAtividade();
-      if (a) { if (isProfessor) await loadProfessor(a); else await loadAluno(a); }
+      if (a) {
+        const staff = await isStaffOfTurma(profile, a.turma_id);
+        setIsProfessor(staff);
+        if (staff) await loadProfessor(a); else await loadAluno(a);
+      }
       setLoading(false);
     })();
   }, [atividadeId, profile]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -23,12 +23,14 @@ export default function MinhasTurmas() {
   useEffect(() => {
     if (!profile || !canView) { setLoading(false); return; }
     (async () => {
-      // is_embaixador ainda não está no schema gerado
+      // is_embaixador/is_staff ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const { data: ut } = isEmbaixador
         ? await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_embaixador', true)
-        : await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id);
+        : isStaff
+          ? await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_staff', true)
+          : await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id);
       const turmaIds = [...new Set(((ut ?? []) as { turma_id: string }[]).map((r) => r.turma_id))] as string[];
       if (!turmaIds.length) { setBlocos([]); setLoading(false); return; }
       const [{ data: turmas }, { data: cts }] = await Promise.all([
