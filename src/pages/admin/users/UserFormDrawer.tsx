@@ -42,6 +42,7 @@ export function UserFormDrawer({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ token: string | null; sent: boolean; emailSent: boolean; emailError?: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [debugMsg, setDebugMsg] = useState<string | null>(null); // DEBUG TEMPORÁRIO
 
   const isStudent = role === 'student';
   const isEmbaixador = role === 'embaixador';
@@ -140,7 +141,7 @@ export function UserFormDrawer({
     try {
       const payload = buildPayload();
       // DEBUG TEMPORÁRIO — remover depois de diagnosticar o bug do is_staff
-      if (isProfessorOrMonitor) window.alert('DEBUG turma_cursos: ' + JSON.stringify((payload as { turma_cursos: unknown }).turma_cursos, null, 2));
+      if (isProfessorOrMonitor) setDebugMsg('DEBUG turma_cursos enviado: ' + JSON.stringify((payload as { turma_cursos: unknown }).turma_cursos));
       await callFn('admin-users', 'update', {
         user_id: user.id,
         email: payload.email !== user.email ? payload.email : undefined,
@@ -149,7 +150,9 @@ export function UserFormDrawer({
         ...((isStudent || isEmbaixador || isProfessorOrMonitor) ? { turma_cursos: (payload as { turma_cursos: unknown }).turma_cursos } : { turma_ids: (payload as { turma_ids: string[] }).turma_ids }),
       });
       toast.success('Usuário atualizado.');
-      onSaved(); onClose();
+      onSaved();
+      // DEBUG TEMPORÁRIO: não fecha o drawer automaticamente para dar tempo de ler/copiar o debug acima.
+      if (!isProfessorOrMonitor) onClose();
     } catch (err) {
       setServerErr((err as Error).message);
     } finally { setLoading(false); }
@@ -217,6 +220,7 @@ export function UserFormDrawer({
       width="lg" footer={footer}>
 
       {serverErr && <Alert tone="danger" className="mb-4">{serverErr}</Alert>}
+      {debugMsg && <Alert tone="warn" className="mb-4"><span className="break-all select-all">{debugMsg}</span></Alert>}
 
       {/* ─────────── FORM ─────────── */}
       {phase === 'form' && (
