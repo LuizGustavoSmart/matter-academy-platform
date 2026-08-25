@@ -33,8 +33,11 @@ export default function Comunidade() {
       // is_staff ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id,curso_id,is_staff').eq('user_id', profile.id).not('curso_id', 'is', null);
+      // is_staff só é relevante para professor/monitor — a coluna tem default
+      // true no banco, então para aluno/embaixador ela não deve excluir nada.
       // Cursos onde o usuário dá aula (is_staff) não aparecem aqui — ficam na Comunidade de gestão.
-      const rawPairs = ((ut ?? []) as { turma_id: string; curso_id: string; is_staff?: boolean }[]).filter((p) => !p.is_staff);
+      const isProfOrMonitor = profile.role === 'professor' || profile.role === 'monitor';
+      const rawPairs = ((ut ?? []) as { turma_id: string; curso_id: string; is_staff?: boolean }[]).filter((p) => !isProfOrMonitor || !p.is_staff);
       if (!rawPairs.length) { setPairs([]); setLoading(false); return; }
       const turmaIds = [...new Set(rawPairs.map((p) => p.turma_id))];
       const cursoIds = [...new Set(rawPairs.map((p) => p.curso_id))];

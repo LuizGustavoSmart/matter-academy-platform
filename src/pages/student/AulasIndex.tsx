@@ -29,8 +29,10 @@ export default function AulasIndex() {
       const turmaIds = [...new Set(rows.map((r) => r.turma_id))];
       if (!turmaIds.length) { setCourses([]); setLoading(false); return; }
       const { data: ctRows } = await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds);
-      // Cursos onde o usuário dá aula (is_staff) não contam como "matriculado como aluno".
-      const enrolledCursoIds = new Set(rows.filter((r) => r.curso_id && !r.is_staff).map((r) => r.curso_id as string));
+      // is_staff só é relevante para professor/monitor — a coluna tem default
+      // true no banco, então para aluno/embaixador ela não deve excluir nada.
+      const isProfOrMonitor = profile.role === 'professor' || profile.role === 'monitor';
+      const enrolledCursoIds = new Set(rows.filter((r) => r.curso_id && (!isProfOrMonitor || !r.is_staff)).map((r) => r.curso_id as string));
       const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
 
       // faixa/capa_url ainda não estão no schema gerado

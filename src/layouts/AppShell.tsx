@@ -126,6 +126,7 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
           <span className="min-w-0 text-left flex-1">
             <span className="block text-sm text-fg font-medium truncate">{name}</span>
             <span className="block text-[11px] text-fg-3 truncate">{ROLE_LABEL[profile?.role ?? ''] ?? profile?.email}</span>
+            <span className="flex items-center gap-0.5 text-[11px] text-brand font-medium mt-0.5">Ver perfil<ChevronRight className="w-3 h-3" /></span>
           </span>
         )}
       </button>
@@ -149,6 +150,7 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
                 <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand/12 text-brand border border-brand/25">
                   {ROLE_LABEL[profile?.role ?? ''] ?? 'Usuário'}
                 </span>
+                <span className="flex items-center gap-0.5 text-[11px] text-brand font-medium mt-2">Ver perfil<ChevronRight className="w-3 h-3" /></span>
               </button>
               <button role="menuitem" onClick={logout} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-fg-2 hover:bg-panel-3 hover:text-fg transition-colors">
                 <LogOut className="w-4 h-4" /> Sair da conta

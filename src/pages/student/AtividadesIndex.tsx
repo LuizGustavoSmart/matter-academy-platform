@@ -27,8 +27,10 @@ export default function AtividadesIndex() {
       const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null; is_staff?: boolean }[];
       const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
       if (!turmaIds.length) { setBlocks([]); setLoading(false); return; }
-      // Cursos onde o usuário dá aula (is_staff) não contam como "matriculado como aluno".
-      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id && !p.is_staff).map((p) => p.curso_id as string));
+      // is_staff só é relevante para professor/monitor — a coluna tem default
+      // true no banco, então para aluno/embaixador ela não deve excluir nada.
+      const isProfOrMonitor = profile.role === 'professor' || profile.role === 'monitor';
+      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id && (!isProfOrMonitor || !p.is_staff)).map((p) => p.curso_id as string));
 
       // Todos os cursos das turmas do aluno — os que ele não está matriculado
       // especificamente aparecem bloqueados.
