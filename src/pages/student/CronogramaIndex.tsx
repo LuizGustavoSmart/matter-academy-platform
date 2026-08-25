@@ -297,7 +297,12 @@ export default function CronogramaIndex() {
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
 
-      let currentKey: string | null = null;
+      // O avatar fica na aula mais avançada já concluída (não na "próxima
+      // pendente") — por isso percorremos tudo em ordem e guardamos a última
+      // marcada como feita, em vez de parar no primeiro slot incompleto.
+      // Se nada foi concluído ainda, `lastDoneKey` continua null e o avatar
+      // cai no bloco decorativo "Início", antes da primeira casa.
+      let lastDoneKey: string | null = null;
       const map: Record<string, Slot[]> = {};
       for (const curso of cursosOrdenados) {
         const vistas = new Set<string>();
@@ -309,14 +314,13 @@ export default function CronogramaIndex() {
         const slots: Slot[] = [];
         for (let ordem = 1; ordem <= total; ordem++) {
           const aula = porOrdem.get(ordem) ?? null;
-          slots.push({ ordem, aula, done: aula ? doneSet.has(aula.id) : false });
+          const done = aula ? doneSet.has(aula.id) : false;
+          slots.push({ ordem, aula, done });
+          if (done) lastDoneKey = `${curso.id}:${ordem}`;
         }
         map[curso.id] = slots;
-        if (!currentKey) {
-          const proxima = slots.find((s) => s.aula && !s.done);
-          if (proxima) currentKey = `${curso.id}:${proxima.ordem}`;
-        }
       }
+      const currentKey = lastDoneKey;
 
       setCursos(cursosOrdenados);
       setCapaUrls(urls);
@@ -402,6 +406,13 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
 
   const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
 
+  // Centro do bloco "Início" — reaproveitado tanto pelo desenho decorativo
+  // quanto pela posição do avatar quando nenhuma aula foi concluída ainda.
+  const inicioCenter: Pt = [
+    track.startMid[0] - track.startForward[0] * INICIO_GAP,
+    track.startMid[1] - track.startForward[1] * INICIO_GAP,
+  ];
+
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -428,17 +439,13 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
           {/* Bloco decorativo "Início" — meio círculo colado antes da primeira casa,
               com um pequeno vão entre as duas formas (não faz parte da tira contígua). */}
           {(() => {
-            const center: Pt = [
-              track.startMid[0] - track.startForward[0] * INICIO_GAP,
-              track.startMid[1] - track.startForward[1] * INICIO_GAP,
-            ];
             const labelCenter: Pt = [
-              center[0] - track.startForward[0] * INICIO_R * 0.5,
-              center[1] - track.startForward[1] * INICIO_R * 0.5,
+              inicioCenter[0] - track.startForward[0] * INICIO_R * 0.5,
+              inicioCenter[1] - track.startForward[1] * INICIO_R * 0.5,
             ];
             return (
               <g>
-                <path d={semicirclePath(center, INICIO_R, track.startForward)} className="fill-brand/25 stroke-brand" strokeWidth={2} />
+                <path d={semicirclePath(inicioCenter, INICIO_R, track.startForward)} className="fill-brand/25 stroke-brand" strokeWidth={2} />
                 <text x={labelCenter[0]} y={labelCenter[1]} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[18px] font-bold">
                   Início
                 </text>
@@ -466,11 +473,14 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
           })}
         </svg>
 
-        {current && (
-          <div className="absolute z-10" style={{ left: current.centroidX, top: current.centroidY - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }}>
-            <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={48} className="ring-2 ring-brand shadow-ma-2" />
-          </div>
-        )}
+        <div
+          className="absolute z-10"
+          style={current
+            ? { left: current.centroidX, top: current.centroidY - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }
+            : { left: inicioCenter[0], top: inicioCenter[1] - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }}
+        >
+          <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={48} className="ring-2 ring-brand shadow-ma-2" />
+        </div>
 
         {marcoCards.map((m, i) => (
           <div
