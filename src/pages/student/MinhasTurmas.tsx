@@ -27,17 +27,19 @@ export default function MinhasTurmas() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const { data: ut } = isEmbaixador
-        ? await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_embaixador', true)
+        ? await sb.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id).eq('is_embaixador', true)
         : isStaff
-          ? await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_staff', true)
-          : await sb.from('user_turmas').select('turma_id').eq('user_id', profile.id);
-      const turmaIds = [...new Set(((ut ?? []) as { turma_id: string }[]).map((r) => r.turma_id))] as string[];
+          ? await sb.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id).eq('is_staff', true)
+          : await sb.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
+      // Só os pares turma+curso onde o usuário realmente é embaixador/staff — não a turma inteira.
+      const pares = ((ut ?? []) as { turma_id: string; curso_id: string | null }[]).filter((r) => r.curso_id);
+      const turmaIds = [...new Set(pares.map((r) => r.turma_id))];
       if (!turmaIds.length) { setBlocos([]); setLoading(false); return; }
       const [{ data: turmas }, { data: cts }] = await Promise.all([
         supabase.from('turmas').select('id,nome').in('id', turmaIds),
         supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds),
       ]);
-      const cursoIds = [...new Set((cts ?? []).map((r) => r.curso_id))];
+      const cursoIds = [...new Set(pares.map((r) => r.curso_id as string))];
       type CursoRow = { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null };
       // faixa/capa_url ainda não estão no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,11 +48,12 @@ export default function MinhasTurmas() {
         : { data: [] as CursoRow[] };
       const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t.nome]));
       const cursoMap = new Map((cursos as CursoRow[] ?? []).map((c) => [c.id, c]));
-      const list: Bloco[] = (cts ?? [])
-        .filter((r) => turmaMap.has(r.turma_id) && cursoMap.has(r.curso_id))
+      const cursoTurmaValido = new Set((cts ?? []).map((r) => `${r.turma_id}:${r.curso_id}`));
+      const list: Bloco[] = pares
+        .filter((r) => turmaMap.has(r.turma_id) && cursoMap.has(r.curso_id as string) && cursoTurmaValido.has(`${r.turma_id}:${r.curso_id}`))
         .map((r) => {
-          const c = cursoMap.get(r.curso_id)!;
-          return { turmaId: r.turma_id, turmaNome: turmaMap.get(r.turma_id)!, cursoId: r.curso_id, cursoTitulo: c.titulo, cursoDescricao: c.descricao, capaUrl: c.capa_url, faixa: c.faixa };
+          const c = cursoMap.get(r.curso_id as string)!;
+          return { turmaId: r.turma_id, turmaNome: turmaMap.get(r.turma_id)!, cursoId: r.curso_id as string, cursoTitulo: c.titulo, cursoDescricao: c.descricao, capaUrl: c.capa_url, faixa: c.faixa };
         })
         .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || ordemDaFaixa(a.faixa) - ordemDaFaixa(b.faixa));
       setBlocos(list);

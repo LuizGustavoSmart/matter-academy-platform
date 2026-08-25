@@ -22,11 +22,15 @@ export default function AulasIndex() {
   useEffect(() => {
     const load = async () => {
       if (!profile) return;
-      const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
-      const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
+      // is_staff ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id,curso_id,is_staff').eq('user_id', profile.id);
+      const rows = (ut ?? []) as { turma_id: string; curso_id: string | null; is_staff?: boolean }[];
+      const turmaIds = [...new Set(rows.map((r) => r.turma_id))];
       if (!turmaIds.length) { setCourses([]); setLoading(false); return; }
       const { data: ctRows } = await supabase.from('curso_turmas').select('curso_id').in('turma_id', turmaIds);
-      const enrolledCursoIds = new Set((ut ?? []).filter((r) => r.curso_id).map((r) => r.curso_id as string));
+      // Cursos onde o usuário dá aula (is_staff) não contam como "matriculado como aluno".
+      const enrolledCursoIds = new Set(rows.filter((r) => r.curso_id && !r.is_staff).map((r) => r.curso_id as string));
       const cursoIds = [...new Set([...enrolledCursoIds, ...(ctRows ?? []).map((r) => r.curso_id)])];
 
       // faixa/capa_url ainda não estão no schema gerado

@@ -34,19 +34,22 @@ export default function ComunidadeGestao() {
     (async () => {
       // is_staff ainda não está no schema gerado
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('is_staff', true);
-      const turmaIds = [...new Set<string>((ut ?? []).map((r: { turma_id: string }) => r.turma_id))];
+      const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id).eq('is_staff', true);
+      // Só os pares turma+curso onde o usuário realmente dá aula — não a turma inteira.
+      const pares = ((ut ?? []) as { turma_id: string; curso_id: string | null }[]).filter((r) => r.curso_id);
+      const turmaIds = [...new Set(pares.map((r) => r.turma_id))];
       if (!turmaIds.length) { setPairs([]); setLoading(false); return; }
       const [{ data: turmas }, { data: cts }] = await Promise.all([
         supabase.from('turmas').select('id,nome').in('id', turmaIds),
         supabase.from('curso_turmas').select('turma_id,curso_id').in('turma_id', turmaIds),
       ]);
-      const cursoIds = [...new Set((cts ?? []).map((r) => r.curso_id))];
+      const cursoIds = [...new Set(pares.map((r) => r.curso_id as string))];
       const { data: cursos } = cursoIds.length ? await supabase.from('cursos').select('id,titulo').in('id', cursoIds) : { data: [] };
       const turmaMap = new Map((turmas ?? []).map((t) => [t.id, t]));
       const cursoMap = new Map((cursos ?? []).map((c) => [c.id, c]));
-      setPairs((cts ?? []).filter((r) => turmaMap.has(r.turma_id) && cursoMap.has(r.curso_id))
-        .map((r) => ({ turmaId: r.turma_id, turmaNome: turmaMap.get(r.turma_id)!.nome, cursoId: r.curso_id, cursoTitulo: cursoMap.get(r.curso_id)!.titulo }))
+      const cursoTurmaValido = new Set((cts ?? []).map((r) => `${r.turma_id}:${r.curso_id}`));
+      setPairs(pares.filter((r) => turmaMap.has(r.turma_id) && cursoMap.has(r.curso_id as string) && cursoTurmaValido.has(`${r.turma_id}:${r.curso_id}`))
+        .map((r) => ({ turmaId: r.turma_id, turmaNome: turmaMap.get(r.turma_id)!.nome, cursoId: r.curso_id as string, cursoTitulo: cursoMap.get(r.curso_id as string)!.titulo }))
         .sort((a, b) => a.turmaNome.localeCompare(b.turmaNome) || a.cursoTitulo.localeCompare(b.cursoTitulo)));
       setLoading(false);
     })();

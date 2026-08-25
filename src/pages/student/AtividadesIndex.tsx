@@ -21,11 +21,14 @@ export default function AtividadesIndex() {
   useEffect(() => {
     if (!profile) { setLoading(false); return; }
     (async () => {
-      const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
-      const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null }[];
+      // is_staff ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ut } = await (supabase as any).from('user_turmas').select('turma_id,curso_id,is_staff').eq('user_id', profile.id);
+      const pairs = (ut ?? []) as { turma_id: string; curso_id: string | null; is_staff?: boolean }[];
       const turmaIds = [...new Set(pairs.map((p) => p.turma_id))];
       if (!turmaIds.length) { setBlocks([]); setLoading(false); return; }
-      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id).map((p) => p.curso_id as string));
+      // Cursos onde o usuário dá aula (is_staff) não contam como "matriculado como aluno".
+      const enrolledCursoIds = new Set(pairs.filter((p) => p.curso_id && !p.is_staff).map((p) => p.curso_id as string));
 
       // Todos os cursos das turmas do aluno — os que ele não está matriculado
       // especificamente aparecem bloqueados.
