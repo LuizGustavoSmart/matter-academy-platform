@@ -844,6 +844,7 @@ export type Database = {
           curso_id: string | null
           id: string
           is_embaixador: boolean
+          is_staff: boolean
           turma_id: string
           user_id: string
         }
@@ -851,6 +852,7 @@ export type Database = {
           curso_id?: string | null
           id?: string
           is_embaixador?: boolean
+          is_staff?: boolean
           turma_id: string
           user_id: string
         }
@@ -858,6 +860,7 @@ export type Database = {
           curso_id?: string | null
           id?: string
           is_embaixador?: boolean
+          is_staff?: boolean
           turma_id?: string
           user_id?: string
         }
