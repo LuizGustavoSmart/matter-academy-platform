@@ -345,8 +345,6 @@ export default function CronogramaIndex() {
       <header className="mb-6 text-center">
         <h1 className="mb-0.5">Cronograma</h1>
         <p className="text-fg-3 text-sm">Sua trilha de aulas — avance faixa por faixa, como num tabuleiro.</p>
-        {/* DEBUG TEMPORÁRIO */}
-        <p className="text-warning text-xs mt-2 font-mono">DEBUG currentSlotKey: {JSON.stringify(currentSlotKey)}</p>
       </header>
 
       {loading ? (
@@ -475,14 +473,20 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
           })}
         </svg>
 
-        <div
-          className="absolute z-10"
-          style={current
-            ? { left: current.centroidX, top: current.centroidY - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }
-            : { left: inicioCenter[0], top: inicioCenter[1] - TRACK_W / 2 - 16, transform: 'translate(-50%, -100%)' }}
-        >
-          <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={48} className="ring-2 ring-brand shadow-ma-2" />
-        </div>
+        {(() => {
+          // Para "Início" (sem tile próprio), avança na direção real da trilha
+          // (não um offset vertical fixo) além do raio do semicírculo, para o
+          // avatar sempre ficar visivelmente acima/antes do bloco decorativo,
+          // mesmo quando a trilha começa em diagonal e não reto para cima.
+          const avatarPos = current
+            ? [current.centroidX, current.centroidY - TRACK_W / 2 - 16]
+            : [inicioCenter[0] - track.startForward[0] * (INICIO_R + 16), inicioCenter[1] - track.startForward[1] * (INICIO_R + 16)];
+          return (
+            <div className="absolute z-10" style={{ left: avatarPos[0], top: avatarPos[1], transform: 'translate(-50%, -100%)' }}>
+              <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={48} className="ring-2 ring-brand shadow-ma-2" />
+            </div>
+          );
+        })()}
 
         {marcoCards.map((m, i) => (
           <div
