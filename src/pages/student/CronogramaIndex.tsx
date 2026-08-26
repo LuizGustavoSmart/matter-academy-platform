@@ -345,6 +345,8 @@ export default function CronogramaIndex() {
       <header className="mb-6 text-center">
         <h1 className="mb-0.5">Cronograma</h1>
         <p className="text-fg-3 text-sm">Sua trilha de aulas — avance faixa por faixa, como num tabuleiro.</p>
+        {/* DEBUG TEMPORÁRIO */}
+        <p className="text-warning text-xs mt-2 font-mono">DEBUG currentSlotKey: {JSON.stringify(currentSlotKey)}</p>
       </header>
 
       {loading ? (
