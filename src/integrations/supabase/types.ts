@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      aprovacoes: {
+        Row: {
+          aprovado: boolean
+          aprovado_em: string
+          aprovado_por: string | null
+          atualizado_em: string
+          curso_id: string
+          id: string
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          aprovado?: boolean
+          aprovado_em?: string
+          aprovado_por?: string | null
+          atualizado_em?: string
+          curso_id: string
+          id?: string
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          aprovado?: boolean
+          aprovado_em?: string
+          aprovado_por?: string | null
+          atualizado_em?: string
+          curso_id?: string
+          id?: string
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aprovacoes_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       atividade_envios: {
         Row: {
           aluno_id: string
