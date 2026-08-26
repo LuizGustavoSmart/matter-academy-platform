@@ -12,6 +12,7 @@ import { uploadAulaCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from './CursoAtividadesTab';
 import CursoPresencaTab, { PresencaAulaModal } from './CursoPresencaTab';
+import CursoAprovacoesTab from './CursoAprovacoesTab';
 import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
@@ -19,7 +20,7 @@ type Curso = { id: string; titulo: string; descricao: string | null; link_ao_viv
 export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
-type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca' | 'alunos';
+type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca' | 'aprovacoes' | 'alunos';
 type Professor = { id: string; nome: string | null; email: string };
 type CursoTurmaInfo = {
   data_inicio: string | null; data_fim: string | null; professor_id: string | null;
@@ -202,7 +203,7 @@ export default function CursoDetalhe() {
       />
 
       <Tabs className="mb-6" value={tab} onChange={setTab}
-        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'atividades', label: 'Atividades' }, { value: 'presenca', label: 'Presença' }, { value: 'alunos', label: 'Alunos' }]} />
+        tabs={[{ value: 'dashboard', label: 'Dashboard' }, { value: 'aulas', label: 'Aulas', count: aulaCount }, { value: 'atividades', label: 'Atividades' }, { value: 'presenca', label: 'Presença' }, { value: 'aprovacoes', label: 'Aprovações' }, { value: 'alunos', label: 'Alunos' }]} />
 
       {/* DASHBOARD */}
       {tab === 'dashboard' && (dashLoading ? (
@@ -287,6 +288,9 @@ export default function CursoDetalhe() {
 
       {/* PRESENÇA */}
       {tab === 'presenca' && <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} />}
+
+      {/* APROVAÇÕES */}
+      {tab === 'aprovacoes' && <CursoAprovacoesTab turmaId={turmaId!} cursoId={cursoId!} />}
 
       {/* ALUNOS */}
       {tab === 'alunos' && (

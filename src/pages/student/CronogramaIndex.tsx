@@ -296,12 +296,20 @@ export default function CronogramaIndex() {
 
       const { data: ps } = await supabase.from('progresso').select('aula_id,concluido').eq('user_id', profile.id).eq('concluido', true);
       const doneSet = new Set((ps ?? []).map((p) => p.aula_id));
+      // aprovacoes ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: aprov } = cursoIdsReais.length
+        ? await (supabase as any).from('aprovacoes').select('curso_id').eq('user_id', profile.id).eq('aprovado', true).in('curso_id', cursoIdsReais)
+        : { data: [] };
+      const aprovadoSet = new Set(((aprov ?? []) as { curso_id: string }[]).map((a) => a.curso_id));
 
       // O avatar fica na aula mais avançada já concluída (não na "próxima
       // pendente") — por isso percorremos tudo em ordem e guardamos a última
       // marcada como feita, em vez de parar no primeiro slot incompleto.
-      // Se nada foi concluído ainda, `lastDoneKey` continua null e o avatar
-      // cai no bloco decorativo "Início", antes da primeira casa.
+      // Se o aluno foi aprovado numa faixa, o avatar avança até a casa de
+      // graduação (capa) daquele curso, mesmo que nem todas as aulas estejam
+      // marcadas como concluídas. Se nada foi concluído/aprovado ainda,
+      // `lastDoneKey` continua null e o avatar cai no bloco "Início".
       let lastDoneKey: string | null = null;
       const map: Record<string, Slot[]> = {};
       for (const curso of cursosOrdenados) {
@@ -319,6 +327,7 @@ export default function CronogramaIndex() {
           if (done) lastDoneKey = `${curso.id}:${ordem}`;
         }
         map[curso.id] = slots;
+        if (aprovadoSet.has(curso.id)) lastDoneKey = `${curso.id}:capa`;
       }
       const currentKey = lastDoneKey;
 
@@ -333,12 +342,13 @@ export default function CronogramaIndex() {
   }, [profile, faixaCapas]);
 
   useEffect(() => {
-    if (loading || scrolledRef.current || !currentSlotKey) return;
+    if (loading || scrolledRef.current || cursos.length === 0) return;
     scrolledRef.current = true;
     requestAnimationFrame(() => {
-      document.getElementById(`slot-${currentSlotKey}`)?.scrollIntoView({ block: 'center' });
+      const id = currentSlotKey ? `slot-${currentSlotKey}` : 'slot-inicio';
+      document.getElementById(id)?.scrollIntoView({ block: 'center' });
     });
-  }, [loading, currentSlotKey]);
+  }, [loading, currentSlotKey, cursos.length]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -404,7 +414,11 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
     marcoCards.push({ y: tile.centroidY, side, marco: tile.item.marco, tileEdgeX: ex, tileEdgeY: ey });
   });
 
-  const current = track.tiles.find((t) => t.item.type === 'aula' && `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey);
+  const current = track.tiles.find((t) => {
+    if (t.item.type === 'aula') return `${t.item.curso.id}:${t.item.slot.ordem}` === currentSlotKey;
+    if (t.item.type === 'capa') return `${t.item.curso.id}:capa` === currentSlotKey;
+    return false;
+  });
 
   // Centro do bloco "Início" — reaproveitado tanto pelo desenho decorativo
   // quanto pela posição do avatar quando nenhuma aula foi concluída ainda.
@@ -444,7 +458,7 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
               inicioCenter[1] - track.startForward[1] * INICIO_R * 0.5,
             ];
             return (
-              <g>
+              <g id="slot-inicio">
                 <path d={semicirclePath(inicioCenter, INICIO_R, track.startForward)} className="fill-brand/25 stroke-brand" strokeWidth={2} />
                 <text x={labelCenter[0]} y={labelCenter[1]} textAnchor="middle" dominantBaseline="middle" className="fill-fg text-[18px] font-bold">
                   Início
@@ -534,7 +548,7 @@ function TileShape({ tile, capaUrls, isCurrent, nav }: {
     // trecho (forçado a ficar horizontal), então encosta perfeitamente nas
     // casas vizinhas, sem sobrepor nem deixar vão.
     return (
-      <g>
+      <g id={`slot-${item.curso.id}:capa`}>
         <defs><clipPath id={clipId}><rect x={rx} y={ry} width={w} height={h} rx={CAPA_RX} /></clipPath></defs>
         <rect x={rx} y={ry} width={w} height={h} rx={CAPA_RX} className={FAIXA_CAPA_FILL[item.curso.faixa ?? ''] ?? 'fill-panel-3'} />
         {url && (

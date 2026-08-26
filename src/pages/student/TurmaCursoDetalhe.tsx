@@ -9,11 +9,12 @@ import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from '../admin/CursoAtividadesTab';
 import CursoPresencaTab from '../admin/CursoPresencaTab';
+import CursoAprovacoesTab from '../admin/CursoAprovacoesTab';
 import { AulaModal, type Aula } from '../admin/CursoDetalhe';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null };
-type Tab = 'dashboard' | 'aulas' | 'atividades' | 'duvidas' | 'presenca' | 'alunos';
+type Tab = 'dashboard' | 'aulas' | 'atividades' | 'duvidas' | 'presenca' | 'aprovacoes' | 'alunos';
 type Duvida = { id: string; titulo: string; status: 'aberta' | 'resolvida'; created_at: string; alunoNome: string | null; alunoEmail: string };
 type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssistidas: number; atividadesEnviadas: number };
 type NextAula = { titulo: string; dataHora: string; linkAoVivo: string | null; started: boolean };
@@ -264,6 +265,7 @@ export default function TurmaCursoDetalhe() {
     { value: 'atividades' as const, label: 'Atividades' },
     ...(isEmbaixador ? [{ value: 'duvidas' as const, label: 'Dúvidas' }] : []),
     { value: 'presenca' as const, label: 'Presença' },
+    { value: 'aprovacoes' as const, label: 'Aprovações' },
     ...(isEmbaixador ? [{ value: 'alunos' as const, label: 'Alunos' }] : []),
   ];
 
@@ -400,6 +402,7 @@ export default function TurmaCursoDetalhe() {
           ? <PresencaBarList turmaId={turmaId!} cursoId={cursoId!} turmaNome={turma?.nome ?? ''} alunosCount={alunosCount} />
           : <CursoPresencaTab turmaId={turmaId!} cursoId={cursoId!} />
       )}
+      {tab === 'aprovacoes' && <CursoAprovacoesTab turmaId={turmaId!} cursoId={cursoId!} readOnly={isEmbaixador} />}
 
       {tab === 'duvidas' && (
         <div>
