@@ -240,7 +240,7 @@ export async function parsePresencaSheet(file: File): Promise<PlanilhaPresenca> 
 
   const nCols = Math.max(headers.length, ...corpo.map((r) => r.length), 0);
   const headersFinais = Array.from({ length: nCols }, (_, i) => headers[i] || `Coluna ${i + 1}`);
-  const map = mapeiaColunas(headerIdx >= 0 ? headersFinais.map((h, i) => headers[i] ?? '') : [], corpo);
+  const map = mapeiaColunas(headerIdx >= 0 ? Array.from({ length: nCols }, (_, i) => headers[i] ?? '') : [], corpo);
 
   return { headers: headersFinais, rows: corpo, map };
 }
