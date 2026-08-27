@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, ChevronRight } 
 import { supabase } from '../../lib/supabase';
 import { Button, Card, Modal, Empty, Toast } from '../../components/ui';
 import { getYouTubeId } from '../../lib/youtube';
+import { notify, studentsOfTurmaCurso } from '../../lib/notify';
 
 type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number };
 type Turma = { id: string; nome: string };
@@ -130,6 +131,7 @@ export default function AdminCursoAulas() {
       <AulaModal
         open={createOpen}
         aula={null}
+        turmaId={turmaId!}
         cursoId={cursoId!}
         nextOrdem={maxOrdem + 1}
         onClose={() => setCreateOpen(false)}
@@ -138,6 +140,7 @@ export default function AdminCursoAulas() {
       <AulaModal
         open={!!editOpen}
         aula={editOpen}
+        turmaId={turmaId!}
         cursoId={cursoId!}
         nextOrdem={maxOrdem + 1}
         onClose={() => setEditOpen(null)}
@@ -150,9 +153,9 @@ export default function AdminCursoAulas() {
 }
 
 function AulaModal({
-  open, aula, cursoId, nextOrdem, onClose, onDone,
+  open, aula, turmaId, cursoId, nextOrdem, onClose, onDone,
 }: {
-  open: boolean; aula: Aula | null; cursoId: string; nextOrdem: number;
+  open: boolean; aula: Aula | null; turmaId: string; cursoId: string; nextOrdem: number;
   onClose: () => void; onDone: () => void;
 }) {
   const [titulo, setTitulo] = useState('');
@@ -181,7 +184,14 @@ function AulaModal({
       : await supabase.from('aulas').insert(payload);
     setLoading(false);
     if (error) setErr(error.message);
-    else onDone();
+    else {
+      if (!aula) {
+        studentsOfTurmaCurso(turmaId, cursoId).then((students) =>
+          notify('nova_aula', students, 'Nova aula disponível', `A aula "${titulo.trim()}" foi publicada.`, `/curso/${cursoId}`),
+        );
+      }
+      onDone();
+    }
   };
 
   return (

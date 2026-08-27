@@ -39,7 +39,13 @@ const C = {
 const FONT = "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif";
 
 
-export type EmailKind = "invite" | "reinvite" | "reset";
+export type EmailKind =
+  | "invite" | "reinvite" | "reset"
+  | "nova_aula" | "nova_atividade" | "atividade_corrigida" | "nova_submissao";
+
+const NOTIFICATION_KINDS = new Set<EmailKind>([
+  "nova_aula", "nova_atividade", "atividade_corrigida", "nova_submissao",
+]);
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrador",
@@ -280,6 +286,9 @@ export type BuildInput = {
   nome?: string | null;
   role?: string | null;
   expires_at?: string | null;
+  /** Usados apenas pelos tipos de notificação (nova_aula, nova_atividade, ...). */
+  titulo?: string;
+  mensagem?: string;
 };
 
 export function buildEmail(i: BuildInput): { subject: string; html: string; text: string } {
@@ -287,6 +296,33 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
   const saudacao = nome ? `Olá, ${escapeHtml(nome)}` : "Olá";
   const papel = ROLE_LABEL[(i.role ?? "").toLowerCase()] ?? "Aluno";
   const prazo = formatDeadline(i.expires_at);
+
+  if (NOTIFICATION_KINDS.has(i.kind)) {
+    const titulo = i.titulo ?? "Nova notificação";
+    const mensagem = i.mensagem ?? "";
+    return {
+      subject: titulo,
+      html: layout({
+        preheader: mensagem,
+        eyebrow: "Notificação",
+        title: titulo,
+        lead: `${saudacao}. ${escapeHtml(mensagem)}`,
+        ctaLabel: "Ver no painel",
+        link: i.link,
+        deadlineNote: "",
+        footerNote: "Você recebeu este e-mail porque tem uma conta ativa na Matter Academy.",
+      }),
+      text: [
+        `${nome ? `Olá, ${nome}.` : "Olá."}`,
+        "",
+        mensagem,
+        "",
+        i.link,
+        "",
+        "Matter Academy · Plataforma de ensino",
+      ].join("\n"),
+    };
+  }
 
   if (i.kind === "reset") {
     const deadlineNote = prazo
@@ -419,4 +455,9 @@ export async function sendTransactionalEmail(input: BuildInput): Promise<SendRes
 /** Monta a URL pública de ativação/redefinição a partir do token. */
 export function buildLink(path: "ativar" | "redefinir-senha", token: string): string {
   return `${PUBLIC_APP_URL}/${path}?token=${token}`;
+}
+
+/** Monta a URL pública a partir de um caminho relativo (ex.: "/atividade/123"). */
+export function buildAppUrl(relativePath: string): string {
+  return `${PUBLIC_APP_URL}${relativePath.startsWith("/") ? "" : "/"}${relativePath}`;
 }

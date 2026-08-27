@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
+import { NotificationBell } from '../components/NotificationBell';
 import { Avatar, Breadcrumbs, cn } from '../components/ui';
 import type { Crumb } from '../components/ui';
 import { fadeScrim, popIn, slideFromLeft } from '../components/ui/motion';
@@ -245,8 +246,11 @@ function SidebarInner({
 
       <NavList nav={nav} collapsed={collapsed} onNavigate={onNavigate} />
 
-      {/* Rodapé — perfil */}
+      {/* Rodapé — notificações + perfil */}
       <div className="border-t border-line p-2.5 flex-shrink-0">
+        <div className={cn('flex items-center mb-1.5', collapsed ? 'justify-center' : 'justify-end')}>
+          <NotificationBell />
+        </div>
         <ProfileMenu collapsed={collapsed} />
       </div>
     </div>
@@ -307,6 +311,9 @@ export default function AppShell({
             <Menu className="w-5 h-5" />
           </button>
           <Logo height={22} className="mix-blend-screen" />
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
         </header>
 
         <main className={cn('flex-1 min-w-0 overflow-x-hidden', contentPadded && 'px-4 sm:px-6 lg:px-8 py-5 sm:py-7')}>

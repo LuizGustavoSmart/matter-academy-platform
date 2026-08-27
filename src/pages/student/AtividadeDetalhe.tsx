@@ -8,6 +8,7 @@ import { Button, Card, Badge, Avatar, Modal, Skeleton, EmptyState, Field, Input,
 import { PageHeader } from '../../layouts/AppShell';
 import { FileLink } from '../../components/FileLink';
 import { isStaffOfTurma } from '../../lib/turmaStaff';
+import { notify, staffOfTurmaCurso } from '../../lib/notify';
 
 type Atividade = {
   id: string; turma_id: string; curso_id: string | null; aula_id: string | null;
@@ -96,6 +97,12 @@ export default function AtividadeDetalhe() {
       const { error } = await supabase.from('atividade_envios').upsert({ atividade_id: atividade.id, aluno_id: profile.id, arquivo_url, arquivo_nome, texto: texto.trim() || null, enviado_em: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'atividade_id,aluno_id' });
       if (error) throw error;
       toast.success('Atividade enviada.'); setFile(null); await loadAluno(atividade);
+      if (atividade.curso_id) {
+        const nomeAluno = profile.nome || profile.email;
+        staffOfTurmaCurso(atividade.turma_id, atividade.curso_id).then((staff) =>
+          notify('nova_submissao', staff, 'Nova entrega de atividade', `${nomeAluno} enviou a atividade "${atividade.titulo}".`, `/atividade/${atividade.id}`),
+        );
+      }
     } catch (e) { toast.error((e as Error).message); } finally { setUploading(false); }
   };
 
@@ -107,6 +114,10 @@ export default function AtividadeDetalhe() {
       const { error } = await supabase.from('atividade_envios').upsert({ atividade_id: atividade.id, aluno_id: alunoId, nota: draft.nota === '' ? null : parseFloat(draft.nota), comentario_professor: draft.comentario.trim() || null, corrigido_em: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'atividade_id,aluno_id' });
       if (error) throw error;
       toast.success('Correção salva.'); setSelectedAluno(null); await loadProfessor(atividade);
+      const aluno = alunos.find((al) => al.id === alunoId);
+      if (aluno) {
+        notify('atividade_corrigida', [{ user_id: aluno.id, email: aluno.email, nome: aluno.nome }], 'Atividade corrigida', `Sua atividade "${atividade.titulo}" foi corrigida.`, `/atividade/${atividade.id}`);
+      }
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(null); }
   };
 

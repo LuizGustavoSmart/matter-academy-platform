@@ -7,6 +7,7 @@ import {
 } from '../../components/ui';
 import { FileLink } from '../../components/FileLink';
 import CriarAtividadeModal, { type AtividadeEditavel } from '../student/CriarAtividadeModal';
+import { notify, studentsOfTurmaCurso } from '../../lib/notify';
 
 type Atividade = AtividadeEditavel & { publicada: boolean; ordem: number };
 type Envio = { id?: string; arquivo_url: string | null; arquivo_nome: string | null; texto: string | null; enviado_em: string | null; nota: number | null; comentario_professor: string | null; corrigido_em: string | null };
@@ -55,11 +56,19 @@ export default function CursoAtividadesTab({ turmaId, cursoId, readOnly = false 
   useEffect(() => { load(); }, [turmaId, cursoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePublicada = async (a: Atividade) => {
-    setAtividades((prev) => prev.map((x) => (x.id === a.id ? { ...x, publicada: !a.publicada } : x)));
+    const next = !a.publicada;
+    setAtividades((prev) => prev.map((x) => (x.id === a.id ? { ...x, publicada: next } : x)));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from('atividades').update({ publicada: !a.publicada }).eq('id', a.id);
+    const { error } = await (supabase as any).from('atividades').update({ publicada: next }).eq('id', a.id);
     if (error) { toast.error(error.message); load(); }
-    else toast.success(a.publicada ? 'Atividade ocultada dos alunos.' : 'Atividade liberada para os alunos.');
+    else {
+      toast.success(next ? 'Atividade liberada para os alunos.' : 'Atividade ocultada dos alunos.');
+      if (next) {
+        studentsOfTurmaCurso(turmaId, cursoId).then((students) =>
+          notify('nova_atividade', students, 'Nova atividade disponível', `A atividade "${a.titulo}" foi publicada.`, `/atividade/${a.id}`),
+        );
+      }
+    }
   };
 
   const moveAtividade = async (a: Atividade, dir: -1 | 1) => {
@@ -213,6 +222,10 @@ function GradeModal({ atividade, alunos, envios, readOnly = false, onClose, onSa
       }, { onConflict: 'atividade_id,aluno_id' });
       if (error) throw error;
       toast.success('Correção salva.'); setSelectedAluno(null); onSaved();
+      const aluno = alunos.find((al) => al.id === alunoId);
+      if (aluno) {
+        notify('atividade_corrigida', [{ user_id: aluno.id, email: aluno.email, nome: aluno.nome }], 'Atividade corrigida', `Sua atividade "${atividade.titulo}" foi corrigida.`, `/atividade/${atividade.id}`);
+      }
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(null); }
   };
 
