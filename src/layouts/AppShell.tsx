@@ -286,9 +286,9 @@ function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () =>
 
 /* ══════════════════════════════ Sidebar ═══════════════════════════════ */
 function SidebarInner({
-  nav, area, collapsed, onToggleCollapse, onNavigate, showClose, onClose,
+  nav, collapsed, onToggleCollapse, onNavigate, showClose, onClose,
 }: {
-  nav: NavGroup[]; area: string; collapsed: boolean;
+  nav: NavGroup[]; collapsed: boolean;
   onToggleCollapse?: () => void; onNavigate?: () => void; showClose?: boolean; onClose?: () => void;
 }) {
   return (
