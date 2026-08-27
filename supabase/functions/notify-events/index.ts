@@ -23,10 +23,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Qualquer usuário autenticado e ativo pode disparar notificações — a lista
- * de destinatários já vem restrita pelo front-end (alunos/professores da
- * turma em questão); esta função só valida que a chamada tem uma sessão
- * válida, para não virar um endpoint de spam anônimo. */
 async function requireActiveUser(req: Request) {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace("Bearer ", "");
