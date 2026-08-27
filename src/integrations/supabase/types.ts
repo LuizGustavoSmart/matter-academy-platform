@@ -539,6 +539,7 @@ export type Database = {
           faixa: string | null
           id: string
           link_ao_vivo: string | null
+          observacao: string | null
           titulo: string
         }
         Insert: {
@@ -549,6 +550,7 @@ export type Database = {
           faixa?: string | null
           id?: string
           link_ao_vivo?: string | null
+          observacao?: string | null
           titulo: string
         }
         Update: {
@@ -559,6 +561,7 @@ export type Database = {
           faixa?: string | null
           id?: string
           link_ao_vivo?: string | null
+          observacao?: string | null
           titulo?: string
         }
         Relationships: []
@@ -918,6 +921,7 @@ export type Database = {
           descricao: string | null
           id: string
           nome: string
+          observacao: string | null
           tipo_cobranca: string | null
           valor: number | null
         }
@@ -929,6 +933,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome: string
+          observacao?: string | null
           tipo_cobranca?: string | null
           valor?: number | null
         }
@@ -940,6 +945,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          observacao?: string | null
           tipo_cobranca?: string | null
           valor?: number | null
         }
