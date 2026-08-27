@@ -14,16 +14,8 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Matter Academy <onboarding@resend.dev>";
 const EMAIL_REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "";
 const PUBLIC_APP_URL = (Deno.env.get("PUBLIC_APP_URL") ?? "https://plataforma.matteracademy.ai").replace(/\/$/, "");
-// Faixa do cabeçalho já "assada" com fundo preto sólido opaco: é uma imagem
-// raster única, sem transparência e sem CSS de fundo por trás. Um cliente de
-// e-mail não tem "cor de fundo" para reescrever num <img> opaco — a defesa
-// contra o auto-dark-mode do Outlook deixa de depender de CSS aqui.
 const BANNER_URL = Deno.env.get("EMAIL_BANNER_URL") ?? `${PUBLIC_APP_URL}/logos/matter-academy-email-banner.png`;
 
-/* ───────────────────────────── Tokens visuais ─────────────────────────────
- * Base clara (híbrido neutro): o corpo do e-mail é claro, previsível em
- * qualquer cliente. A marca aparece na faixa do cabeçalho, que é a imagem
- * BANNER_URL (fundo preto + logo já compostos), não CSS. */
 const C = {
   canvas: "#f1f3f5",
   panel: "#ffffff",
@@ -64,7 +56,6 @@ function firstName(nome?: string | null, email?: string): string {
   return (email ?? "").split("@")[0] || "";
 }
 
-/** "12/08/2026 às 14h30" no fuso de São Paulo. */
 function formatDeadline(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -77,24 +68,11 @@ function formatDeadline(iso?: string | null): string {
   return `${get("day")}/${get("month")}/${get("year")} às ${get("hour")}h${get("minute")}`;
 }
 
-/* ────────────────────────────── Blocos de HTML ───────────────────────────── */
-
-/**
- * Fundo à prova do "auto dark mode" dos clientes de e-mail.
- *
- * Outlook.com, novo Outlook e Outlook mobile reescrevem `background-color`
- * quando o usuário está em tema escuro — inclusive clareando preto para um
- * cinza próprio, que é exatamente o bug relatado. Eles NÃO reescrevem
- * `background-image`, então um gradiente de cor única pinta a cor real por
- * cima da substituição. O `bgcolor=` no atributo cobre o Outlook desktop
- * (engine do Word), que ignora background via CSS.
- */
 function bg(color: string, important = false): string {
   const w = important ? " !important" : "";
   return `background-color:${color}${w};background-image:linear-gradient(${color},${color})${w};`;
 }
 
-/** Classes de fundo e de texto, usadas no HTML e nas regras de defesa. */
 const BG_CLASSES: [string, string][] = [
   ["ma-canvas", C.canvas],
   ["ma-panel", C.panel],
@@ -109,15 +87,6 @@ const FG_CLASSES: [string, string][] = [
   ["ma-brand", C.accentInk],
 ];
 
-
-/**
- * Regras que devolvem as cores da marca quando o cliente tenta convertê-las.
- *
- * O Outlook injeta `data-ogsb`/`data-ogsc` (original get style background/color)
- * nos elementos cujo background/cor ele trocou. Cobrimos as duas formas — no
- * próprio elemento e em um ancestral — porque varia conforme a versão. Geradas
- * a partir das mesmas constantes do HTML para não haver divergência.
- */
 function darkModeGuardCss(): string {
   const sel = (c: string) =>
     `.${c},[data-ogsb] .${c},.${c}[data-ogsb],[data-ogsc] .${c},.${c}[data-ogsc]`;
@@ -134,41 +103,40 @@ function darkModeGuardCss(): string {
   return `${rules}\n  @media (prefers-color-scheme: dark) {\n${media}\n  }`;
 }
 
-/** Botão compatível com Outlook (VML) e demais clientes. */
 function ctaButton(href: string, label: string): string {
   return `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-  <tr><td align="center">
-    <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-      href="${href}" style="height:50px;v-text-anchor:middle;width:300px;" arcsize="24%" stroke="f" fillcolor="${C.brand}">
-      <w:anchorlock/>
-      <center style="color:${C.ink};font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${label}</center>
-    </v:roundrect>
-    <![endif]-->
-    <!--[if !mso]><!-- -->
-    <a href="${href}" target="_blank" class="ma-cta"
-      style="display:inline-block;${bg(C.brand)}color:${C.ink};font-family:${FONT};font-size:15px;font-weight:700;line-height:50px;text-align:center;text-decoration:none;width:300px;border-radius:12px;letter-spacing:0.01em;">${label}</a>
-    <!--<![endif]-->
-  </td></tr>
-</table>`;
+    <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate;line-height:100%;margin:0 auto;width:auto">
+      <tr>
+        <td align="center" bgcolor="${C.brand}" class="ma-cta" role="presentation" style="${bg(C.brand)}border:none;border-radius:10px;cursor:auto;height:48px;mso-padding-alt:0 28px" valign="middle">
+          <a href="${escapeHtml(href)}" style="display:inline-block;color:${C.ink};font-family:${FONT};font-size:15px;font-weight:700;line-height:48px;text-decoration:none;padding:0 28px;mso-text-raise:0" target="_blank">
+            ${escapeHtml(label)}
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
 }
 
 function highlightRow(icon: string, title: string, desc: string): string {
   return `
-<tr>
-  <td style="padding:0 0 14px 0;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-      <tr>
-        <td width="34" valign="top" style="font-size:18px;line-height:22px;">${icon}</td>
-        <td valign="top" style="font-family:${FONT};">
-          <div class="ma-fg" style="color:${C.fg};font-size:14px;font-weight:600;line-height:20px;">${title}</div>
-          <div class="ma-fg3" style="color:${C.fg3};font-size:13px;line-height:19px;margin-top:2px;">${desc}</div>
-        </td>
-      </tr>
-    </table>
-  </td>
-</tr>`;
+  <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%" style="border-collapse:collapse">
+    <tr>
+      <td style="padding:10px 0;vertical-align:top;width:28px">
+        <p class="ma-fg3" style="margin:0;font-family:${FONT};font-size:14px;line-height:20px;color:${C.fg3}">
+          ${icon}
+        </p>
+      </td>
+      <td style="padding:10px 0 10px 12px;vertical-align:top">
+        <p class="ma-fg" style="margin:0 0 2px;font-family:${FONT};font-size:15px;line-height:20px;font-weight:700;color:${C.fg}">
+          ${escapeHtml(title)}
+        </p>
+        <p class="ma-fg2" style="margin:0;font-family:${FONT};font-size:14px;line-height:20px;color:${C.fg2}">
+          ${escapeHtml(desc)}
+        </p>
+      </td>
+    </tr>
+  </table>
+  `;
 }
 
 type LayoutInput = {
@@ -184,100 +152,135 @@ type LayoutInput = {
 };
 
 function layout(i: LayoutInput): string {
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" lang="pt-BR">
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="x-apple-disable-message-reformatting" />
-<meta name="color-scheme" content="only light" />
-<meta name="supported-color-schemes" content="light" />
-<title>${escapeHtml(i.title)}</title>
-<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
-<style>
-  /* Base clara declarada como "light only": nenhum cliente precisa converter
-     nada. Onde converte mesmo assim, valem as regras abaixo somadas ao
-     gradiente aplicado por bg() em cada elemento. */
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${escapeHtml(i.title)}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    /* Reset */
+    body, table, td, p, a, li, blockquote { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+    /* Dark-mode guard */
 ${darkModeGuardCss()}
-</style>
+    @media only screen and (max-width: 620px) {
+      .ma-wrapper { width: 100% !important; max-width: 100% !important; }
+      .ma-pad { padding-left: 20px !important; padding-right: 20px !important; }
+    }
+  </style>
 </head>
-<body class="ma-canvas" style="margin:0;padding:0;${bg(C.canvas)}" bgcolor="${C.canvas}">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">${escapeHtml(i.preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
+<body class="ma-canvas" style="margin:0;padding:0;${bg(C.canvas)}font-family:${FONT};color:${C.fg}">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">
+    ${escapeHtml(i.preheader)}​​​​​​​​​​
+  </div>
+  <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%" class="ma-canvas" style="border-collapse:collapse;${bg(C.canvas)}">
+    <tr>
+      <td align="center" valign="top" style="padding:24px 0">
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-canvas" style="${bg(C.canvas)}" bgcolor="${C.canvas}">
-<tr><td align="center" class="ma-canvas" style="padding:32px 16px 48px 16px;${bg(C.canvas)}" bgcolor="${C.canvas}">
+        <!-- Header -->
+        <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="600" class="ma-wrapper" style="border-collapse:collapse;max-width:600px;width:100%">
+          <tr>
+            <td align="center" style="padding:0 0 16px 0">
+              <a href="${PUBLIC_APP_URL}" target="_blank" style="text-decoration:none">
+                <img src="${BANNER_URL}" alt="Matter Academy" width="600" height="auto" style="display:block;width:100%;max-width:600px;height:auto;border:0;border-radius:14px" class="ma-panel">
+              </a>
+            </td>
+          </tr>
+        </table>
 
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;">
+        <!-- Card -->
+        <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="600" class="ma-wrapper ma-panel" style="border-collapse:collapse;max-width:600px;width:100%;${bg(C.panel)}border-radius:16px;overflow:hidden">
+          <tr>
+            <td class="ma-pad" style="padding:36px 40px 28px 40px">
 
-    <!-- Card -->
-    <tr><td>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ma-panel"
-        style="${bg(C.panel)}border:1px solid ${C.line};border-radius:16px;overflow:hidden;" bgcolor="${C.panel}">
+              <p class="ma-fg3" style="margin:0 0 8px;font-family:${FONT};font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.fg3}">
+                ${escapeHtml(i.eyebrow)}
+              </p>
 
-        <!-- Faixa da marca: imagem única (fundo preto + logo já compostos),
-             sem CSS de fundo por trás — nada aqui para o cliente reescrever. -->
-        <tr><td style="padding:0;line-height:0;font-size:0;">
-          <img src="${BANNER_URL}" alt="Matter Academy" width="600" height="170" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;" />
-        </td></tr>
+              <h1 class="ma-fg" style="margin:0 0 16px;font-family:${FONT};font-size:26px;font-weight:800;line-height:34px;color:${C.fg}">
+                ${escapeHtml(i.title)}
+              </h1>
 
-        <tr><td class="ma-accent" style="height:3px;line-height:3px;font-size:0;${bg(C.brand)}" bgcolor="${C.brand}">&nbsp;</td></tr>
+              <p class="ma-fg2" style="margin:0 0 28px;font-family:${FONT};font-size:16px;line-height:26px;color:${C.fg2}">
+                ${i.lead}
+              </p>
 
-        <tr><td class="ma-panel" style="padding:36px 40px 34px 40px;${bg(C.panel)}" bgcolor="${C.panel}">
+              ${ctaButton(i.link, i.ctaLabel)}
 
-          <p class="ma-brand" style="margin:0 0 14px 0;font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.accentInk};">${escapeHtml(i.eyebrow)}</p>
+              <p class="ma-fg3" style="margin:24px 0 0;font-family:${FONT};font-size:13px;line-height:18px;text-align:center;color:${C.fg3}">
+                ${escapeHtml(i.deadlineNote)}
+              </p>
 
-
-          <h1 class="ma-fg" style="margin:0 0 16px 0;font-family:${FONT};font-size:27px;line-height:34px;font-weight:700;color:${C.fg};letter-spacing:-0.01em;">${escapeHtml(i.title)}</h1>
-
-          <p class="ma-fg2" style="margin:0 0 30px 0;font-family:${FONT};font-size:15px;line-height:24px;color:${C.fg2};">${i.lead}</p>
-
-          ${ctaButton(i.link, i.ctaLabel)}
-
-          <p class="ma-fg3" style="margin:22px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${escapeHtml(i.deadlineNote)}</p>
-
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:30px;">
-            <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
-          </table>
-
+            </td>
+          </tr>
           ${i.highlights ? `
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:26px;">
-            ${i.highlights}
-          </table>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;">
-            <tr><td class="ma-line" style="height:1px;line-height:1px;font-size:0;${bg(C.line)}" bgcolor="${C.line}">&nbsp;</td></tr>
-          </table>` : ""}
+          <tr>
+            <td class="ma-pad ma-panel2" style="padding:28px 40px;border-top:1px solid ${C.line};${bg(C.panel2)}">
+              <p class="ma-fg" style="margin:0 0 6px;font-family:${FONT};font-size:14px;font-weight:700;color:${C.fg}">O que você encontra por aqui:</p>
+              ${i.highlights}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;height:1px;line-height:1px;font-size:1px" class="ma-line">&nbsp;</td>
+          </tr>
+          ` : ""}
+          <tr>
+            <td class="ma-pad" style="padding:22px 40px 30px 40px;border-top:1px solid ${C.line}">
+              <p class="ma-fg3" style="margin:0 0 10px;font-family:${FONT};font-size:13px;line-height:18px;color:${C.fg3}">
+                Se o botão não funcionar, copie e cole este endereço no seu navegador:
+              </p>
+              <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%" class="ma-panel2" style="border-collapse:collapse;border-radius:10px;${bg(C.panel2)}">
+                <tr>
+                  <td style="padding:12px 14px;word-break:break-all">
+                    <a href="${escapeHtml(i.link)}" class="ma-fg2" target="_blank" style="font-family:${FONT};font-size:13px;line-height:18px;color:${C.fg2};text-decoration:underline">
+                      ${escapeHtml(i.link)}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
 
-          <p class="ma-fg3" style="margin:24px 0 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};">
-            Se o botão não funcionar, copie e cole este endereço no seu navegador:
-          </p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr><td class="ma-panel2" style="${bg(C.panel2)}border:1px solid ${C.line};border-radius:8px;padding:11px 13px;" bgcolor="${C.panel2}">
-              <a href="${i.link}" target="_blank" class="ma-brand" style="font-family:Consolas,Menlo,Monaco,'Courier New',monospace;font-size:11px;line-height:17px;color:${C.accentInk};text-decoration:none;word-break:break-all;">${escapeHtml(i.link)}</a>
-            </td></tr>
-          </table>
+        <!-- Footer -->
+        <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="600" class="ma-wrapper" style="border-collapse:collapse;max-width:600px;width:100%">
+          <tr>
+            <td class="ma-pad" align="center" style="padding:22px 20px 0">
+              <p class="ma-fg3" style="margin:0 0 6px;font-family:${FONT};font-size:13px;line-height:18px;color:${C.fg3}">
+                ${i.footerNote}
+              </p>
+              <p class="ma-fg3" style="margin:0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3}">
+                Matter Academy · Plataforma de ensino
+              </p>
+              <p class="ma-fg3" style="margin:8px 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3}">
+                Esta é uma mensagem automática. Não responda a este e-mail.
+              </p>
+            </td>
+          </tr>
+        </table>
 
-        </td></tr>
-      </table>
-    </td></tr>
-
-    <!-- Rodapé -->
-    <tr><td style="padding:26px 24px 0 24px;">
-      <p class="ma-fg3" style="margin:0 0 10px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${C.fg3};text-align:center;">${i.footerNote}</p>
-      <p style="margin:0;font-family:${FONT};font-size:11px;line-height:17px;color:#5b626d;text-align:center;">
-        Matter Academy · Plataforma de ensino<br />
-        Esta é uma mensagem automática. Não responda a este e-mail.
-      </p>
-    </td></tr>
-
+      </td>
+    </tr>
   </table>
-
-</td></tr>
-</table>
 </body>
-</html>`;
+</html>
+  `;
 }
-
-/* ──────────────────────────────── Templates ─────────────────────────────── */
 
 export type BuildInput = {
   kind: EmailKind;
@@ -334,7 +337,7 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
         preheader: "Use o link abaixo para criar uma nova senha de acesso.",
         eyebrow: "Segurança da conta",
         title: "Redefina sua senha",
-        lead: `${saudacao}. Recebemos uma solicitação para redefinir a senha da conta <strong style="color:${C.fg};">${escapeHtml(i.email)}</strong>. Clique no botão abaixo para criar uma nova senha.`,
+        lead: `${saudacao}. Recebemos uma solicitação para redefinir a senha da conta ${escapeHtml(i.email)}. Clique no botão abaixo para criar uma nova senha.`,
         ctaLabel: "Criar nova senha",
         link: i.link,
         deadlineNote,
@@ -356,17 +359,16 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
   }
 
   const isReinvite = i.kind === "reinvite";
-  // O convite não tem prazo: o link só deixa de valer depois que a senha é criada.
   const deadlineNote = "Este link é pessoal e continua valendo até você definir sua senha.";
 
   const highlights =
-    highlightRow("&#9679;", "Trilhas organizadas por turma", "Seus cursos e aulas já ficam prontos no seu painel.") +
-    highlightRow("&#9679;", "Vídeo-aulas com progresso", "Retome exatamente de onde parou, em qualquer dispositivo.") +
-    highlightRow("&#9679;", "Comunidade e atividades", "Tire dúvidas, entregue atividades e acompanhe sua evolução.");
+    highlightRow("●", "Trilhas organizadas por turma", "Seus cursos e aulas já ficam prontos no seu painel.") +
+    highlightRow("●", "Vídeo-aulas com progresso", "Retome exatamente de onde parou, em qualquer dispositivo.") +
+    highlightRow("●", "Comunidade e atividades", "Tire dúvidas, entregue atividades e acompanhe sua evolução.");
 
   const lead = isReinvite
-    ? `${saudacao}. Geramos um novo link para você ativar seu acesso de <strong style="color:${C.fg};">${escapeHtml(papel)}</strong> na Matter Academy. O link enviado anteriormente deixou de ser válido.`
-    : `${saudacao}. Seu acesso de <strong style="color:${C.fg};">${escapeHtml(papel)}</strong> na plataforma da Matter Academy já está criado. Para começar, defina sua senha: leva menos de um minuto.`;
+    ? `${saudacao}. Geramos um novo link para você ativar seu acesso de ${escapeHtml(papel)} na Matter Academy. O link enviado anteriormente deixou de ser válido.`
+    : `${saudacao}. Seu acesso de ${escapeHtml(papel)} na plataforma da Matter Academy já está criado. Para começar, defina sua senha: leva menos de um minuto.`;
 
   return {
     subject: isReinvite
@@ -383,7 +385,7 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
       link: i.link,
       deadlineNote,
       highlights,
-      footerNote: `Você recebeu este e-mail porque um administrador criou um acesso para <strong style="color:${C.fg2};">${escapeHtml(i.email)}</strong>. Se não reconhece este convite, ignore esta mensagem.`,
+      footerNote: `Você recebeu este e-mail porque um administrador criou um acesso para ${escapeHtml(i.email)}. Se não reconhece este convite, ignore esta mensagem.`,
     }),
     text: [
       `${nome ? `Olá, ${nome}.` : "Olá."}`,
@@ -400,8 +402,6 @@ export function buildEmail(i: BuildInput): { subject: string; html: string; text
     ].join("\n"),
   };
 }
-
-/* ─────────────────────────────── Envio (Resend) ──────────────────────────── */
 
 export type SendResult = { ok: boolean; id?: string; error?: string };
 
@@ -452,12 +452,10 @@ export async function sendTransactionalEmail(input: BuildInput): Promise<SendRes
   }
 }
 
-/** Monta a URL pública de ativação/redefinição a partir do token. */
 export function buildLink(path: "ativar" | "redefinir-senha", token: string): string {
   return `${PUBLIC_APP_URL}/${path}?token=${token}`;
 }
 
-/** Monta a URL pública a partir de um caminho relativo (ex.: "/atividade/123"). */
 export function buildAppUrl(relativePath: string): string {
   return `${PUBLIC_APP_URL}${relativePath.startsWith("/") ? "" : "/"}${relativePath}`;
 }
