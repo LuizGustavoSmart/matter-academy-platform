@@ -13,7 +13,7 @@ export type Profile = {
 };
 
 
-type ViewAsRole = 'student' | 'professor' | 'monitor';
+export type ViewAsRole = 'student' | 'professor' | 'embaixador';
 const VIEW_AS_KEY = 'ma_view_as_role';
 
 type AuthCtx = {
@@ -24,8 +24,8 @@ type AuthCtx = {
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   isImpersonating: boolean;
-  startViewAs: (role: ViewAsRole) => void;
-  stopViewAs: () => void;
+  startViewAs: (role: ViewAsRole, turmaId: string, cursoId: string) => Promise<void>;
+  stopViewAs: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [viewAsRole, setViewAsRole] = useState<ViewAsRole | null>(() => {
     const v = sessionStorage.getItem(VIEW_AS_KEY);
-    return v === 'student' || v === 'professor' || v === 'monitor' ? v : null;
+    return v === 'student' || v === 'professor' || v === 'embaixador' ? v : null;
   });
 
   const loadProfile = async (userId: string) => {
@@ -87,12 +87,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.user) await loadProfile(session.user.id);
   };
 
-  const startViewAs = (role: ViewAsRole) => {
+  /**
+   * A simulação troca o role no cliente, mas o id continua sendo o do
+   * próprio admin — sem uma matrícula real, as telas de turma/curso
+   * apareceriam todas vazias. Por isso criamos uma linha TEMPORÁRIA em
+   * user_turmas (marcada com is_view_as_temp) para a turma/curso escolhida,
+   * removida ao encerrar a simulação.
+   */
+  const startViewAs = async (role: ViewAsRole, turmaId: string, cursoId: string) => {
     if (realProfile?.role !== 'admin') return;
+    // is_staff/is_embaixador/is_view_as_temp ainda não estão no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    await sb.from('user_turmas').delete().eq('user_id', realProfile.id).eq('is_view_as_temp', true);
+    const { error } = await sb.from('user_turmas').upsert({
+      user_id: realProfile.id, turma_id: turmaId, curso_id: cursoId,
+      is_staff: role === 'professor', is_embaixador: role === 'embaixador', is_view_as_temp: true,
+    }, { onConflict: 'user_id,turma_id,curso_id' });
+    if (error) { console.error('[startViewAs] falha ao criar matrícula temporária', error.message); return; }
     sessionStorage.setItem(VIEW_AS_KEY, role);
     setViewAsRole(role);
   };
-  const stopViewAs = () => {
+  const stopViewAs = async () => {
+    if (realProfile) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('user_turmas').delete().eq('user_id', realProfile.id).eq('is_view_as_temp', true);
+    }
     sessionStorage.removeItem(VIEW_AS_KEY);
     setViewAsRole(null);
   };

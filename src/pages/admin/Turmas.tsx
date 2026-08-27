@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, Users as UsersIcon, BookOpen, Layers, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import {
-  Button, IconButton, Card, Modal, EmptyState, Skeleton, Field, Input, Textarea, Alert,
+  Button, IconButton, Card, Modal, EmptyState, Skeleton, Field, Input, Textarea, Alert, Select, SearchInput,
   DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { staggerContainer, staggerItem } from '../../components/ui/motion';
@@ -23,6 +23,8 @@ export default function AdminTurmas() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState<Turma | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'criacao_recente' | 'criacao_antiga' | 'inicio_recente' | 'inicio_antigo' | 'mais_alunos' | 'mais_cursos'>('criacao_recente');
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +50,22 @@ export default function AdminTurmas() {
   };
   useEffect(() => { load(); }, []);
 
+  const turmasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return turmas
+      .filter((t) => !termo || t.nome.toLowerCase().includes(termo) || (t.codigo ?? '').toLowerCase().includes(termo))
+      .sort((a, b) => {
+        if (ordem === 'nome_az') return a.nome.localeCompare(b.nome);
+        if (ordem === 'nome_za') return b.nome.localeCompare(a.nome);
+        if (ordem === 'criacao_recente') return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+        if (ordem === 'criacao_antiga') return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
+        if (ordem === 'inicio_recente') return new Date(b.data_inicio ?? 0).getTime() - new Date(a.data_inicio ?? 0).getTime();
+        if (ordem === 'inicio_antigo') return new Date(a.data_inicio ?? 0).getTime() - new Date(b.data_inicio ?? 0).getTime();
+        if (ordem === 'mais_alunos') return (counts[b.id]?.alunos ?? 0) - (counts[a.id]?.alunos ?? 0);
+        return (counts[b.id]?.cursos ?? 0) - (counts[a.id]?.cursos ?? 0);
+      });
+  }, [turmas, busca, ordem, counts]);
+
   const del = async (t: Turma) => {
     const ok = await confirm({ title: 'Excluir turma', tone: 'danger', confirmLabel: 'Excluir', message: <>Excluir <strong className="text-fg">{t.nome}</strong>? Os vínculos com alunos e cursos serão removidos.</> });
     if (!ok) return;
@@ -66,8 +84,23 @@ export default function AdminTurmas() {
         <EmptyState icon={<Layers className="w-8 h-8" />} title="Nenhuma turma criada" description="Crie sua primeira turma para organizar alunos e cursos."
           action={<Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Nova turma</Button>} />
       ) : (
+        <>
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <SearchInput value={busca} onChange={setBusca} placeholder="Buscar por nome ou código..." className="flex-1" />
+            <Select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="sm:w-64">
+              <option value="criacao_recente">Criação mais recente</option>
+              <option value="criacao_antiga">Criação mais antiga</option>
+              <option value="nome_az">Nome A-Z</option>
+              <option value="nome_za">Nome Z-A</option>
+              <option value="inicio_recente">Início mais recente</option>
+              <option value="inicio_antigo">Início mais antigo</option>
+              <option value="mais_alunos">Mais alunos</option>
+              <option value="mais_cursos">Mais cursos</option>
+            </Select>
+          </div>
+          {turmasFiltradas.length === 0 ? <EmptyState icon={<Layers className="w-8 h-8" />} title="Nenhuma turma encontrada" /> : (
         <motion.div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" variants={staggerContainer} initial="hidden" animate="visible">
-          {turmas.map((t) => (
+          {turmasFiltradas.map((t) => (
             <motion.div key={t.id} variants={staggerItem}>
               <Card hoverable className="p-5 cursor-pointer hover:border-line-strong transition-colors relative group" onClick={() => nav(`/admin/turmas/${t.id}`)}>
                 <div className="absolute top-3.5 right-3.5" onClick={(e) => e.stopPropagation()}>
@@ -95,6 +128,8 @@ export default function AdminTurmas() {
             </motion.div>
           ))}
         </motion.div>
+          )}
+        </>
       )}
 
       <TurmaModal open={createOpen} turma={null} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); load(); }} />

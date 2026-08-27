@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState, ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { Menu, X, LogOut, ChevronRight, PanelLeftClose, Undo2, GraduationCap, UserCog, Eye } from 'lucide-react';
+import { useAuth, type ViewAsRole } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { NotificationBell } from '../components/NotificationBell';
-import { Avatar, Breadcrumbs, cn } from '../components/ui';
+import { Avatar, Breadcrumbs, cn, Modal, Field, Select, Button } from '../components/ui';
 import type { Crumb } from '../components/ui';
 import { fadeScrim, popIn, slideFromLeft } from '../components/ui/motion';
 
@@ -166,8 +167,12 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
 }
 
 /* ══════════════════════════ ViewAsSwitcher ═════════════════════════════ */
+const VIEW_AS_LABEL: Record<ViewAsRole, string> = { student: 'Aluno', professor: 'Professor', embaixador: 'Embaixador' };
+const VIEW_AS_ICON: Record<ViewAsRole, React.ComponentType<{ className?: string }>> = { student: GraduationCap, professor: UserCog, embaixador: Eye };
+
 function ViewAsSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { profile, isImpersonating, startViewAs, stopViewAs } = useAuth();
+  const { profile, isImpersonating, stopViewAs } = useAuth();
+  const [pickerRole, setPickerRole] = useState<ViewAsRole | null>(null);
 
   if (isImpersonating) {
     return (
@@ -192,15 +197,90 @@ function ViewAsSwitcher({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="flex-shrink-0 px-2.5 pt-2.5">
       <p className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-fg-3/80">Visualizar como</p>
-      <div className="grid grid-cols-2 gap-1.5">
-        <button onClick={() => startViewAs('student')} className="flex items-center justify-center gap-1.5 rounded-md border border-line px-2 py-2 text-xs font-medium text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors">
-          <GraduationCap className="w-3.5 h-3.5" /> Aluno
-        </button>
-        <button onClick={() => startViewAs('professor')} className="flex items-center justify-center gap-1.5 rounded-md border border-line px-2 py-2 text-xs font-medium text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors">
-          <UserCog className="w-3.5 h-3.5" /> Professor
-        </button>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(['student', 'professor', 'embaixador'] as const).map((role) => {
+          const Icon = VIEW_AS_ICON[role];
+          return (
+            <button key={role} onClick={() => setPickerRole(role)} className="flex flex-col items-center justify-center gap-1 rounded-md border border-line px-1.5 py-2 text-[11px] font-medium text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors">
+              <Icon className="w-3.5 h-3.5" /> {VIEW_AS_LABEL[role]}
+            </button>
+          );
+        })}
       </div>
+      {pickerRole && <ViewAsPickerModal role={pickerRole} onClose={() => setPickerRole(null)} />}
     </div>
+  );
+}
+
+/** Escolhe a turma+curso usados como contexto da simulação — sem isso o
+ * admin (mesmo id, sem matrícula real) veria tudo vazio nas telas de
+ * turma/curso. */
+function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () => void }) {
+  const { startViewAs } = useAuth();
+  const [turmas, setTurmas] = useState<{ id: string; nome: string }[]>([]);
+  const [cursosByTurma, setCursosByTurma] = useState<Record<string, { id: string; titulo: string }[]>>({});
+  const [turmaId, setTurmaId] = useState('');
+  const [cursoId, setCursoId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: ts }, { data: cts }, { data: cs }] = await Promise.all([
+        supabase.from('turmas').select('id,nome').order('nome'),
+        supabase.from('curso_turmas').select('turma_id,curso_id'),
+        supabase.from('cursos').select('id,titulo'),
+      ]);
+      setTurmas(ts ?? []);
+      const cursoMap = new Map((cs ?? []).map((c) => [c.id, c]));
+      const byTurma: Record<string, { id: string; titulo: string }[]> = {};
+      (cts ?? []).forEach((ct) => {
+        const c = cursoMap.get(ct.curso_id);
+        if (!c) return;
+        (byTurma[ct.turma_id] ??= []).push(c);
+      });
+      setCursosByTurma(byTurma);
+      setLoading(false);
+    })();
+  }, []);
+
+  const cursosDaTurma = turmaId ? (cursosByTurma[turmaId] ?? []) : [];
+
+  const confirmar = async () => {
+    if (!turmaId || !cursoId) return;
+    setStarting(true);
+    await startViewAs(role, turmaId, cursoId);
+    setStarting(false);
+    onClose();
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Simular como ${VIEW_AS_LABEL[role]}`}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+        <Button variant="primary" loading={starting} disabled={!turmaId || !cursoId} onClick={confirmar}>Iniciar simulação</Button>
+      </>}>
+      {loading ? (
+        <p className="text-fg-3 text-sm">Carregando turmas...</p>
+      ) : turmas.length === 0 ? (
+        <p className="text-fg-3 text-sm">Nenhuma turma cadastrada ainda.</p>
+      ) : (
+        <div className="space-y-4">
+          <Field label="Turma" required htmlFor="viewas-turma">
+            <Select id="viewas-turma" value={turmaId} onChange={(e) => { setTurmaId(e.target.value); setCursoId(''); }}>
+              <option value="">Selecione uma turma</option>
+              {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </Select>
+          </Field>
+          <Field label="Curso" required htmlFor="viewas-curso" hint={!turmaId ? 'Selecione uma turma primeiro' : cursosDaTurma.length === 0 ? 'Essa turma ainda não tem cursos vinculados' : undefined}>
+            <Select id="viewas-curso" value={cursoId} onChange={(e) => setCursoId(e.target.value)} disabled={!turmaId || cursosDaTurma.length === 0}>
+              <option value="">Selecione um curso</option>
+              {cursosDaTurma.map((c) => <option key={c.id} value={c.id}>{c.titulo}</option>)}
+            </Select>
+          </Field>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -239,10 +319,6 @@ function SidebarInner({
       </div>
 
       <ViewAsSwitcher collapsed={collapsed} />
-
-      {!collapsed && (
-        <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-3/70">{area}</p>
-      )}
 
       <NavList nav={nav} collapsed={collapsed} onNavigate={onNavigate} />
 
