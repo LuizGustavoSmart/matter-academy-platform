@@ -12,7 +12,7 @@ import { PageHeader } from '../../layouts/AppShell';
 import { uploadCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 
-type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null };
+type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; observacao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null };
 
 export default function AdminTurmas() {
   const nav = useNavigate();
@@ -143,6 +143,7 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [capaFile, setCapaFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,7 +151,7 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
 
   useEffect(() => {
     setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? '');
-    setDataInicio(turma?.data_inicio ?? ''); setCapaFile(null); setErr(null);
+    setObservacao(turma?.observacao ?? ''); setDataInicio(turma?.data_inicio ?? ''); setCapaFile(null); setErr(null);
   }, [turma, open]);
 
   const submit = async () => {
@@ -162,7 +163,7 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
       try { const up = await uploadCapa(capaFile, 'turmas'); capa_url = up.path; }
       catch (e) { setLoading(false); setErr((e as Error).message); return; }
     }
-    const payload = { nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), data_inicio: dataInicio || null, capa_url };
+    const payload = { nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), observacao: observacao.trim() || null, data_inicio: dataInicio || null, capa_url };
     // codigo/capa_url ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
@@ -181,6 +182,7 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
           <Field label="Código" hint="Ex.: T002" htmlFor="turma-codigo"><Input id="turma-codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="T002" /></Field>
         </div>
         <Field label="Descrição" htmlFor="turma-desc"><Textarea id="turma-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Objetivo ou observações da turma" /></Field>
+        <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="turma-obs"><Textarea id="turma-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre esta turma" /></Field>
         <Field label="Data de início" htmlFor="turma-data"><Input id="turma-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
         <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="turma-capa">
           <div className="flex items-center gap-3">

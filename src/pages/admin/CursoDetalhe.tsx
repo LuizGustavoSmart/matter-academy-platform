@@ -18,7 +18,7 @@ import CursoAprovacoesTab from './CursoAprovacoesTab';
 import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; observacao: string | null; link_ao_vivo: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
 export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
@@ -360,6 +360,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [linkAoVivo, setLinkAoVivo] = useState('');
   const [faixa, setFaixa] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -374,7 +375,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setObservacao(curso?.observacao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
     setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
     setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
     setDiaSemana(info?.dia_semana ?? ''); setCapaPending(CAPA_PENDING_EMPTY); setCapaAulasPending(CAPA_PENDING_EMPTY); setErr(null);
@@ -394,7 +395,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const { error } = await sb.from('cursos').update({
-      titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null, faixa: faixa || null,
+      titulo: titulo.trim(), descricao: descricao.trim(), observacao: observacao.trim() || null, link_ao_vivo: linkAoVivo.trim() || null, faixa: faixa || null,
       capa_url, capa_aulas_padrao_url,
     }).eq('id', curso!.id);
     if (error) { setLoading(false); setErr(error.message); return; }
@@ -415,6 +416,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cd-tit"><Input id="cd-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cd-desc"><Textarea id="cd-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="cd-obs"><Textarea id="cd-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre este curso" /></Field>
         <Field label="Faixa" hint="Define a ordem fixa em que os blocos aparecem" htmlFor="cd-faixa">
           <Select id="cd-faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
             <option value="">Não definida</option>

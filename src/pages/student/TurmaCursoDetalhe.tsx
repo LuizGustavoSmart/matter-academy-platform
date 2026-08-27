@@ -3,7 +3,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, MoreHorizontal, HelpCircle, ClipboardList, Percent, Clock, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, Select, SearchInput, useToast, useConfirm } from '../../components/ui';
+import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch, Badge, Avatar, DropdownMenu, Modal, Select, SearchInput, Textarea, useToast, useConfirm } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
@@ -13,8 +13,8 @@ import CursoPresencaTab from '../admin/CursoPresencaTab';
 import CursoAprovacoesTab from '../admin/CursoAprovacoesTab';
 import { AulaModal, type Aula } from '../admin/CursoDetalhe';
 
-type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null; capa_aulas_padrao_url?: string | null };
+type Turma = { id: string; nome: string; observacao?: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; observacao?: string | null; capa_aulas_padrao_url?: string | null };
 type Tab = 'dashboard' | 'aulas' | 'atividades' | 'duvidas' | 'presenca' | 'aprovacoes' | 'alunos';
 type Duvida = { id: string; titulo: string; status: 'aberta' | 'resolvida'; created_at: string; alunoNome: string | null; alunoEmail: string };
 type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssistidas: number; atividadesEnviadas: number };
@@ -74,8 +74,8 @@ export default function TurmaCursoDetalhe() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const [{ data: t }, { data: c }, { data: uts }, { data: ct }] = await Promise.all([
-      supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
-      sb.from('cursos').select('id,titulo,descricao,capa_aulas_padrao_url').eq('id', cursoId!).maybeSingle(),
+      sb.from('turmas').select('id,nome,observacao').eq('id', turmaId!).maybeSingle(),
+      sb.from('cursos').select('id,titulo,descricao,observacao,capa_aulas_padrao_url').eq('id', cursoId!).maybeSingle(),
       supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!),
       sb.from('curso_turmas').select('professor_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!).maybeSingle(),
     ]);
@@ -332,9 +332,21 @@ export default function TurmaCursoDetalhe() {
             </div>
           )
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatTile label="Aulas" value={aulas.length || '—'} icon={<PlayCircle className="w-4 h-4" />} />
-            <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+          <div className="space-y-6">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <StatTile label="Aulas" value={aulas.length || '—'} icon={<PlayCircle className="w-4 h-4" />} />
+              <StatTile label="Alunos matriculados" value={alunosCount} icon={<Users className="w-4 h-4" />} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {curso && (
+                <ObservacaoCard titulo="Observação do curso" table="cursos" id={curso.id} valorAtual={curso.observacao ?? null}
+                  onSaved={(v) => setCurso((prev) => (prev ? { ...prev, observacao: v } : prev))} />
+              )}
+              {turma && (
+                <ObservacaoCard titulo="Observação da turma" table="turmas" id={turma.id} valorAtual={turma.observacao ?? null}
+                  onSaved={(v) => setTurma((prev) => (prev ? { ...prev, observacao: v } : prev))} />
+              )}
+            </div>
           </div>
         )
       )}
@@ -859,6 +871,43 @@ function AlunoDetalheModal({ turmaId, cursoId, aluno, onClose }: {
         </div>
       )}
     </Modal>
+  );
+}
+
+/* ═══════════════════ Observação interna (curso/turma) — só professor/monitor/admin ═══════════════════ */
+function ObservacaoCard({ titulo, table, id, valorAtual, onSaved }: {
+  titulo: string; table: 'cursos' | 'turmas'; id: string; valorAtual: string | null; onSaved: (v: string | null) => void;
+}) {
+  const toast = useToast();
+  const [valor, setValor] = useState(valorAtual ?? '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setValor(valorAtual ?? ''); }, [valorAtual]);
+  const dirty = valor !== (valorAtual ?? '');
+
+  const salvar = async () => {
+    setSaving(true);
+    const observacao = valor.trim() || null;
+    // observacao ainda não está no schema gerado
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from(table).update({ observacao }).eq('id', id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Observação salva.');
+    onSaved(observacao);
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="text-base">{titulo}</h2>
+        {dirty && <Badge tone="warn">Não salvo</Badge>}
+      </div>
+      <Textarea value={valor} onChange={(e) => setValor(e.target.value)} rows={4} placeholder="Notas internas — visíveis só para professores, monitores e administradores" />
+      <div className="flex justify-end mt-3">
+        <Button variant="primary" size="sm" loading={saving} disabled={!dirty} onClick={salvar}>Salvar</Button>
+      </div>
+    </Card>
   );
 }
 

@@ -18,8 +18,8 @@ import { SignedImage } from '../../components/SignedImage';
 import { FAIXA_OPTIONS, labelDaFaixa, ordemDaFaixa } from '../../lib/faixa';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
 
-type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
-type Curso = { id: string; titulo: string; descricao: string | null; capa_url: string | null; faixa: string | null };
+type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; observacao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
+type Curso = { id: string; titulo: string; descricao: string | null; observacao: string | null; capa_url: string | null; faixa: string | null };
 type Tab = 'dashboard' | 'cursos' | 'participantes';
 type ParticipanteRole = 'student' | 'professor' | 'monitor' | 'admin';
 type Participante = { id: string; email: string; nome: string | null; role: ParticipanteRole; status: string; cursoTitulo: string | null };
@@ -322,6 +322,7 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [capaFile, setCapaFile] = useState<File | null>(null);
   const [tipoCobranca, setTipoCobranca] = useState<'' | TipoCobranca>('');
@@ -330,7 +331,7 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? ''); setDataInicio(turma?.data_inicio ?? '');
+    setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? ''); setObservacao(turma?.observacao ?? ''); setDataInicio(turma?.data_inicio ?? '');
     setCapaFile(null);
     setTipoCobranca(turma?.tipo_cobranca ?? ''); setValor(turma?.valor != null ? String(turma.valor) : ''); setErr(null);
   }, [turma, open]);
@@ -350,7 +351,7 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
     // codigo/capa_url ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any).from('turmas').update({
-      nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), data_inicio: dataInicio || null,
+      nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), observacao: observacao.trim() || null, data_inicio: dataInicio || null,
       capa_url, tipo_cobranca: tipoCobranca || null, valor: tipoCobranca ? parseFloat(valor) : null,
     }).eq('id', turma!.id);
     setLoading(false);
@@ -367,6 +368,7 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
           <Field label="Código" hint="Ex.: T002" htmlFor="td-codigo"><Input id="td-codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="T002" /></Field>
         </div>
         <Field label="Descrição" htmlFor="td-desc"><Textarea id="td-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="td-obs"><Textarea id="td-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre esta turma" /></Field>
         <Field label="Data de início" htmlFor="td-data"><Input id="td-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
         <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="td-capa">
           <div className="flex items-center gap-3">
@@ -398,12 +400,13 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; 
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [capaFile, setCapaFile] = useState<File | null>(null);
   const [faixa, setFaixa] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setFaixa(curso?.faixa ?? ''); setCapaFile(null); setErr(null); }, [curso, open]);
+  useEffect(() => { setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setObservacao(curso?.observacao ?? ''); setFaixa(curso?.faixa ?? ''); setCapaFile(null); setErr(null); }, [curso, open]);
 
   const submit = async () => {
     setErr(null);
@@ -414,7 +417,7 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; 
       try { const up = await uploadCapa(capaFile, 'cursos'); capa_url = up.path; }
       catch (e) { setLoading(false); setErr((e as Error).message); return; }
     }
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), capa_url, faixa: faixa || null };
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), observacao: observacao.trim() || null, capa_url, faixa: faixa || null };
     // capa_url ainda não está no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
@@ -438,6 +441,7 @@ function CursoModal({ open, curso, turmaId, onClose, onDone }: { open: boolean; 
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="tdc-tit"><Input id="tdc-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} data-autofocus /></Field>
         <Field label="Descrição" htmlFor="tdc-desc"><Textarea id="tdc-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
+        <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="tdc-obs"><Textarea id="tdc-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre este curso" /></Field>
         <Field label="Faixa" hint="Define a ordem fixa em que os blocos aparecem" htmlFor="tdc-faixa">
           <Select id="tdc-faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
             <option value="">Não definida</option>

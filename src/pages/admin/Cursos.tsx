@@ -13,7 +13,7 @@ import { FAIXA_OPTIONS, labelDaFaixa } from '../../lib/faixa';
 import { uploadCapa } from '../../lib/storage';
 import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
 
-type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; observacao: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
 type Turma = { id: string; nome: string };
 
 export default function AdminCursos() {
@@ -115,6 +115,7 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [faixa, setFaixa] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [capaPending, setCapaPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
@@ -123,7 +124,7 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setFaixa(curso?.faixa ?? '');
+    setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setObservacao(curso?.observacao ?? ''); setFaixa(curso?.faixa ?? '');
     setSelected(curso ? (cursoTurmas[curso.id] ?? []) : []); setCapaPending(CAPA_PENDING_EMPTY); setCapaAulasPending(CAPA_PENDING_EMPTY); setErr(null);
   }, [curso, cursoTurmas, open]);
 
@@ -143,7 +144,7 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
       if (capaPending.file) capa_url = (await uploadCapa(capaPending.file, cursoId ?? 'novo-curso')).path;
       if (capaAulasPending.file) capa_aulas_padrao_url = (await uploadCapa(capaAulasPending.file, cursoId ?? 'novo-curso')).path;
     } catch (e) { setErr((e as Error).message); setLoading(false); return; }
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), faixa: faixa || null, capa_url, capa_aulas_padrao_url };
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), observacao: observacao.trim() || null, faixa: faixa || null, capa_url, capa_aulas_padrao_url };
     if (curso) {
       const { error } = await sb.from('cursos').update(payload).eq('id', curso.id);
       if (error) { setErr(error.message); setLoading(false); return; }
@@ -168,6 +169,7 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
         {err && <Alert tone="danger">{err}</Alert>}
         <Field label="Título" required htmlFor="cur-tit"><Input id="cur-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Introdução ao produto" data-autofocus /></Field>
         <Field label="Descrição" htmlFor="cur-desc"><Textarea id="cur-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Resumo do curso" /></Field>
+        <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="cur-obs"><Textarea id="cur-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre este curso" /></Field>
         <Field label="Faixa" hint="Define a ordem fixa em que os blocos aparecem" htmlFor="cur-faixa">
           <Select id="cur-faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
             <option value="">Não definida</option>
