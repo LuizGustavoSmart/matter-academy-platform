@@ -7,13 +7,14 @@ import { Card, EmptyState, Skeleton, StatTile, Tabs, Button, IconButton, Switch,
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { SignedImage } from '../../components/SignedImage';
+import { resolveAulaCapaUrl } from '../../lib/faixaCapas';
 import CursoAtividadesTab from '../admin/CursoAtividadesTab';
 import CursoPresencaTab from '../admin/CursoPresencaTab';
 import CursoAprovacoesTab from '../admin/CursoAprovacoesTab';
 import { AulaModal, type Aula } from '../admin/CursoDetalhe';
 
 type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; capa_aulas_padrao_url?: string | null };
 type Tab = 'dashboard' | 'aulas' | 'atividades' | 'duvidas' | 'presenca' | 'aprovacoes' | 'alunos';
 type Duvida = { id: string; titulo: string; status: 'aberta' | 'resolvida'; created_at: string; alunoNome: string | null; alunoEmail: string };
 type AlunoResumo = { id: string; email: string; nome: string | null; aulasAssistidas: number; atividadesEnviadas: number };
@@ -74,7 +75,7 @@ export default function TurmaCursoDetalhe() {
     const sb = supabase as any;
     const [{ data: t }, { data: c }, { data: uts }, { data: ct }] = await Promise.all([
       supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
-      supabase.from('cursos').select('id,titulo,descricao').eq('id', cursoId!).maybeSingle(),
+      sb.from('cursos').select('id,titulo,descricao,capa_aulas_padrao_url').eq('id', cursoId!).maybeSingle(),
       supabase.from('user_turmas').select('user_id').eq('turma_id', turmaId!),
       sb.from('curso_turmas').select('professor_id').eq('turma_id', turmaId!).eq('curso_id', cursoId!).maybeSingle(),
     ]);
@@ -350,11 +351,12 @@ export default function TurmaCursoDetalhe() {
                 <ul>
                   {aulas.map((a, i) => {
                     const ytId = getYouTubeId(a.youtube_url);
+                    const capaEfetiva = resolveAulaCapaUrl(a.capa_url, curso?.capa_aulas_padrao_url);
                     return (
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
                         <div className="w-20 h-11 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                          {a.capa_url ? (
-                            <SignedImage bucket="aulas" path={a.capa_url} className="w-full h-full object-cover" alt="" />
+                          {capaEfetiva ? (
+                            <SignedImage bucket="aulas" path={capaEfetiva} className="w-full h-full object-cover" alt="" />
                           ) : ytId ? (
                             <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" loading="lazy" />
                           ) : null}
@@ -472,8 +474,8 @@ export default function TurmaCursoDetalhe() {
 
       {!isEmbaixador && (
         <>
-          <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); }} />
-          <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+          <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); }} />
+          <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
         </>
       )}
 

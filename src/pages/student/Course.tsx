@@ -7,14 +7,14 @@ import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui
 import LessonVideoPlayer, { type WatchProgress } from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
-import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
+import { useFaixaCapas, resolveCapaUrl, resolveAulaCapaUrl } from '../../lib/faixaCapas';
 import {
   LIMITE_PRESENCA_PCT, LIMITE_CONCLUSAO_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
 } from '../../lib/presenca';
 
 
 type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
-type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null; capa_aulas_padrao_url: string | null };
 const AULAS_POR_FAIXA = 12;
 
 export default function StudentCourse() {
@@ -243,8 +243,8 @@ export default function StudentCourse() {
                   return (
                     <li key={a.id}>
                       <button onClick={() => selectAula(a.id)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border', isCurrent ? 'bg-brand/10 border-brand/30 shadow-sm' : 'hover:bg-panel-2 hover:border-line border-transparent')}>
-                        {a.capa_url ? (
-                          <SignedImage bucket="aulas" path={a.capa_url} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
+                        {resolveAulaCapaUrl(a.capa_url, curso?.capa_aulas_padrao_url) ? (
+                          <SignedImage bucket={a.capa_url ? 'aulas' : 'capas'} path={resolveAulaCapaUrl(a.capa_url, curso?.capa_aulas_padrao_url)!} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
                         ) : resolveCapaUrl(null, curso?.faixa, faixaCapas) ? (
                           <SignedImage bucket="capas" path={resolveCapaUrl(null, curso?.faixa, faixaCapas)} className="w-10 h-7 rounded-md object-cover flex-shrink-0 border border-line" alt="" />
                         ) : null}

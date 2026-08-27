@@ -8,7 +8,8 @@ import {
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
-import { uploadAulaCapa } from '../../lib/storage';
+import { uploadAulaCapa, uploadCapa } from '../../lib/storage';
+import { resolveAulaCapaUrl } from '../../lib/faixaCapas';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from './CursoAtividadesTab';
 import CursoPresencaTab, { PresencaAulaModal } from './CursoPresencaTab';
@@ -16,7 +17,7 @@ import CursoAprovacoesTab from './CursoAprovacoesTab';
 import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
-type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null; faixa: string | null };
+type Curso = { id: string; titulo: string; descricao: string | null; link_ao_vivo: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
 export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
@@ -243,11 +244,12 @@ export default function CursoDetalhe() {
                 <ul>
                   {aulas.map((a, i) => {
                     const ytId = getYouTubeId(a.youtube_url);
+                    const capaEfetiva = resolveAulaCapaUrl(a.capa_url, curso?.capa_aulas_padrao_url);
                     return (
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
                         <div className="w-20 h-11 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                          {a.capa_url ? (
-                            <SignedImage bucket="aulas" path={a.capa_url} className="w-full h-full object-cover" alt="" />
+                          {capaEfetiva ? (
+                            <SignedImage bucket="aulas" path={capaEfetiva} className="w-full h-full object-cover" alt="" />
                           ) : ytId ? (
                             <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" loading="lazy" />
                           ) : null}
@@ -333,8 +335,8 @@ export default function CursoDetalhe() {
       )}
 
       <CursoEditModal open={editCursoOpen} curso={curso} turmaId={turmaId!} info={cursoTurmaInfo} professores={professores} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
-      <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
-      <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
+      <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
+      <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
       {presencaAula && (
         <PresencaAulaModal turmaId={turmaId!} cursoId={cursoId!} aula={presencaAula} onClose={() => setPresencaAula(null)} />
       )}
@@ -365,6 +367,8 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [horarioInicio, setHorarioInicio] = useState('');
   const [horarioFim, setHorarioFim] = useState('');
   const [diaSemana, setDiaSemana] = useState('');
+  const [capaFile, setCapaFile] = useState<File | null>(null);
+  const [capaAulasFile, setCapaAulasFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -372,18 +376,25 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
     setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
     setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
     setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
-    setDiaSemana(info?.dia_semana ?? ''); setErr(null);
+    setDiaSemana(info?.dia_semana ?? ''); setCapaFile(null); setCapaAulasFile(null); setErr(null);
   }, [curso, info, open]);
 
   const submit = async () => {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
+    let capa_url = curso?.capa_url ?? null;
+    let capa_aulas_padrao_url = curso?.capa_aulas_padrao_url ?? null;
+    try {
+      if (capaFile) capa_url = (await uploadCapa(capaFile, curso!.id)).path;
+      if (capaAulasFile) capa_aulas_padrao_url = (await uploadCapa(capaAulasFile, curso!.id)).path;
+    } catch (e) { setLoading(false); setErr((e as Error).message); return; }
     // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const { error } = await sb.from('cursos').update({
       titulo: titulo.trim(), descricao: descricao.trim(), link_ao_vivo: linkAoVivo.trim() || null, faixa: faixa || null,
+      capa_url, capa_aulas_padrao_url,
     }).eq('id', curso!.id);
     if (error) { setLoading(false); setErr(error.message); return; }
 
@@ -410,6 +421,27 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
           </Select>
         </Field>
         <Field label="Link da aula ao vivo" hint="Reutilizado em todas as aulas deste curso" htmlFor="cd-link"><Input id="cd-link" value={linkAoVivo} onChange={(e) => setLinkAoVivo(e.target.value)} placeholder="https://meet.google.com/..." /></Field>
+
+        <Field label="Capa do curso" hint="Usada nas listas de cursos/aulas" htmlFor="cd-capa">
+          <div className="flex items-center gap-3">
+            {(capaFile || curso?.capa_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="cd-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
+        <Field label="Capa padrão das aulas" hint="Usada em qualquer aula deste curso sem capa própria — se trocar depois, essas aulas acompanham" htmlFor="cd-capa-aulas">
+          <div className="flex items-center gap-3">
+            {(capaAulasFile || curso?.capa_aulas_padrao_url) && (
+              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
+                {capaAulasFile ? <img src={URL.createObjectURL(capaAulasFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_aulas_padrao_url} className="w-full h-full object-cover" />}
+              </div>
+            )}
+            <Input id="cd-capa-aulas" type="file" accept="image/*" onChange={(e) => setCapaAulasFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
 
         <div className="border-t border-line pt-4 grid grid-cols-2 gap-4">
           <Field label="Data de início" htmlFor="cd-dini"><Input id="cd-dini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></Field>
@@ -444,8 +476,8 @@ function toDatetimeLocal(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, onClose, onDone }: {
-  open: boolean; aula: Aula | null; cursoId: string; turmaId: string; dataHoraAtual: string | null; nextOrdem: number; onClose: () => void; onDone: () => void;
+export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrdem, cursoCapaAulasPadrao, onClose, onDone }: {
+  open: boolean; aula: Aula | null; cursoId: string; turmaId: string; dataHoraAtual: string | null; nextOrdem: number; cursoCapaAulasPadrao?: string | null; onClose: () => void; onDone: () => void;
 }) {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
@@ -512,11 +544,13 @@ export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrd
           <Field label="Data e horário" hint="Desta turma" htmlFor="cda-dh"><Input id="cda-dh" type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)} /></Field>
         </div>
         <Field label="Descrição" htmlFor="cda-desc"><Textarea id="cda-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
-        <Field label="Capa da aula" hint="Opcional — usada nas listas" htmlFor="cda-capa">
+        <Field label="Capa da aula" hint={aula?.capa_url ? 'Opcional — usada nas listas' : cursoCapaAulasPadrao ? 'Sem capa própria — usando a capa padrão do curso. Envie uma imagem para usar uma específica.' : 'Opcional — usada nas listas'} htmlFor="cda-capa">
           <div className="flex items-center gap-3">
-            {(capaFile || aula?.capa_url) && (
+            {(capaFile || aula?.capa_url || cursoCapaAulasPadrao) && (
               <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="aulas" path={aula!.capa_url} className="w-full h-full object-cover" />}
+                {capaFile
+                  ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" />
+                  : <SignedImage bucket={aula?.capa_url ? 'aulas' : 'capas'} path={(aula?.capa_url || cursoCapaAulasPadrao)!} className="w-full h-full object-cover" />}
               </div>
             )}
             <Input id="cda-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />

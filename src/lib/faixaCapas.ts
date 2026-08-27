@@ -42,3 +42,8 @@ export function resolveCapaUrl(explicit: string | null | undefined, faixa: strin
   if (faixa && faixaCapas[faixa]) return faixaCapas[faixa];
   return null;
 }
+
+/** Capa própria da aula, com fallback dinâmico para a capa padrão de aulas do curso. */
+export function resolveAulaCapaUrl(explicit: string | null | undefined, cursoCapaAulasPadrao: string | null | undefined): string | null {
+  return explicit || cursoCapaAulasPadrao || null;
+}
