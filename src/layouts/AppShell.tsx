@@ -121,7 +121,7 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors', !collapsed && 'w-full')}
+        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors min-w-0', !collapsed && 'flex-1')}
       >
         <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} />
         {!collapsed && (
@@ -322,12 +322,19 @@ function SidebarInner({
 
       <NavList nav={nav} collapsed={collapsed} onNavigate={onNavigate} />
 
-      {/* Rodapé — notificações + perfil */}
+      {/* Rodapé — perfil + notificações */}
       <div className="border-t border-line p-2.5 flex-shrink-0">
-        <div className={cn('flex items-center mb-1.5', collapsed ? 'justify-center' : 'justify-end')}>
-          <NotificationBell />
-        </div>
-        <ProfileMenu collapsed={collapsed} />
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-1.5">
+            <ProfileMenu collapsed={collapsed} />
+            <NotificationBell />
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <ProfileMenu collapsed={collapsed} />
+            <NotificationBell />
+          </div>
+        )}
       </div>
     </div>
   );
