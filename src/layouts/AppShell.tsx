@@ -115,13 +115,13 @@ function ProfileMenu({ collapsed }: { collapsed?: boolean }) {
   const name = profile?.nome || profile?.email?.split('@')[0] || 'Conta';
 
   return (
-    <div>
+    <div className={cn('min-w-0', !collapsed && 'flex-1')}>
       <button
         ref={btnRef}
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors min-w-0', !collapsed && 'flex-1')}
+        className={cn('flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-panel-2 transition-colors w-full min-w-0')}
       >
         <Avatar name={profile?.nome} email={profile?.email} src={profile?.avatar_url} size={32} />
         {!collapsed && (
