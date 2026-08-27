@@ -71,7 +71,7 @@ export default function StudentLayout() {
 
   return (
     <>
-      <AppShell nav={nav} area={area} contentPadded={false} />
+      <AppShell nav={nav} contentPadded={false} />
       {(profile?.role === 'student' || isEmbaixador) && <OnboardingTour />}
     </>
   );

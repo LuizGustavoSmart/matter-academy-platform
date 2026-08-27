@@ -335,9 +335,9 @@ function SidebarInner({
 
 /* ═══════════════════════════════ Shell ════════════════════════════════ */
 export default function AppShell({
-  nav, area, contentPadded = true,
+  nav, contentPadded = true,
 }: {
-  nav: NavGroup[]; area: string; contentPadded?: boolean;
+  nav: NavGroup[]; contentPadded?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === 'true');
   const [mobileOpen, setMobileOpen] = useState(false);
