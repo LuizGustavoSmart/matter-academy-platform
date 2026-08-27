@@ -249,7 +249,6 @@ export default function CronogramaIndex() {
   const [currentSlotKey, setCurrentSlotKey] = useState<string | null>(null);
   const [capaUrls, setCapaUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const scrolledRef = useRef(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -341,15 +340,6 @@ export default function CronogramaIndex() {
     // as capas quando ele chegar, para não perder o fallback por faixa.
   }, [profile, faixaCapas]);
 
-  useEffect(() => {
-    if (loading || scrolledRef.current || cursos.length === 0) return;
-    scrolledRef.current = true;
-    requestAnimationFrame(() => {
-      const id = currentSlotKey ? `slot-${currentSlotKey}` : 'slot-inicio';
-      document.getElementById(id)?.scrollIntoView({ block: 'center' });
-    });
-  }, [loading, currentSlotKey, cursos.length]);
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <header className="mb-6 text-center">
@@ -438,6 +428,21 @@ function Board({ cursos, slotsPorCurso, currentSlotKey, capaUrls, nav, profile }
     ro.observe(el);
     return () => ro.disconnect();
   }, [track.width]);
+
+  // Centraliza no elemento atual só depois que a escala do tabuleiro já
+  // assentou (senão a rolagem calcula a posição em cima de um layout
+  // provisório, ainda em scale=1, e o resultado sai desalinhado).
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (scrolledRef.current) return;
+    scrolledRef.current = true;
+    const id = currentSlotKey ? `slot-${currentSlotKey}` : 'slot-inicio';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ block: 'center', inline: 'center' });
+      });
+    });
+  }, [scale, currentSlotKey]);
 
   return (
     <>
