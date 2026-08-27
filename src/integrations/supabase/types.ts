@@ -532,6 +532,7 @@ export type Database = {
       }
       cursos: {
         Row: {
+          capa_aulas_padrao_url: string | null
           capa_url: string | null
           created_at: string | null
           descricao: string | null
@@ -541,6 +542,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          capa_aulas_padrao_url?: string | null
           capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
@@ -550,6 +552,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          capa_aulas_padrao_url?: string | null
           capa_url?: string | null
           created_at?: string | null
           descricao?: string | null
