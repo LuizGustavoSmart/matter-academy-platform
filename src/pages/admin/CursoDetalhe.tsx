@@ -10,6 +10,7 @@ import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
 import { uploadAulaCapa, uploadCapa } from '../../lib/storage';
 import { resolveAulaCapaUrl } from '../../lib/faixaCapas';
+import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
 import { SignedImage } from '../../components/SignedImage';
 import CursoAtividadesTab from './CursoAtividadesTab';
 import CursoPresencaTab, { PresencaAulaModal } from './CursoPresencaTab';
@@ -367,8 +368,8 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [horarioInicio, setHorarioInicio] = useState('');
   const [horarioFim, setHorarioFim] = useState('');
   const [diaSemana, setDiaSemana] = useState('');
-  const [capaFile, setCapaFile] = useState<File | null>(null);
-  const [capaAulasFile, setCapaAulasFile] = useState<File | null>(null);
+  const [capaPending, setCapaPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
+  const [capaAulasPending, setCapaAulasPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -376,18 +377,18 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
     setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
     setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
     setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
-    setDiaSemana(info?.dia_semana ?? ''); setCapaFile(null); setCapaAulasFile(null); setErr(null);
+    setDiaSemana(info?.dia_semana ?? ''); setCapaPending(CAPA_PENDING_EMPTY); setCapaAulasPending(CAPA_PENDING_EMPTY); setErr(null);
   }, [curso, info, open]);
 
   const submit = async () => {
     setErr(null);
     if (!titulo.trim()) { setErr('Informe o título do curso.'); return; }
     setLoading(true);
-    let capa_url = curso?.capa_url ?? null;
-    let capa_aulas_padrao_url = curso?.capa_aulas_padrao_url ?? null;
+    let capa_url = resolveCapaPending(capaPending, curso?.capa_url ?? null);
+    let capa_aulas_padrao_url = resolveCapaPending(capaAulasPending, curso?.capa_aulas_padrao_url ?? null);
     try {
-      if (capaFile) capa_url = (await uploadCapa(capaFile, curso!.id)).path;
-      if (capaAulasFile) capa_aulas_padrao_url = (await uploadCapa(capaAulasFile, curso!.id)).path;
+      if (capaPending.file) capa_url = (await uploadCapa(capaPending.file, curso!.id)).path;
+      if (capaAulasPending.file) capa_aulas_padrao_url = (await uploadCapa(capaAulasPending.file, curso!.id)).path;
     } catch (e) { setLoading(false); setErr((e as Error).message); return; }
     // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -422,26 +423,10 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
         </Field>
         <Field label="Link da aula ao vivo" hint="Reutilizado em todas as aulas deste curso" htmlFor="cd-link"><Input id="cd-link" value={linkAoVivo} onChange={(e) => setLinkAoVivo(e.target.value)} placeholder="https://meet.google.com/..." /></Field>
 
-        <Field label="Capa do curso" hint="Usada nas listas de cursos/aulas" htmlFor="cd-capa">
-          <div className="flex items-center gap-3">
-            {(capaFile || curso?.capa_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="cd-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
-        <Field label="Capa padrão das aulas" hint="Usada em qualquer aula deste curso sem capa própria — se trocar depois, essas aulas acompanham" htmlFor="cd-capa-aulas">
-          <div className="flex items-center gap-3">
-            {(capaAulasFile || curso?.capa_aulas_padrao_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaAulasFile ? <img src={URL.createObjectURL(capaAulasFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_aulas_padrao_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="cd-capa-aulas" type="file" accept="image/*" onChange={(e) => setCapaAulasFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
+        <CapaField id="cd-capa" label="Capa do curso" hint="Usada nas listas de cursos/aulas — envie uma imagem ou escolha um modelo"
+          existingUrl={curso?.capa_url ?? null} value={capaPending} onChange={setCapaPending} />
+        <CapaField id="cd-capa-aulas" label="Capa padrão das aulas" hint="Usada em qualquer aula deste curso sem capa própria — se trocar depois, essas aulas acompanham"
+          existingUrl={curso?.capa_aulas_padrao_url ?? null} value={capaAulasPending} onChange={setCapaAulasPending} />
 
         <div className="border-t border-line pt-4 grid grid-cols-2 gap-4">
           <Field label="Data de início" htmlFor="cd-dini"><Input id="cd-dini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></Field>

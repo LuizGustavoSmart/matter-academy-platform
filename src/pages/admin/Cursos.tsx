@@ -11,7 +11,7 @@ import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { PageHeader } from '../../layouts/AppShell';
 import { FAIXA_OPTIONS, labelDaFaixa } from '../../lib/faixa';
 import { uploadCapa } from '../../lib/storage';
-import { SignedImage } from '../../components/SignedImage';
+import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
 
 type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
 type Turma = { id: string; nome: string };
@@ -117,14 +117,14 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
   const [descricao, setDescricao] = useState('');
   const [faixa, setFaixa] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [capaFile, setCapaFile] = useState<File | null>(null);
-  const [capaAulasFile, setCapaAulasFile] = useState<File | null>(null);
+  const [capaPending, setCapaPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
+  const [capaAulasPending, setCapaAulasPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setFaixa(curso?.faixa ?? '');
-    setSelected(curso ? (cursoTurmas[curso.id] ?? []) : []); setCapaFile(null); setCapaAulasFile(null); setErr(null);
+    setSelected(curso ? (cursoTurmas[curso.id] ?? []) : []); setCapaPending(CAPA_PENDING_EMPTY); setCapaAulasPending(CAPA_PENDING_EMPTY); setErr(null);
   }, [curso, cursoTurmas, open]);
 
   const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -137,11 +137,11 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     let cursoId = curso?.id;
-    let capa_url = curso?.capa_url ?? null;
-    let capa_aulas_padrao_url = curso?.capa_aulas_padrao_url ?? null;
+    let capa_url = resolveCapaPending(capaPending, curso?.capa_url ?? null);
+    let capa_aulas_padrao_url = resolveCapaPending(capaAulasPending, curso?.capa_aulas_padrao_url ?? null);
     try {
-      if (capaFile) capa_url = (await uploadCapa(capaFile, cursoId ?? 'novo-curso')).path;
-      if (capaAulasFile) capa_aulas_padrao_url = (await uploadCapa(capaAulasFile, cursoId ?? 'novo-curso')).path;
+      if (capaPending.file) capa_url = (await uploadCapa(capaPending.file, cursoId ?? 'novo-curso')).path;
+      if (capaAulasPending.file) capa_aulas_padrao_url = (await uploadCapa(capaAulasPending.file, cursoId ?? 'novo-curso')).path;
     } catch (e) { setErr((e as Error).message); setLoading(false); return; }
     const payload = { titulo: titulo.trim(), descricao: descricao.trim(), faixa: faixa || null, capa_url, capa_aulas_padrao_url };
     if (curso) {
@@ -174,26 +174,10 @@ function CursoModal({ open, curso, turmas, cursoTurmas, onClose, onDone }: {
             {FAIXA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </Field>
-        <Field label="Capa do curso" hint="Usada nas listas de cursos/aulas" htmlFor="cur-capa">
-          <div className="flex items-center gap-3">
-            {(capaFile || curso?.capa_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="cur-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
-        <Field label="Capa padrão das aulas" hint="Usada em qualquer aula deste curso sem capa própria — se trocar depois, essas aulas acompanham" htmlFor="cur-capa-aulas">
-          <div className="flex items-center gap-3">
-            {(capaAulasFile || curso?.capa_aulas_padrao_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaAulasFile ? <img src={URL.createObjectURL(capaAulasFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={curso!.capa_aulas_padrao_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="cur-capa-aulas" type="file" accept="image/*" onChange={(e) => setCapaAulasFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
+        <CapaField id="cur-capa" label="Capa do curso" hint="Usada nas listas de cursos/aulas — envie uma imagem ou escolha um modelo"
+          existingUrl={curso?.capa_url ?? null} value={capaPending} onChange={setCapaPending} />
+        <CapaField id="cur-capa-aulas" label="Capa padrão das aulas" hint="Usada em qualquer aula deste curso sem capa própria — se trocar depois, essas aulas acompanham"
+          existingUrl={curso?.capa_aulas_padrao_url ?? null} value={capaAulasPending} onChange={setCapaAulasPending} />
         <Field label="Turmas com acesso">
           {turmas.length === 0 ? <p className="text-fg-3 text-sm">Crie uma turma antes de vincular.</p> : (
             <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin border border-line rounded-lg p-3 bg-panel-3/30">
