@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, CheckCircle2, AlertTriangle, XCircle, Lock } from 'lucide-react';
+import { Upload, CheckCircle2, AlertTriangle, XCircle, Lock, Columns3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Modal, Button, Alert, Badge, EmptyState, Tabs, cn } from '../../components/ui';
+import { Modal, Button, Alert, Badge, EmptyState, Tabs, Field, Select, cn } from '../../components/ui';
 import { normalizeEmail } from '../../lib/users';
-import { parseTeamsAttendance, type ParticipanteTeams } from '../../lib/teamsAttendance';
+import {
+  parsePresencaSheet, participantesFrom, CAMPO_LABEL, CAMPOS_OBRIGATORIOS,
+  type ParticipanteTeams, type PlanilhaPresenca, type MapaColunas, type CampoTeams,
+} from '../../lib/teamsAttendance';
 import type { Presenca } from '../../lib/presenca';
 
 type AlunoRow = { id: string; email: string; nome: string | null };
 type Situacao = 'vinculado' | 'nao_matriculado' | 'nao_encontrado' | 'manual';
 type Linha = ParticipanteTeams & { situacao: Situacao; alunoId?: string };
+
+const CAMPOS: CampoTeams[] = ['nome', 'email', 'entrada', 'saida', 'duracao', 'funcao'];
 
 const SITUACAO: Record<Situacao, { label: string; tone: 'success' | 'warn' | 'danger' | 'default'; desc: string }> = {
   vinculado: { label: 'Vinculado', tone: 'success', desc: 'Presença será registrada.' },
@@ -19,9 +24,10 @@ const SITUACAO: Record<Situacao, { label: string; tone: 'success' | 'warn' | 'da
 };
 
 /**
- * Importa a lista de participação exportada do Teams e cria presença com
- * `origem = 'teams_importado'` para quem está matriculado na turma/curso.
- * Registros já editados manualmente pelo professor não são sobrescritos.
+ * Importa qualquer lista de participação (Teams ou planilha equivalente) e cria
+ * presença com `origem = 'teams_importado'` para quem está matriculado na
+ * turma/curso. As colunas são detectadas automaticamente e podem ser ajustadas
+ * manualmente. Registros já editados pelo professor não são sobrescritos.
  */
 export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onClose, onDone }: {
   turmaId: string;
@@ -33,6 +39,9 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
   const { profile } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
+  const [planilha, setPlanilha] = useState<PlanilhaPresenca | null>(null);
+  const [map, setMap] = useState<MapaColunas | null>(null);
+  const [etapa, setEtapa] = useState<'upload' | 'mapear' | 'revisar'>('upload');
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [filtro, setFiltro] = useState<'todas' | Situacao>('todas');
   const [erro, setErro] = useState<string | null>(null);
@@ -53,34 +62,55 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
     [alunos],
   );
 
+  /** Classifica os participantes contra os alunos da turma/curso. */
+  const classificar = async (participantes: ParticipanteTeams[]) => {
+    const desconhecidos = participantes.map((p) => p.email).filter((e) => !porEmail.has(e));
+    let cadastrados = new Set<string>();
+    if (desconhecidos.length) {
+      const { data } = await supabase.from('profiles').select('email').in('email', desconhecidos);
+      cadastrados = new Set((data ?? []).map((p) => normalizeEmail(p.email)));
+    }
+    setLinhas(participantes.map((p) => {
+      const aluno = porEmail.get(p.email);
+      if (!aluno) return { ...p, situacao: cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
+      if (existentes[aluno.id]?.editado_por) return { ...p, situacao: 'manual', alunoId: aluno.id };
+      return { ...p, situacao: 'vinculado', alunoId: aluno.id };
+    }));
+    setEtapa('revisar');
+  };
+
   const onFile = async (file: File) => {
     setErro(null);
     try {
-      const participantes = await parseTeamsAttendance(file);
-      if (!participantes.length) {
-        setErro('Não encontramos a lista de participantes no arquivo. Exporte o relatório de participação direto da reunião do Teams.');
+      const pl = await parsePresencaSheet(file);
+      if (!pl.rows.length) {
+        setErro('Não conseguimos ler nenhuma linha de dados no arquivo. Envie o relatório de participação (XLSX ou CSV).');
         return;
       }
-      // Quem não é aluno da turma pode existir como usuário da plataforma
-      // (outra turma) ou não existir — a consulta separa os dois casos dentro
-      // do que a RLS deixa o usuário atual enxergar.
-      const desconhecidos = participantes.map((p) => p.email).filter((e) => !porEmail.has(e));
-      let cadastrados = new Set<string>();
-      if (desconhecidos.length) {
-        const { data } = await supabase.from('profiles').select('email').in('email', desconhecidos);
-        cadastrados = new Set((data ?? []).map((p) => normalizeEmail(p.email)));
-      }
-
       setFileName(file.name);
-      setLinhas(participantes.map((p) => {
-        const aluno = porEmail.get(p.email);
-        if (!aluno) return { ...p, situacao: cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
-        if (existentes[aluno.id]?.editado_por) return { ...p, situacao: 'manual', alunoId: aluno.id };
-        return { ...p, situacao: 'vinculado', alunoId: aluno.id };
-      }));
+      setPlanilha(pl);
+      setMap(pl.map);
+
+      const faltando = CAMPOS_OBRIGATORIOS.filter((c) => pl.map[c] < 0);
+      if (faltando.length) { setEtapa('mapear'); return; }
+
+      const participantes = participantesFrom(pl, pl.map);
+      if (!participantes.length) { setEtapa('mapear'); return; }
+      await classificar(participantes);
     } catch {
-      setErro('Não foi possível ler o arquivo. Envie o XLSX ou CSV exportado pelo Teams.');
+      setErro('Não foi possível ler o arquivo. Envie um XLSX ou CSV do relatório de presença.');
     }
+  };
+
+  const aplicarMapeamento = async () => {
+    if (!planilha || !map) return;
+    const participantes = participantesFrom(planilha, map);
+    if (!participantes.length) {
+      setErro('Nenhum e-mail válido encontrado na coluna escolhida. Confira o mapeamento.');
+      return;
+    }
+    setErro(null);
+    await classificar(participantes);
   };
 
   const contagem = useMemo(() => ({
@@ -120,17 +150,24 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
 
   const footer = resultado ? (
     <Button variant="primary" onClick={onClose}>Concluir</Button>
+  ) : etapa === 'mapear' ? (
+    <>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="primary" disabled={!map || CAMPOS_OBRIGATORIOS.some((c) => (map?.[c] ?? -1) < 0)} onClick={aplicarMapeamento}>
+        Continuar
+      </Button>
+    </>
   ) : (
     <>
       <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-      <Button variant="primary" loading={salvando} disabled={!linhas || contagem.vinculado === 0} onClick={confirmar}>
+      <Button variant="primary" loading={salvando} disabled={etapa !== 'revisar' || contagem.vinculado === 0} onClick={confirmar}>
         Registrar {contagem.vinculado} presença{contagem.vinculado === 1 ? '' : 's'}
       </Button>
     </>
   );
 
   return (
-    <Modal open onClose={onClose} size="lg" title="Importar lista do Teams" footer={footer}>
+    <Modal open onClose={onClose} size="lg" title="Importar lista de presença" footer={footer}>
       {resultado ? (
         <div className="text-center py-6">
           <span className="w-12 h-12 rounded-full grid place-items-center mb-3 mx-auto bg-ok/12 text-ok"><CheckCircle2 className="w-6 h-6" /></span>
@@ -139,7 +176,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
             <p className="text-fg-3 text-sm mt-1">{resultado.mantidas} lançamento{resultado.mantidas === 1 ? '' : 's'} manual{resultado.mantidas === 1 ? '' : 'is'} preservado{resultado.mantidas === 1 ? '' : 's'}.</p>
           )}
         </div>
-      ) : !linhas ? (
+      ) : etapa === 'upload' ? (
         <div className="space-y-4">
           <button onClick={() => fileRef.current?.click()}
             className="w-full border-2 border-dashed border-line hover:border-brand/50 rounded-xl py-12 px-6 text-center transition-colors group">
@@ -147,11 +184,43 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
               <Upload className="w-5 h-5 text-fg-2 group-hover:text-brand" />
             </span>
             <p className="text-fg font-medium">Clique para enviar o relatório</p>
-            <p className="text-fg-3 text-xs mt-1">XLSX ou CSV exportado pelo Teams</p>
+            <p className="text-fg-3 text-xs mt-1">XLSX, XLS, CSV ou TSV — colunas detectadas automaticamente</p>
           </button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
           {erro && <Alert tone="danger">{erro}</Alert>}
+        </div>
+      ) : etapa === 'mapear' && planilha && map ? (
+        <div className="space-y-4">
+          {erro && <Alert tone="danger">{erro}</Alert>}
+          <Alert tone="info">
+            <strong className="text-fg">{fileName}</strong> — {planilha.rows.length} linha{planilha.rows.length === 1 ? '' : 's'}.
+            {' '}Confirme de onde vem cada informação. Só o e-mail é obrigatório.
+          </Alert>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {CAMPOS.map((c) => (
+              <Field key={c} label={CAMPO_LABEL[c]} required={CAMPOS_OBRIGATORIOS.includes(c)}>
+                <Select value={String(map[c])} onChange={(e) => setMap({ ...map, [c]: Number(e.target.value) })}>
+                  <option value="-1">— não usar —</option>
+                  {planilha.headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                </Select>
+              </Field>
+            ))}
+          </div>
+          {planilha.rows[0] && (
+            <div className="border border-line rounded-xl overflow-x-auto scrollbar-thin">
+              <table className="text-xs w-full">
+                <thead><tr>{planilha.headers.map((h, i) => <th key={i} className="text-left px-3 py-2 text-fg-3 font-medium whitespace-nowrap">{h}</th>)}</tr></thead>
+                <tbody>
+                  {planilha.rows.slice(0, 3).map((r, ri) => (
+                    <tr key={ri} className="border-t border-line">
+                      {planilha.headers.map((_, i) => <td key={i} className="px-3 py-2 text-fg-2 whitespace-nowrap">{r[i] ?? ''}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -161,13 +230,18 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
             {' '}Só quem está matriculado nesta turma/curso recebe presença. Nada é gravado até você confirmar.
           </Alert>
 
-          <Tabs value={filtro} onChange={setFiltro} tabs={[
-            { value: 'todas', label: 'Todos', count: contagem.todas },
-            { value: 'vinculado', label: 'Vinculados', count: contagem.vinculado },
-            { value: 'nao_matriculado', label: 'Não matriculados', count: contagem.nao_matriculado },
-            { value: 'nao_encontrado', label: 'Não encontrados', count: contagem.nao_encontrado },
-            ...(contagem.manual > 0 ? [{ value: 'manual' as const, label: 'Manuais', count: contagem.manual }] : []),
-          ]} />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <Tabs value={filtro} onChange={setFiltro} tabs={[
+              { value: 'todas', label: 'Todos', count: contagem.todas },
+              { value: 'vinculado', label: 'Vinculados', count: contagem.vinculado },
+              { value: 'nao_matriculado', label: 'Não matriculados', count: contagem.nao_matriculado },
+              { value: 'nao_encontrado', label: 'Não encontrados', count: contagem.nao_encontrado },
+              ...(contagem.manual > 0 ? [{ value: 'manual' as const, label: 'Manuais', count: contagem.manual }] : []),
+            ]} />
+            <Button variant="ghost" onClick={() => setEtapa('mapear')} className="flex items-center gap-1.5 text-xs">
+              <Columns3 className="w-3.5 h-3.5" /> Ajustar colunas
+            </Button>
+          </div>
 
           {visiveis.length === 0 ? <EmptyState title="Nenhum participante nesta situação" /> : (
             <ul className="border border-line rounded-xl divide-y divide-line max-h-80 overflow-y-auto scrollbar-thin">
@@ -176,6 +250,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
                 const Icon = l.situacao === 'vinculado' ? CheckCircle2
                   : l.situacao === 'nao_matriculado' ? AlertTriangle
                   : l.situacao === 'manual' ? Lock : XCircle;
+                const detalhe = [l.duracao, l.entrada && l.saida ? `${l.entrada} → ${l.saida}` : null].filter(Boolean).join(' · ');
                 return (
                   <li key={l.email} className="flex items-center gap-3 px-3 py-2.5">
                     <Icon className={cn('w-4 h-4 flex-shrink-0',
@@ -184,7 +259,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
                         : l.situacao === 'manual' ? 'text-fg-3' : 'text-danger')} />
                     <div className="flex-1 min-w-0">
                       <p className="text-fg text-sm truncate">{l.nome || l.email.split('@')[0]}</p>
-                      <p className="text-fg-3 text-xs truncate">{l.email}{l.duracao ? ` · ${l.duracao}` : ''}</p>
+                      <p className="text-fg-3 text-xs truncate">{l.email}{detalhe ? ` · ${detalhe}` : ''}</p>
                     </div>
                     <Badge tone={s.tone} className="flex-shrink-0">{s.label}</Badge>
                   </li>

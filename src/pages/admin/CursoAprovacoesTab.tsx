@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, GraduationCap, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Card, Badge, Avatar, Modal, Button, EmptyState, Skeleton, Select, SearchInput, useToast } from '../../components/ui';
+import { Card, Badge, Avatar, Checkbox, Modal, Button, EmptyState, Skeleton, Select, SearchInput, useToast } from '../../components/ui';
 
 type AlunoRow = {
   id: string; email: string; nome: string | null;
@@ -18,6 +18,10 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<'nome_az' | 'nome_za' | 'presenca_desc' | 'atividades_desc' | 'aprovado_primeiro' | 'pendente_primeiro'>('nome_az');
   const [selecionado, setSelecionado] = useState<AlunoRow | null>(null);
+  // Alterações de "aprovado" ficam pendentes localmente — só gravam no banco
+  // quando "Lançar aprovações" é clicado, mesmo mecanismo do lançamento de presença.
+  const [pendentes, setPendentes] = useState<Record<string, boolean>>({});
+  const [lancando, setLancando] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -31,6 +35,7 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
       sb.from('aprovacoes').select('user_id,aprovado').eq('turma_id', turmaId).eq('curso_id', cursoId),
     ]);
     setTemAprovacoes(!!aprov?.length);
+    setPendentes({});
 
     const userIds = (ut ?? []).map((r: { user_id: string }) => r.user_id);
     if (!userIds.length) { setAlunos([]); setLoading(false); return; }
@@ -78,6 +83,34 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
 
   useEffect(() => { load(); }, [turmaId, cursoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Valor efetivo (considerando alteração ainda não lançada) de "aprovado" para um aluno. */
+  const efetivo = (aluno: AlunoRow) => pendentes[aluno.id] ?? aluno.aprovado;
+  const toggleLocal = (aluno: AlunoRow) => setPendentes((prev) => ({ ...prev, [aluno.id]: !efetivo(aluno) }));
+  const temPendentes = Object.keys(pendentes).length > 0;
+
+  const lancar = async () => {
+    const alteracoes = Object.entries(pendentes);
+    if (!alteracoes.length) return;
+    setLancando(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const rows = alteracoes.map(([userId, aprovado]) => ({
+        user_id: userId, turma_id: turmaId, curso_id: cursoId,
+        aprovado, aprovado_por: userData.user?.id ?? null, atualizado_em: new Date().toISOString(),
+      }));
+      // aprovacoes ainda não está no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('aprovacoes').upsert(rows, { onConflict: 'user_id,turma_id,curso_id' });
+      if (error) throw error;
+      toast.success(`${alteracoes.length} aprovação(ões) lançada(s).`);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLancando(false);
+    }
+  };
+
   const alunosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const nomeDe = (a: AlunoRow) => a.nome || a.email.split('@')[0];
@@ -88,10 +121,11 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
         if (ordem === 'nome_za') return nomeDe(b).localeCompare(nomeDe(a));
         if (ordem === 'presenca_desc') return b.pctPresenca - a.pctPresenca;
         if (ordem === 'atividades_desc') return b.pctAtividades - a.pctAtividades;
-        if (ordem === 'aprovado_primeiro') return Number(b.aprovado) - Number(a.aprovado);
-        return Number(a.aprovado) - Number(b.aprovado);
+        if (ordem === 'aprovado_primeiro') return Number(efetivo(b)) - Number(efetivo(a));
+        return Number(efetivo(a)) - Number(efetivo(b));
       });
-  }, [alunos, busca, ordem]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alunos, busca, ordem, pendentes]);
 
   if (loading) return <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>;
 
@@ -101,7 +135,10 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
 
   return (
     <div>
-      <p className="text-fg-3 text-sm mb-4">Presença, atividades e nota do projeto final de cada aluno nesta faixa.</p>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <p className="text-fg-3 text-sm">Presença, atividades e nota do projeto final de cada aluno nesta faixa.</p>
+        {temPendentes && <Badge tone="warn">Não lançado</Badge>}
+      </div>
       {alunos.length === 0 ? (
         <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno nesta turma/curso" />
       ) : (
@@ -120,23 +157,39 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
           {alunosFiltrados.length === 0 ? <EmptyState icon={<Users className="w-8 h-8" />} title="Nenhum aluno encontrado" /> : (
             <Card className="overflow-hidden">
               <ul>
-                {alunosFiltrados.map((a) => (
-                  <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 cursor-pointer transition-colors" onClick={() => setSelecionado(a)}>
-                    <Avatar name={a.nome} email={a.email} size={32} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
-                      <p className="text-fg-3 text-xs truncate">{a.email}</p>
-                    </div>
-                    <span className="text-sm text-fg-2 flex-shrink-0 hidden sm:inline">Presença {a.pctPresenca}%</span>
-                    <span className="text-sm text-fg-2 flex-shrink-0 hidden sm:inline">Atividades {a.pctAtividades}%</span>
-                    <span className="text-sm text-fg-2 flex-shrink-0 hidden md:inline">Nota final {a.notaFinal ?? '—'}</span>
-                    {a.aprovado
-                      ? <Badge tone="success" className="flex-shrink-0"><CheckCircle2 className="w-3.5 h-3.5 mr-1 inline" />Aprovado</Badge>
-                      : <Badge tone="default" className="flex-shrink-0">Pendente</Badge>}
-                  </li>
-                ))}
+                {alunosFiltrados.map((a) => {
+                  const aprovadoEfetivo = efetivo(a);
+                  const alterado = pendentes[a.id] !== undefined;
+                  return (
+                    <li key={a.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
+                      {!readOnly && (
+                        <Checkbox checked={aprovadoEfetivo} onChange={() => toggleLocal(a)} />
+                      )}
+                      <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => setSelecionado(a)}>
+                        <Avatar name={a.nome} email={a.email} size={32} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-fg text-sm font-medium truncate">{a.nome || a.email.split('@')[0]}</p>
+                          <p className="text-fg-3 text-xs truncate">{a.email}</p>
+                        </div>
+                      </div>
+                      <span className="text-sm text-fg-2 flex-shrink-0 hidden sm:inline">Presença {a.pctPresenca}%</span>
+                      <span className="text-sm text-fg-2 flex-shrink-0 hidden sm:inline">Atividades {a.pctAtividades}%</span>
+                      <span className="text-sm text-fg-2 flex-shrink-0 hidden md:inline">Nota final {a.notaFinal ?? '—'}</span>
+                      {aprovadoEfetivo
+                        ? <Badge tone={alterado ? 'warn' : 'success'} className="flex-shrink-0"><CheckCircle2 className="w-3.5 h-3.5 mr-1 inline" />{alterado ? 'Aprovar' : 'Aprovado'}</Badge>
+                        : <Badge tone={alterado ? 'warn' : 'default'} className="flex-shrink-0">{alterado ? 'Desaprovar' : 'Pendente'}</Badge>}
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
+          )}
+          {!readOnly && (
+            <div className="flex justify-end mt-4">
+              <Button variant="primary" onClick={lancar} loading={lancando} disabled={!temPendentes}>
+                {temPendentes ? `Lançar aprovações (${Object.keys(pendentes).length})` : 'Lançar aprovações'}
+              </Button>
+            </div>
           )}
         </>
       )}
@@ -144,20 +197,9 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
       {selecionado && (
         <AlunoAprovacaoModal
           turmaId={turmaId} cursoId={cursoId} aluno={selecionado} readOnly={readOnly}
+          aprovadoEfetivo={efetivo(selecionado)}
           onClose={() => setSelecionado(null)}
-          onAprovar={async (aprovar) => {
-            // aprovacoes ainda não está no schema gerado
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: userData } = await supabase.auth.getUser();
-            const { error } = await (supabase as any).from('aprovacoes').upsert({
-              user_id: selecionado.id, turma_id: turmaId, curso_id: cursoId,
-              aprovado: aprovar, aprovado_por: userData.user?.id ?? null, atualizado_em: new Date().toISOString(),
-            }, { onConflict: 'user_id,turma_id,curso_id' });
-            if (error) { toast.error(error.message); return; }
-            toast.success(aprovar ? 'Aluno aprovado.' : 'Aprovação desfeita.');
-            setSelecionado(null);
-            load();
-          }}
+          onToggle={() => { toggleLocal(selecionado); setSelecionado(null); }}
         />
       )}
     </div>
@@ -165,15 +207,14 @@ export default function CursoAprovacoesTab({ turmaId, cursoId, readOnly = false 
 }
 
 /* ═══════════════════ Detalhe + aprovação de um aluno ═══════════════════ */
-function AlunoAprovacaoModal({ turmaId, cursoId, aluno, readOnly, onClose, onAprovar }: {
-  turmaId: string; cursoId: string; aluno: AlunoRow; readOnly: boolean; onClose: () => void; onAprovar: (aprovar: boolean) => void;
+function AlunoAprovacaoModal({ turmaId, cursoId, aluno, readOnly, aprovadoEfetivo, onClose, onToggle }: {
+  turmaId: string; cursoId: string; aluno: AlunoRow; readOnly: boolean; aprovadoEfetivo: boolean; onClose: () => void; onToggle: () => void;
 }) {
   type AtividadeRow = { id: string; titulo: string; enviadoEm: string | null; nota: number | null; corrigidoEm: string | null };
   type AulaRow = { id: string; titulo: string; dataHora: string | null; presente: boolean };
   const [atividades, setAtividades] = useState<AtividadeRow[]>([]);
   const [aulas, setAulas] = useState<AulaRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -214,9 +255,8 @@ function AlunoAprovacaoModal({ turmaId, cursoId, aluno, readOnly, onClose, onApr
       footer={readOnly ? <Button variant="secondary" onClick={onClose}>Fechar</Button> : (
         <>
           <Button variant="secondary" onClick={onClose}>Fechar</Button>
-          <Button variant={aluno.aprovado ? 'danger' : 'primary'} loading={saving}
-            onClick={async () => { setSaving(true); await onAprovar(!aluno.aprovado); setSaving(false); }}>
-            {aluno.aprovado ? 'Desaprovar aluno' : 'Aprovar aluno'}
+          <Button variant={aprovadoEfetivo ? 'danger' : 'primary'} onClick={onToggle}>
+            {aprovadoEfetivo ? 'Desmarcar aprovação' : 'Marcar como aprovado'}
           </Button>
         </>
       )}>
@@ -229,7 +269,7 @@ function AlunoAprovacaoModal({ turmaId, cursoId, aluno, readOnly, onClose, onApr
         <>
           <div className="flex items-center gap-3 mb-5">
             <Badge tone="default">Nota do projeto final: {aluno.notaFinal ?? '—'}</Badge>
-            {aluno.aprovado && <Badge tone="success"><CheckCircle2 className="w-3.5 h-3.5 mr-1 inline" />Aprovado</Badge>}
+            {aprovadoEfetivo && <Badge tone="success"><CheckCircle2 className="w-3.5 h-3.5 mr-1 inline" />Aprovado</Badge>}
           </div>
           <div className="grid sm:grid-cols-2 gap-6">
             <div>
