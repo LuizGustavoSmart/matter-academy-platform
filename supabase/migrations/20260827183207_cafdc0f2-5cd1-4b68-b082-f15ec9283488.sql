@@ -1,0 +1,1 @@
+ALTER TABLE public.user_turmas ADD COLUMN IF NOT EXISTS is_view_as_temp boolean NOT NULL DEFAULT false;

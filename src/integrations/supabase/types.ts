@@ -948,6 +948,7 @@ export type Database = {
           id: string
           is_embaixador: boolean
           is_staff: boolean
+          is_view_as_temp: boolean
           turma_id: string
           user_id: string
         }
@@ -956,6 +957,7 @@ export type Database = {
           id?: string
           is_embaixador?: boolean
           is_staff?: boolean
+          is_view_as_temp?: boolean
           turma_id: string
           user_id: string
         }
@@ -964,6 +966,7 @@ export type Database = {
           id?: string
           is_embaixador?: boolean
           is_staff?: boolean
+          is_view_as_temp?: boolean
           turma_id?: string
           user_id?: string
         }

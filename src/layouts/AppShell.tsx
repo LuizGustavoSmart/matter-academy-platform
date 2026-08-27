@@ -286,9 +286,9 @@ function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () =>
 
 /* ══════════════════════════════ Sidebar ═══════════════════════════════ */
 function SidebarInner({
-  nav, area, collapsed, onToggleCollapse, onNavigate, showClose, onClose,
+  nav, collapsed, onToggleCollapse, onNavigate, showClose, onClose,
 }: {
-  nav: NavGroup[]; area: string; collapsed: boolean;
+  nav: NavGroup[]; collapsed: boolean;
   onToggleCollapse?: () => void; onNavigate?: () => void; showClose?: boolean; onClose?: () => void;
 }) {
   return (
@@ -335,9 +335,9 @@ function SidebarInner({
 
 /* ═══════════════════════════════ Shell ════════════════════════════════ */
 export default function AppShell({
-  nav, area, contentPadded = true,
+  nav, contentPadded = true,
 }: {
-  nav: NavGroup[]; area: string; contentPadded?: boolean;
+  nav: NavGroup[]; contentPadded?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === 'true');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -351,7 +351,7 @@ export default function AppShell({
     <div className="min-h-screen flex bg-canvas">
       {/* Sidebar desktop */}
       <aside className={cn('hidden lg:flex flex-shrink-0 sticky top-0 h-screen transition-[width] duration-200 ease-ma', collapsed ? 'w-[68px]' : 'w-60')}>
-        <SidebarInner nav={nav} area={area} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
+        <SidebarInner nav={nav} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       </aside>
 
       {/* Sidebar mobile (off-canvas) */}
@@ -373,7 +373,7 @@ export default function AppShell({
               variants={slideFromLeft}
               className="absolute inset-y-0 left-0 w-[264px]"
             >
-              <SidebarInner nav={nav} area={area} collapsed={false} onNavigate={() => setMobileOpen(false)} showClose onClose={() => setMobileOpen(false)} />
+              <SidebarInner nav={nav} collapsed={false} onNavigate={() => setMobileOpen(false)} showClose onClose={() => setMobileOpen(false)} />
             </motion.div>
           </div>
         )}
