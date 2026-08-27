@@ -7,10 +7,6 @@ export default function StudentLayout() {
   const { profile } = useAuth();
   const isStaff = profile?.role === 'professor' || profile?.role === 'monitor';
   const isEmbaixador = profile?.role === 'embaixador';
-  const area = profile?.role === 'professor' ? 'Área do professor'
-    : profile?.role === 'monitor' ? 'Área do monitor'
-    : isEmbaixador ? 'Área do embaixador'
-    : 'Área do aluno';
 
   // Embaixador é aluno em algumas turmas e acompanha métricas em outras, e
   // professor/monitor dá aula em algumas turmas e é aluno em outras — em

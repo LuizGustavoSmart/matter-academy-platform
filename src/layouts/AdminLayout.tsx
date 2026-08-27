@@ -26,5 +26,5 @@ const nav: NavGroup[] = [
 ];
 
 export default function AdminLayout() {
-  return <AppShell nav={nav} area="Administração" contentPadded />;
+  return <AppShell nav={nav} contentPadded />;
 }
