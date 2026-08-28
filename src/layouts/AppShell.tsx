@@ -356,9 +356,8 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen flex bg-canvas">
-      {/* Sidebar desktop — id usado por telas que precisam medir esse espaço
-          (ex.: material de aula em "tela cheia", que não pode cobrir o menu). */}
-      <aside id="app-shell-sidebar" className={cn('hidden lg:flex flex-shrink-0 sticky top-0 h-screen transition-[width] duration-200 ease-ma', collapsed ? 'w-[68px]' : 'w-60')}>
+      {/* Sidebar desktop */}
+      <aside className={cn('hidden lg:flex flex-shrink-0 sticky top-0 h-screen transition-[width] duration-200 ease-ma', collapsed ? 'w-[68px]' : 'w-60')}>
         <SidebarInner nav={nav} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       </aside>
 
@@ -390,7 +389,7 @@ export default function AppShell({
       {/* Coluna principal */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Topbar (somente mobile: abre o menu) */}
-        <header id="app-shell-topbar" className="lg:hidden sticky top-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-line bg-canvas/90 backdrop-blur">
+        <header className="lg:hidden sticky top-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-line bg-canvas/90 backdrop-blur">
           <button onClick={() => setMobileOpen(true)} aria-label="Abrir menu" className="text-fg-2 hover:text-fg p-1 -ml-1 rounded-md">
             <Menu className="w-5 h-5" />
           </button>
