@@ -1080,6 +1080,10 @@ export type Database = {
         Args: { a_id: string; t_id: string }
         Returns: boolean
       }
+      can_manage_progresso: {
+        Args: { a_id: string; u_id: string }
+        Returns: boolean
+      }
       has_access_to_turma_curso: {
         Args: { c_id: string; t_id: string }
         Returns: boolean
