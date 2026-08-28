@@ -17,9 +17,23 @@ export default function MaterialAulaViewer({ path }: { path: string }) {
 
   useEffect(() => {
     let active = true;
+    let objectUrl: string | null = null;
     setUrl(null);
-    getSignedUrl('materiais', path).then((u) => { if (active) setUrl(u); }).catch(() => {});
-    return () => { active = false; };
+    (async () => {
+      // Baixa o PDF e exibe a partir de um blob: local, em vez de apontar o
+      // iframe direto pra URL assinada do Storage — o Storage costuma servir
+      // o arquivo com Content-Disposition de download, e o Chrome bloqueia
+      // esse tipo de download automático disparado de dentro de um iframe
+      // ("Esta página foi bloqueada pelo Chrome"). Um blob: local não sofre
+      // esse bloqueio.
+      const signedUrl = await getSignedUrl('materiais', path);
+      const resp = await fetch(signedUrl);
+      const blob = await resp.blob();
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob.type === 'application/pdf' ? blob : blob.slice(0, blob.size, 'application/pdf'));
+      setUrl(objectUrl);
+    })().catch(() => {});
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [path]);
 
   useEffect(() => {
