@@ -159,12 +159,12 @@ function buildTrack(seq: SeqItem[]) {
   const rightPts: Pt[] = rightX.map((x, j) => shift(x, rightY[j]));
   // Só o lado que de fato "olhava através" do canto vira limite — o outro
   // lado de cada capa não tinha esse problema e deve continuar exatamente
-  // como antes. Entrada da capa (k) é o canto que distorcia a lateral
-  // esquerda da casa seguinte; saída da capa (k+1) é o canto que distorcia
-  // a lateral direita da casa anterior.
+  // como antes. Entrada da capa (k) é o canto que distorcia a curva `rightPts`
+  // da casa seguinte; saída da capa (k+1) é o canto que distorcia a curva
+  // `leftPts` da casa anterior.
   const leftHardIdx = new Set<number>();
   const rightHardIdx = new Set<number>();
-  capaIndexes.forEach((i) => { leftHardIdx.add(i); rightHardIdx.add(i + 1); });
+  capaIndexes.forEach((i) => { rightHardIdx.add(i); leftHardIdx.add(i + 1); });
   const leftSegs = catmullRomSegments(leftPts, leftHardIdx);
   const rightSegs = catmullRomSegments(rightPts, rightHardIdx);
 
