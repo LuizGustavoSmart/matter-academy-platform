@@ -84,14 +84,19 @@ type BezierSeg = { c1: Pt; c2: Pt };
 
 /** Spline Catmull-Rom convertida em Béziers — dá o contorno arredondado "de rio",
     com continuidade de tangente exata entre segmentos vizinhos (sem quebras nas junções). */
-function catmullRomSegments(pts: Pt[]): BezierSeg[] {
+function catmullRomSegments(pts: Pt[], hardIdx: Set<number> = new Set()): BezierSeg[] {
   const n = pts.length;
   const segs: BezierSeg[] = [];
   for (let i = 0; i < n - 1; i++) {
-    const p0 = pts[Math.max(i - 1, 0)];
     const p1 = pts[i];
     const p2 = pts[i + 1];
-    const p3 = pts[Math.min(i + 2, n - 1)];
+    // Os dois cortes de um bloco de capa são cantos "duros" (mudança brusca
+    // de direção, de propósito). Olhar através deles para estimar a tangente
+    // da casa vizinha é o que produzia a curva estranha logo antes/depois da
+    // capa — então, exatamente como nas pontas do traçado (Math.max/min
+    // acima), duplicamos o próprio ponto em vez de alcançar o outro lado do canto.
+    const p0 = (i - 1 < 0 || hardIdx.has(i - 1)) ? p1 : pts[i - 1];
+    const p3 = (i + 2 > n - 1 || hardIdx.has(i + 2)) ? p2 : pts[i + 2];
     segs.push({
       c1: [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6],
       c2: [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6],
@@ -152,8 +157,10 @@ function buildTrack(seq: SeqItem[]) {
 
   const leftPts: Pt[] = leftX.map((x, j) => shift(x, leftY[j]));
   const rightPts: Pt[] = rightX.map((x, j) => shift(x, rightY[j]));
-  const leftSegs = catmullRomSegments(leftPts);
-  const rightSegs = catmullRomSegments(rightPts);
+  const hardIdx = new Set<number>();
+  capaIndexes.forEach((i) => { hardIdx.add(i); hardIdx.add(i + 1); });
+  const leftSegs = catmullRomSegments(leftPts, hardIdx);
+  const rightSegs = catmullRomSegments(rightPts, hardIdx);
 
   const tiles: TileGeom[] = seq.map((item, i) => {
     const [lx0, ly0] = leftPts[i]; const [lx1, ly1] = leftPts[i + 1];
