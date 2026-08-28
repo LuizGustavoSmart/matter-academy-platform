@@ -7,13 +7,14 @@ import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui
 import LessonVideoPlayer, { type WatchProgress } from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
+import MaterialAulaViewer from '../../components/MaterialAulaViewer';
 import { useFaixaCapas, resolveCapaUrl, resolveAulaCapaUrl } from '../../lib/faixaCapas';
 import {
   LIMITE_PRESENCA_PCT, LIMITE_CONCLUSAO_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
 } from '../../lib/presenca';
 
 
-type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null };
+type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null; material_pdf_url: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null; capa_aulas_padrao_url: string | null };
 const AULAS_POR_FAIXA = 12;
 
@@ -49,7 +50,7 @@ export default function StudentCourse() {
       setCurso(c);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
-      const { data: as } = await sb.from('lessons_public').select('id,titulo,descricao,ordem,capa_url').eq('curso_id', id).order('ordem');
+      const { data: as } = await sb.from('lessons_public').select('id,titulo,descricao,ordem,capa_url,material_pdf_url').eq('curso_id', id).order('ordem');
       setAulas((as ?? []) as Aula[]);
 
       const { data: ut } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('curso_id', id).limit(1);
@@ -282,6 +283,7 @@ export default function StudentCourse() {
                 </div>
               </div>
               {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words">{current.descricao}</p>}
+              {current.material_pdf_url && <div className="mb-8"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>}
               <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 pt-6 border-t border-line">
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>

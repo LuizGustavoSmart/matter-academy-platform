@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, Calendar, Clock, GraduationCap, MoreHorizontal, ClipboardCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Users, Calendar, Clock, GraduationCap, MoreHorizontal, ClipboardCheck, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
-  Field, Input, Textarea, Select, SearchInput, Alert, DropdownMenu, Checkbox, useToast, useConfirm,
+  Field, Input, Textarea, Select, SearchInput, Alert, DropdownMenu, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
-import { uploadAulaCapa, uploadCapa } from '../../lib/storage';
+import { uploadAulaCapa, uploadCapa, uploadMaterialAula } from '../../lib/storage';
 import { resolveAulaCapaUrl } from '../../lib/faixaCapas';
 import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
 import { SignedImage } from '../../components/SignedImage';
@@ -19,7 +19,7 @@ import { FAIXA_OPTIONS } from '../../lib/faixa';
 
 type Turma = { id: string; nome: string };
 type Curso = { id: string; titulo: string; descricao: string | null; observacao: string | null; link_ao_vivo: string | null; faixa: string | null; capa_url: string | null; capa_aulas_padrao_url: string | null };
-export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null };
+export type Aula = { id: string; curso_id: string; titulo: string; descricao: string | null; youtube_url: string; ordem: number; publicada: boolean; capa_url: string | null; material_pdf_url: string | null };
 type Horario = { aula_id: string; data_hora: string };
 type Aluno = { id: string; email: string; concluidas: number; total: number };
 type Tab = 'dashboard' | 'aulas' | 'atividades' | 'presenca' | 'aprovacoes' | 'alunos';
@@ -418,9 +418,10 @@ function CursoEditModal({ open, curso, turmaId, info, professores, professorStaf
     }).eq('id', curso!.id);
     if (error) { setLoading(false); setErr(error.message); return; }
 
+    const professorIdsPreenchidos = professorIds.filter(Boolean);
     const { error: ctErr } = await sb.from('curso_turmas').upsert({
       turma_id: turmaId, curso_id: curso!.id,
-      data_inicio: dataInicio || null, data_fim: dataFim || null, professor_id: professorIds[0] ?? null,
+      data_inicio: dataInicio || null, data_fim: dataFim || null, professor_id: professorIdsPreenchidos[0] ?? null,
       horario_inicio: horarioInicio || null, horario_fim: horarioFim || null, dia_semana: diaSemana || null,
     }, { onConflict: 'turma_id,curso_id' });
     if (ctErr) { setLoading(false); setErr(ctErr.message); return; }
@@ -429,7 +430,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, professorStaf
     // marcado no formulário. Quem já é staff da turma inteira (curso_id nulo)
     // não é mexido — desmarcar não teria como "descobrir" só este curso sem
     // afetar os demais que ele leciona na mesma turma.
-    const selecionados = new Set(professorIds);
+    const selecionados = new Set(professorIdsPreenchidos);
     const toAdd = professores.filter((p) => selecionados.has(p.id) && professorStaff[p.id] === undefined);
     const toDisable = professores.filter((p) => !selecionados.has(p.id) && professorStaff[p.id] === 'scoped');
     const staffErr = (
@@ -468,23 +469,50 @@ function CursoEditModal({ open, curso, turmaId, info, professores, professorStaf
           <Field label="Data de início" htmlFor="cd-dini"><Input id="cd-dini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></Field>
           <Field label="Data de fim" htmlFor="cd-dfim"><Input id="cd-dfim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} /></Field>
         </div>
-        <Field label="Professores responsáveis" hint="Todos os marcados têm as mesmas permissões e veem as correções uns dos outros">
+        <Field label="Professores responsáveis" hint="Todos têm as mesmas permissões e veem as correções uns dos outros">
           {professores.length === 0 ? (
             <p className="text-sm text-fg-3">Nenhum professor cadastrado ainda.</p>
           ) : (
             <div className="space-y-2">
-              {professores.map((p) => {
-                const whole = professorStaff[p.id] === 'whole';
+              {(professorIds.length ? professorIds : ['']).map((pid, idx) => {
+                const whole = pid !== '' && professorStaff[pid] === 'whole';
+                const rows = professorIds.length ? professorIds : [''];
                 return (
-                  <Checkbox
-                    key={p.id}
-                    checked={professorIds.includes(p.id) || whole}
-                    disabled={whole}
-                    label={<>{p.nome || p.email}{whole && <span className="text-fg-3"> (staff da turma inteira)</span>}</>}
-                    onChange={(v) => setProfessorIds((prev) => (v ? [...prev, p.id] : prev.filter((id) => id !== p.id)))}
-                  />
+                  <div key={idx} className="flex items-center gap-2">
+                    <Select
+                      aria-label={`Professor ${idx + 1}`}
+                      value={pid}
+                      disabled={whole}
+                      onChange={(e) => setProfessorIds((prev) => {
+                        const next = prev.length ? [...prev] : [''];
+                        next[idx] = e.target.value;
+                        return next;
+                      })}
+                      className="flex-1"
+                    >
+                      <option value="">Selecione o professor {idx + 1}</option>
+                      {professores.map((p) => {
+                        const takenElsewhere = rows.some((otherId, i) => i !== idx && otherId === p.id);
+                        const staffWhole = professorStaff[p.id] === 'whole';
+                        return (
+                          <option key={p.id} value={p.id} disabled={takenElsewhere}>
+                            {p.nome || p.email}
+                            {takenElsewhere ? ' (já selecionado)' : staffWhole ? ' (staff da turma inteira)' : ''}
+                          </option>
+                        );
+                      })}
+                    </Select>
+                    {!whole && rows.length > 1 && (
+                      <IconButton label="Remover professor" variant="danger" onClick={() => setProfessorIds((prev) => prev.filter((_, i) => i !== idx))}>
+                        <X className="w-4 h-4" />
+                      </IconButton>
+                    )}
+                  </div>
                 );
               })}
+              <Button type="button" variant="secondary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setProfessorIds((prev) => [...(prev.length ? prev : ['']), ''])}>
+                Adicionar professor
+              </Button>
             </div>
           )}
         </Field>
@@ -521,12 +549,15 @@ export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrd
   const [ordem, setOrdem] = useState(1);
   const [dataHora, setDataHora] = useState('');
   const [capaFile, setCapaFile] = useState<File | null>(null);
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [removerMaterial, setRemoverMaterial] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setTitulo(aula?.titulo ?? ''); setDescricao(aula?.descricao ?? ''); setUrl(aula?.youtube_url ?? '');
-    setOrdem(aula?.ordem ?? nextOrdem); setDataHora(toDatetimeLocal(dataHoraAtual)); setCapaFile(null); setErr(null);
+    setOrdem(aula?.ordem ?? nextOrdem); setDataHora(toDatetimeLocal(dataHoraAtual)); setCapaFile(null);
+    setMaterialFile(null); setRemoverMaterial(false); setErr(null);
   }, [aula, nextOrdem, dataHoraAtual, open]);
 
   const submit = async () => {
@@ -541,7 +572,14 @@ export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrd
         capa_url = up.path;
       } catch (e) { setLoading(false); setErr((e as Error).message); return; }
     }
-    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), youtube_url: url.trim(), ordem, curso_id: cursoId, capa_url };
+    let material_pdf_url = removerMaterial ? null : (aula?.material_pdf_url ?? null);
+    if (materialFile) {
+      try {
+        const up = await uploadMaterialAula(materialFile, `${cursoId}`);
+        material_pdf_url = up.path;
+      } catch (e) { setLoading(false); setErr((e as Error).message); return; }
+    }
+    const payload = { titulo: titulo.trim(), descricao: descricao.trim(), youtube_url: url.trim(), ordem, curso_id: cursoId, capa_url, material_pdf_url };
     // capa_url ainda não está no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: savedAula, error } = aula
@@ -589,6 +627,23 @@ export function AulaModal({ open, aula, cursoId, turmaId, dataHoraAtual, nextOrd
               </div>
             )}
             <Input id="cda-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
+          </div>
+        </Field>
+        <Field label="Material da aula (PDF)" hint="Mostrado na tela da aula, entre a descrição e a navegação" htmlFor="cda-material">
+          <div className="space-y-2">
+            {aula?.material_pdf_url && !removerMaterial && !materialFile && (
+              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-md bg-panel-2 border border-line text-sm">
+                <span className="text-fg-2 truncate">PDF atual anexado</span>
+                <button type="button" onClick={() => setRemoverMaterial(true)} className="text-danger hover:underline flex-shrink-0">Remover</button>
+              </div>
+            )}
+            {materialFile && (
+              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-md bg-panel-2 border border-line text-sm">
+                <span className="text-fg-2 truncate">{materialFile.name}</span>
+                <button type="button" onClick={() => setMaterialFile(null)} className="text-danger hover:underline flex-shrink-0">Cancelar</button>
+              </div>
+            )}
+            <Input id="cda-material" type="file" accept="application/pdf" onChange={(e) => { setMaterialFile(e.target.files?.[0] ?? null); setRemoverMaterial(false); }} className="!py-2" />
           </div>
         </Field>
       </div>
