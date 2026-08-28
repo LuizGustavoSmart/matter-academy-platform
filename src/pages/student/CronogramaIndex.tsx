@@ -84,7 +84,7 @@ type BezierSeg = { c1: Pt; c2: Pt };
 
 /** Spline Catmull-Rom convertida em Béziers — dá o contorno arredondado "de rio",
     com continuidade de tangente exata entre segmentos vizinhos (sem quebras nas junções). */
-function catmullRomSegments(pts: Pt[], hardIdx: Set<number> = new Set()): BezierSeg[] {
+function catmullRomSegments(pts: Pt[], hardIdx: Set<number> = new Set(), boostIdx: Set<number> = new Set(), boostFactor = 1.5): BezierSeg[] {
   const n = pts.length;
   const segs: BezierSeg[] = [];
   for (let i = 0; i < n - 1; i++) {
@@ -97,9 +97,13 @@ function catmullRomSegments(pts: Pt[], hardIdx: Set<number> = new Set()): Bezier
     // acima), duplicamos o próprio ponto em vez de alcançar o outro lado do canto.
     const p0 = (i - 1 < 0 || hardIdx.has(i - 1)) ? p1 : pts[i - 1];
     const p3 = (i + 2 > n - 1 || hardIdx.has(i + 2)) ? p2 : pts[i + 2];
+    // Na lateral oposta (a que não tem o canto duro), a casa vizinha à capa
+    // pode ficar um pouco "achatada" perto dela — amplia um pouco a tangente
+    // só nessa casa para arredondar mais a curva para fora.
+    const f = boostIdx.has(i) ? boostFactor : 1;
     segs.push({
-      c1: [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6],
-      c2: [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6],
+      c1: [p1[0] + f * (p2[0] - p0[0]) / 6, p1[1] + f * (p2[1] - p0[1]) / 6],
+      c2: [p2[0] - f * (p3[0] - p1[0]) / 6, p2[1] - f * (p3[1] - p1[1]) / 6],
     });
   }
   return segs;
@@ -165,8 +169,13 @@ function buildTrack(seq: SeqItem[]) {
   const leftHardIdx = new Set<number>();
   const rightHardIdx = new Set<number>();
   capaIndexes.forEach((i) => { rightHardIdx.add(i); leftHardIdx.add(i + 1); });
-  const leftSegs = catmullRomSegments(leftPts, leftHardIdx);
-  const rightSegs = catmullRomSegments(rightPts, rightHardIdx);
+  // Lateral oposta à corrigida acima, na mesma casa vizinha à capa — fica um
+  // pouco mais arredondada para fora, a pedido do usuário.
+  const leftBoostIdx = new Set<number>();
+  const rightBoostIdx = new Set<number>();
+  capaIndexes.forEach((i) => { leftBoostIdx.add(i + 1); rightBoostIdx.add(i - 1); });
+  const leftSegs = catmullRomSegments(leftPts, leftHardIdx, leftBoostIdx);
+  const rightSegs = catmullRomSegments(rightPts, rightHardIdx, rightBoostIdx);
 
   const tiles: TileGeom[] = seq.map((item, i) => {
     const [lx0, ly0] = leftPts[i]; const [lx1, ly1] = leftPts[i + 1];
