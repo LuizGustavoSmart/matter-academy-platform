@@ -271,18 +271,18 @@ export default function StudentCourse() {
             <>
               <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
-                <div className="min-w-0"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0 sm:items-center">
+                <div className="min-w-0 max-w-2xl"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
+                <div className="flex flex-col items-stretch sm:items-end gap-2 sm:flex-shrink-0">
+                  <span className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
+                    {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
+                  </span>
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
                   {atividadeId && (
                     <Button variant="secondary" onClick={() => nav(`/atividade/${atividadeId}`)} icon={<ClipboardList className="w-4 h-4" />}>Ver atividade</Button>
                   )}
-                  <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
-                    {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
-                  </span>
                 </div>
               </div>
-              {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words">{current.descricao}</p>}
+              {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words max-w-2xl">{current.descricao}</p>}
               {current.material_pdf_url && <div className="mb-8"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>}
               <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 pt-6 border-t border-line">
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
