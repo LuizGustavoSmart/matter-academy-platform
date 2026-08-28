@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -296,6 +296,7 @@ export type Database = {
           curso_id: string
           descricao: string | null
           id: string
+          material_pdf_url: string | null
           ordem: number
           publicada: boolean
           titulo: string
@@ -307,6 +308,7 @@ export type Database = {
           curso_id: string
           descricao?: string | null
           id?: string
+          material_pdf_url?: string | null
           ordem?: number
           publicada?: boolean
           titulo: string
@@ -318,6 +320,7 @@ export type Database = {
           curso_id?: string
           descricao?: string | null
           id?: string
+          material_pdf_url?: string | null
           ordem?: number
           publicada?: boolean
           titulo?: string
@@ -1039,6 +1042,7 @@ export type Database = {
           curso_id: string | null
           descricao: string | null
           id: string | null
+          material_pdf_url: string | null
           ordem: number | null
           publicada: boolean | null
           titulo: string | null
@@ -1049,6 +1053,7 @@ export type Database = {
           curso_id?: string | null
           descricao?: string | null
           id?: string | null
+          material_pdf_url?: string | null
           ordem?: number | null
           publicada?: boolean | null
           titulo?: string | null
@@ -1059,6 +1064,7 @@ export type Database = {
           curso_id?: string | null
           descricao?: string | null
           id?: string | null
+          material_pdf_url?: string | null
           ordem?: number | null
           publicada?: boolean | null
           titulo?: string | null
