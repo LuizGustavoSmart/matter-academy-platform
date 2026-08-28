@@ -269,9 +269,17 @@ export default function StudentCourse() {
         <section className="p-4 sm:p-6 lg:p-8 min-w-0">
           {current ? (
             <>
+              <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 mb-6 pb-6 border-b border-line">
+                <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
+                <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
+              </div>
               <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
-                <div className="min-w-0 max-w-2xl"><p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p><h2 className="break-words">{current.titulo}</h2></div>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-8">
+                <div className="min-w-0 max-w-2xl">
+                  <p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p>
+                  <h2 className="break-words">{current.titulo}</h2>
+                  {current.descricao && <p className="text-fg-2 leading-relaxed mt-2 whitespace-pre-line break-words">{current.descricao}</p>}
+                </div>
                 <div className="flex flex-col items-stretch sm:items-end gap-2 sm:flex-shrink-0">
                   <span className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
                     {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
@@ -282,12 +290,7 @@ export default function StudentCourse() {
                   )}
                 </div>
               </div>
-              {current.descricao && <p className="text-fg-2 leading-relaxed mb-8 whitespace-pre-line break-words max-w-2xl">{current.descricao}</p>}
               {current.material_pdf_url && <div className="mb-8"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>}
-              <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 pt-6 border-t border-line">
-                <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
-                <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
-              </div>
             </>
           ) : <p className="text-fg-3">Selecione uma aula</p>}
         </section>
