@@ -1097,6 +1097,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_embaixador_of_turma: { Args: { p_turma_id: string }; Returns: boolean }
       is_embaixador_over_user: { Args: { p_user_id: string }; Returns: boolean }
+      is_professor_of_curso: { Args: { c_id: string }; Returns: boolean }
       is_professor_of_turma: { Args: { t_id: string }; Returns: boolean }
       is_professor_of_turma_curso: {
         Args: { c_id: string; t_id: string }
