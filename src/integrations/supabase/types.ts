@@ -1046,6 +1046,7 @@ export type Database = {
           ordem: number | null
           publicada: boolean | null
           titulo: string | null
+          youtube_url: string | null
         }
         Insert: {
           capa_url?: string | null
@@ -1057,6 +1058,7 @@ export type Database = {
           ordem?: number | null
           publicada?: boolean | null
           titulo?: string | null
+          youtube_url?: string | null
         }
         Update: {
           capa_url?: string | null
@@ -1068,6 +1070,7 @@ export type Database = {
           ordem?: number | null
           publicada?: boolean | null
           titulo?: string | null
+          youtube_url?: string | null
         }
         Relationships: [
           {

@@ -15,6 +15,13 @@
       "when": 1787946882584,
       "tag": "0001_professor_curso_aulas_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787951977308,
+      "tag": "0002_update_lessons_public_view",
+      "breakpoints": true
     }
   ]
 }
