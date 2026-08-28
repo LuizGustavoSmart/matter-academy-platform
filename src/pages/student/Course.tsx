@@ -285,9 +285,11 @@ export default function StudentCourse() {
                   {current.descricao && <p className="text-fg-2 leading-relaxed mt-2 whitespace-pre-line break-words">{current.descricao}</p>}
                 </div>
                 <div className="flex flex-col items-stretch sm:items-end gap-2 sm:flex-shrink-0">
-                  <span className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
-                    {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
-                  </span>
+                  {current.youtube_url && (
+                    <span className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
+                      {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
+                    </span>
+                  )}
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
                   {atividadeId && (
                     <Button variant="secondary" onClick={() => nav(`/atividade/${atividadeId}`)} icon={<ClipboardList className="w-4 h-4" />}>Ver atividade</Button>
