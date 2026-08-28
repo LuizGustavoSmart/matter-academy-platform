@@ -266,7 +266,7 @@ export default function StudentCourse() {
           </div>
         </aside>
 
-        <section className="p-4 sm:p-6 lg:p-8">
+        <section className="p-4 sm:p-6 lg:p-8 min-w-0">
           {current ? (
             <>
               <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>

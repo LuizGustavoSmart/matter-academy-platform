@@ -56,14 +56,23 @@ export default function MaterialAulaViewer({ path }: { path: string }) {
       const pdfPage = await doc.getPage(page);
       const containerWidth = scrollRef.current?.clientWidth ?? 800;
       const base = pdfPage.getViewport({ scale: 1 });
-      const viewport = pdfPage.getViewport({ scale: (containerWidth / base.width) * zoom });
+      // Tamanho exibido (CSS px) — o que realmente ocupa espaço na página —
+      // fica só sob controle do zoom escolhido. A resolução do canvas usa o
+      // devicePixelRatio por cima disso apenas pra nitidez, nunca influencia
+      // o tamanho exibido: sem isso, a página inteira "crescia" junto com o
+      // documento em vez de só rolar dentro do próprio visualizador.
+      const displayViewport = pdfPage.getViewport({ scale: (containerWidth / base.width) * zoom });
+      const dpr = window.devicePixelRatio || 1;
+      const renderViewport = pdfPage.getViewport({ scale: (containerWidth / base.width) * zoom * dpr });
       const canvas = canvasRef.current;
       if (!canvas || cancelled) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await pdfPage.render({ canvas, canvasContext: ctx, viewport }).promise;
+      canvas.width = renderViewport.width;
+      canvas.height = renderViewport.height;
+      canvas.style.width = `${displayViewport.width}px`;
+      canvas.style.height = `${displayViewport.height}px`;
+      await pdfPage.render({ canvas, canvasContext: ctx, viewport: renderViewport }).promise;
     })().catch(() => { if (!cancelled) setErr('Não foi possível exibir esta página.'); });
     return () => { cancelled = true; };
   }, [doc, page, zoom, fullscreen]);
@@ -91,7 +100,7 @@ export default function MaterialAulaViewer({ path }: { path: string }) {
   }, [fullscreen]);
 
   const viewer = (
-    <div className={cn('flex flex-col border border-line rounded-xl overflow-hidden bg-panel', fullscreen ? 'w-full h-full' : 'h-[70vh]')}>
+    <div className={cn('flex flex-col min-w-0 max-w-full border border-line rounded-xl overflow-hidden bg-panel', fullscreen ? 'w-full h-full' : 'h-[70vh]')}>
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-line flex-shrink-0">
         <p className="text-sm font-medium text-fg pl-1">Material da aula</p>
         <div className="flex items-center gap-1">
@@ -107,7 +116,7 @@ export default function MaterialAulaViewer({ path }: { path: string }) {
           </IconButton>
         </div>
       </div>
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto bg-canvas flex justify-center p-4">
+      <div ref={scrollRef} className="flex-1 min-h-0 min-w-0 overflow-auto bg-canvas flex justify-center p-4">
         {err ? (
           <p className="text-sm text-danger self-start">{err}</p>
         ) : !doc ? (
