@@ -14,7 +14,7 @@ import {
 } from '../../lib/presenca';
 
 
-type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null; material_pdf_url: string | null };
+type Aula = { id: string; titulo: string; descricao: string | null; ordem: number; capa_url: string | null; material_pdf_url: string | null; youtube_url: string | null };
 type Curso = { id: string; titulo: string; descricao: string | null; faixa: string | null; capa_aulas_padrao_url: string | null };
 const AULAS_POR_FAIXA = 12;
 
@@ -50,7 +50,7 @@ export default function StudentCourse() {
       setCurso(c);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
-      const { data: as } = await sb.from('lessons_public').select('id,titulo,descricao,ordem,capa_url,material_pdf_url').eq('curso_id', id).order('ordem');
+      const { data: as } = await sb.from('lessons_public').select('id,titulo,descricao,ordem,capa_url,material_pdf_url,youtube_url').eq('curso_id', id).order('ordem');
       setAulas((as ?? []) as Aula[]);
 
       const { data: ut } = await supabase.from('user_turmas').select('turma_id').eq('user_id', profile.id).eq('curso_id', id).limit(1);
@@ -273,7 +273,11 @@ export default function StudentCourse() {
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx - 1].id)} disabled={currentIdx <= 0}>Aula anterior</Button>
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
               </div>
-              <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
+              {current.youtube_url ? (
+                <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
+              ) : current.material_pdf_url ? (
+                <div className="mb-6"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>
+              ) : null}
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-8">
                 <div className="min-w-0 max-w-2xl">
                   <p className="text-fg-3 text-xs mb-1">Aula {current.ordem}</p>
@@ -290,7 +294,7 @@ export default function StudentCourse() {
                   )}
                 </div>
               </div>
-              {current.material_pdf_url && <div className="mb-8"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>}
+              {current.youtube_url && current.material_pdf_url && <div className="mb-8"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>}
             </>
           ) : <p className="text-fg-3">Selecione uma aula</p>}
         </section>
