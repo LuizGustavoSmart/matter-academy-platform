@@ -199,10 +199,11 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
     // vídeo por conta própria.
     const presentesIds = pendentesIds.filter((id) => pendentes[id]);
     if (presentesIds.length) {
-      await sb.from('progresso').upsert(
+      const { error: progressoError } = await sb.from('progresso').upsert(
         presentesIds.map((alunoId) => ({ user_id: alunoId, aula_id: aula.id, concluido: true, updated_at: new Date().toISOString() })),
         { onConflict: 'user_id,aula_id' },
       );
+      if (progressoError) toast.error(`Presenças salvas, mas o progresso não pôde ser atualizado: ${progressoError.message}`);
     }
     toast.success('Presenças lançadas.');
     onSaved?.();
