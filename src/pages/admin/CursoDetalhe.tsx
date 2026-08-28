@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ExternalLink, PlayCircle, Use
 import { supabase } from '../../lib/supabase';
 import {
   Button, IconButton, Card, Modal, EmptyState, Skeleton, ProgressBar, Avatar, StatTile, Tabs, Switch,
-  Field, Input, Textarea, Select, SearchInput, Alert, DropdownMenu, useToast, useConfirm,
+  Field, Input, Textarea, Select, SearchInput, Alert, DropdownMenu, Checkbox, useToast, useConfirm,
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { getYouTubeId } from '../../lib/youtube';
@@ -56,6 +56,10 @@ export default function CursoDetalhe() {
   const [curso, setCurso] = useState<Curso | null>(null);
   const [cursoTurmaInfo, setCursoTurmaInfo] = useState<CursoTurmaInfo | null>(null);
   const [professores, setProfessores] = useState<Professor[]>([]);
+  /** Como cada professor está vinculado à turma: "scoped" (só este curso) ou
+   * "whole" (staff da turma inteira, curso_id nulo — não dá pra "desmarcar"
+   * só deste curso sem afetar os demais, então o toggle fica travado ligado). */
+  const [professorStaff, setProfessorStaff] = useState<Record<string, 'scoped' | 'whole'>>({});
   const [editCursoOpen, setEditCursoOpen] = useState(false);
 
   const [dashLoading, setDashLoading] = useState(true);
@@ -78,13 +82,22 @@ export default function CursoDetalhe() {
     // link_ao_vivo/curso_turmas extras ainda não estão no schema gerado
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
-    const [{ data: t }, { data: c }, { data: ct }, { data: profs }] = await Promise.all([
+    const [{ data: t }, { data: c }, { data: ct }, { data: profs }, { data: staffRows }] = await Promise.all([
       supabase.from('turmas').select('id,nome').eq('id', turmaId!).maybeSingle(),
       sb.from('cursos').select('*').eq('id', cursoId!).maybeSingle(),
       sb.from('curso_turmas').select('data_inicio,data_fim,professor_id,horario_inicio,horario_fim,dia_semana').eq('turma_id', turmaId!).eq('curso_id', cursoId!).maybeSingle(),
       supabase.from('profiles').select('id,nome,email').eq('role', 'professor').order('nome'),
+      // is_staff/curso_id ainda não estão no schema gerado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).from('user_turmas').select('user_id,curso_id,is_staff').eq('turma_id', turmaId!).eq('is_staff', true),
     ]);
     setTurma(t); setCurso(c); setCursoTurmaInfo(ct ?? null); setProfessores(profs ?? []);
+    const staffMap: Record<string, 'scoped' | 'whole'> = {};
+    ((staffRows ?? []) as { user_id: string; curso_id: string | null }[]).forEach((r) => {
+      if (r.curso_id === cursoId) staffMap[r.user_id] = 'scoped';
+      else if (r.curso_id === null && !staffMap[r.user_id]) staffMap[r.user_id] = 'whole';
+    });
+    setProfessorStaff(staffMap);
   };
 
   const loadDashboard = async () => {
@@ -219,9 +232,12 @@ export default function CursoDetalhe() {
             <InfoCard icon={<Calendar className="w-4 h-4" />} label="Data de fim" value={dateOnlyBR(cursoTurmaInfo?.data_fim ?? null)} placeholder={!cursoTurmaInfo?.data_fim} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <InfoCard icon={<GraduationCap className="w-4 h-4" />} label="Professor responsável"
-              value={(() => { const p = professores.find((x) => x.id === cursoTurmaInfo?.professor_id); return p ? (p.nome || p.email) : '—'; })()}
-              placeholder={!cursoTurmaInfo?.professor_id} />
+            <InfoCard icon={<GraduationCap className="w-4 h-4" />} label="Professores responsáveis"
+              value={(() => {
+                const nomes = professores.filter((p) => professorStaff[p.id]).map((p) => p.nome || p.email);
+                return nomes.length ? nomes.join(', ') : '—';
+              })()}
+              placeholder={!Object.keys(professorStaff).length} />
             <InfoCard icon={<Clock className="w-4 h-4" />} label="Horário das aulas"
               value={cursoTurmaInfo?.horario_inicio ? `${cursoTurmaInfo.horario_inicio.slice(0, 5)} às ${cursoTurmaInfo.horario_fim?.slice(0, 5) ?? '—'}` : '—'}
               placeholder={!cursoTurmaInfo?.horario_inicio} />
@@ -335,7 +351,7 @@ export default function CursoDetalhe() {
         </div>
       )}
 
-      <CursoEditModal open={editCursoOpen} curso={curso} turmaId={turmaId!} info={cursoTurmaInfo} professores={professores} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
+      <CursoEditModal open={editCursoOpen} curso={curso} turmaId={turmaId!} info={cursoTurmaInfo} professores={professores} professorStaff={professorStaff} onClose={() => setEditCursoOpen(false)} onDone={() => { setEditCursoOpen(false); loadBase(); }} />
       <AulaModal open={createAulaOpen} aula={null} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setCreateAulaOpen(false)} onDone={() => { setCreateAulaOpen(false); loadAulas(); loadDashboard(); }} />
       <AulaModal open={!!editAula} aula={editAula} cursoId={cursoId!} turmaId={turmaId!} dataHoraAtual={editAula ? horarios[editAula.id] ?? null : null} nextOrdem={maxOrdem + 1} cursoCapaAulasPadrao={curso?.capa_aulas_padrao_url} onClose={() => setEditAula(null)} onDone={() => { setEditAula(null); loadAulas(); }} />
       {presencaAula && (
@@ -354,8 +370,9 @@ function InfoCard({ icon, label, value, placeholder = true }: { icon: React.Reac
   );
 }
 
-function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDone }: {
-  open: boolean; curso: Curso | null; turmaId: string; info: CursoTurmaInfo | null; professores: Professor[]; onClose: () => void; onDone: () => void;
+function CursoEditModal({ open, curso, turmaId, info, professores, professorStaff, onClose, onDone }: {
+  open: boolean; curso: Curso | null; turmaId: string; info: CursoTurmaInfo | null; professores: Professor[];
+  professorStaff: Record<string, 'scoped' | 'whole'>; onClose: () => void; onDone: () => void;
 }) {
   const toast = useToast();
   const [titulo, setTitulo] = useState('');
@@ -365,7 +382,7 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
   const [faixa, setFaixa] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
-  const [professorId, setProfessorId] = useState('');
+  const [professorIds, setProfessorIds] = useState<string[]>([]);
   const [horarioInicio, setHorarioInicio] = useState('');
   const [horarioFim, setHorarioFim] = useState('');
   const [diaSemana, setDiaSemana] = useState('');
@@ -376,10 +393,11 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
 
   useEffect(() => {
     setTitulo(curso?.titulo ?? ''); setDescricao(curso?.descricao ?? ''); setObservacao(curso?.observacao ?? ''); setLinkAoVivo(curso?.link_ao_vivo ?? ''); setFaixa(curso?.faixa ?? '');
-    setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? ''); setProfessorId(info?.professor_id ?? '');
+    setDataInicio(info?.data_inicio ?? ''); setDataFim(info?.data_fim ?? '');
+    setProfessorIds(professores.filter((p) => professorStaff[p.id]).map((p) => p.id));
     setHorarioInicio(info?.horario_inicio?.slice(0, 5) ?? ''); setHorarioFim(info?.horario_fim?.slice(0, 5) ?? '');
     setDiaSemana(info?.dia_semana ?? ''); setCapaPending(CAPA_PENDING_EMPTY); setCapaAulasPending(CAPA_PENDING_EMPTY); setErr(null);
-  }, [curso, info, open]);
+  }, [curso, info, open, professores, professorStaff]);
 
   const submit = async () => {
     setErr(null);
@@ -402,11 +420,27 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
 
     const { error: ctErr } = await sb.from('curso_turmas').upsert({
       turma_id: turmaId, curso_id: curso!.id,
-      data_inicio: dataInicio || null, data_fim: dataFim || null, professor_id: professorId || null,
+      data_inicio: dataInicio || null, data_fim: dataFim || null, professor_id: professorIds[0] ?? null,
       horario_inicio: horarioInicio || null, horario_fim: horarioFim || null, dia_semana: diaSemana || null,
     }, { onConflict: 'turma_id,curso_id' });
+    if (ctErr) { setLoading(false); setErr(ctErr.message); return; }
+
+    // Sincroniza o acesso de professor (user_turmas.is_staff) com quem ficou
+    // marcado no formulário. Quem já é staff da turma inteira (curso_id nulo)
+    // não é mexido — desmarcar não teria como "descobrir" só este curso sem
+    // afetar os demais que ele leciona na mesma turma.
+    const selecionados = new Set(professorIds);
+    const toAdd = professores.filter((p) => selecionados.has(p.id) && professorStaff[p.id] === undefined);
+    const toDisable = professores.filter((p) => !selecionados.has(p.id) && professorStaff[p.id] === 'scoped');
+    const staffErr = (
+      await Promise.all([
+        ...toAdd.map((p) => sb.from('user_turmas').insert({ user_id: p.id, turma_id: turmaId, curso_id: curso!.id, is_staff: true })),
+        ...toDisable.map((p) => sb.from('user_turmas').update({ is_staff: false }).eq('user_id', p.id).eq('turma_id', turmaId).eq('curso_id', curso!.id)),
+      ])
+    ).find((r) => r?.error)?.error;
     setLoading(false);
-    if (ctErr) setErr(ctErr.message); else { toast.success('Curso atualizado.'); onDone(); }
+    if (staffErr) setErr(staffErr.message);
+    else { toast.success('Curso atualizado.'); onDone(); }
   };
 
   return (
@@ -434,11 +468,25 @@ function CursoEditModal({ open, curso, turmaId, info, professores, onClose, onDo
           <Field label="Data de início" htmlFor="cd-dini"><Input id="cd-dini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></Field>
           <Field label="Data de fim" htmlFor="cd-dfim"><Input id="cd-dfim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} /></Field>
         </div>
-        <Field label="Professor responsável" htmlFor="cd-prof">
-          <Select id="cd-prof" value={professorId} onChange={(e) => setProfessorId(e.target.value)}>
-            <option value="">Não definido</option>
-            {professores.map((p) => <option key={p.id} value={p.id}>{p.nome || p.email}</option>)}
-          </Select>
+        <Field label="Professores responsáveis" hint="Todos os marcados têm as mesmas permissões e veem as correções uns dos outros">
+          {professores.length === 0 ? (
+            <p className="text-sm text-fg-3">Nenhum professor cadastrado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {professores.map((p) => {
+                const whole = professorStaff[p.id] === 'whole';
+                return (
+                  <Checkbox
+                    key={p.id}
+                    checked={professorIds.includes(p.id) || whole}
+                    disabled={whole}
+                    label={<>{p.nome || p.email}{whole && <span className="text-fg-3"> (staff da turma inteira)</span>}</>}
+                    onChange={(v) => setProfessorIds((prev) => (v ? [...prev, p.id] : prev.filter((id) => id !== p.id)))}
+                  />
+                );
+              })}
+            </div>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Horário — início" htmlFor="cd-hini"><Input id="cd-hini" type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} /></Field>
