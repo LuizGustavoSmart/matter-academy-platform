@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787946130388,
+      "tag": "0000_ler20260828_material_pdf_aulas",
+      "breakpoints": true
+    }
+  ]
+}
