@@ -192,6 +192,18 @@ export function PresencaAulaModal({ turmaId, cursoId, aula, readOnly = false, on
       return next;
     });
     setPendentes({});
+
+    // Presença marca a aula como concluída no progresso do aluno, para que
+    // o painel de aulas e o cronograma reflitam a presença lançada pelo
+    // professor. Ausência não desmarca — o aluno pode já ter assistido o
+    // vídeo por conta própria.
+    const presentesIds = pendentesIds.filter((id) => pendentes[id]);
+    if (presentesIds.length) {
+      await sb.from('progresso').upsert(
+        presentesIds.map((alunoId) => ({ user_id: alunoId, aula_id: aula.id, concluido: true, updated_at: new Date().toISOString() })),
+        { onConflict: 'user_id,aula_id' },
+      );
+    }
     toast.success('Presenças lançadas.');
     onSaved?.();
     return true;

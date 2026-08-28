@@ -250,7 +250,7 @@ export default function CursoDetalhe() {
                       <li key={a.id} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0 hover:bg-panel-2/40 transition-colors">
                         <div className="w-20 h-11 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
                           {capaEfetiva ? (
-                            <SignedImage bucket="aulas" path={capaEfetiva} className="w-full h-full object-cover" alt="" />
+                            <SignedImage bucket={a.capa_url ? 'aulas' : 'capas'} path={capaEfetiva} className="w-full h-full object-cover" alt="" />
                           ) : ytId ? (
                             <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" loading="lazy" />
                           ) : null}
