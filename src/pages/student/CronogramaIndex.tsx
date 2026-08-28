@@ -157,10 +157,16 @@ function buildTrack(seq: SeqItem[]) {
 
   const leftPts: Pt[] = leftX.map((x, j) => shift(x, leftY[j]));
   const rightPts: Pt[] = rightX.map((x, j) => shift(x, rightY[j]));
-  const hardIdx = new Set<number>();
-  capaIndexes.forEach((i) => { hardIdx.add(i); hardIdx.add(i + 1); });
-  const leftSegs = catmullRomSegments(leftPts, hardIdx);
-  const rightSegs = catmullRomSegments(rightPts, hardIdx);
+  // Só o lado que de fato "olhava através" do canto vira limite — o outro
+  // lado de cada capa não tinha esse problema e deve continuar exatamente
+  // como antes. Entrada da capa (k) é o canto que distorcia a lateral
+  // esquerda da casa seguinte; saída da capa (k+1) é o canto que distorcia
+  // a lateral direita da casa anterior.
+  const leftHardIdx = new Set<number>();
+  const rightHardIdx = new Set<number>();
+  capaIndexes.forEach((i) => { leftHardIdx.add(i); rightHardIdx.add(i + 1); });
+  const leftSegs = catmullRomSegments(leftPts, leftHardIdx);
+  const rightSegs = catmullRomSegments(rightPts, rightHardIdx);
 
   const tiles: TileGeom[] = seq.map((item, i) => {
     const [lx0, ly0] = leftPts[i]; const [lx1, ly1] = leftPts[i + 1];
