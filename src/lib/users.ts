@@ -71,26 +71,36 @@ export function fullName(nome?: string | null, sobrenome?: string | null): strin
   return [nome, sobrenome].filter(Boolean).join(' ').trim();
 }
 
-/* ───────────────────── Modelo de importação (planilha) ─────────────── */
+/* ───────────────────── Modelo de exportação de usuários ────────────── */
+/** Usado só pelo botão "Exportar" (lista completa de usuários, qualquer papel). */
 export const TEMPLATE_COLUMNS = [
   'Nome', 'Sobrenome', 'Email', 'Telefone', 'Empresa', 'Papel', 'Turma', 'Cursos', 'Enviar convite',
 ] as const;
 
-export const TEMPLATE_SAMPLE_ROWS: string[][] = [
-  ['Maria', 'Souza', 'maria.souza@empresa.com', '(11) 98888-0001', 'Acme Ltda', 'Aluno', 'Turma A', 'Introdução; Avançado', 'Sim'],
-  ['João', 'Pereira', 'joao.pereira@empresa.com', '11988880002', 'Acme Ltda', 'Professor', 'Turma A', '', 'Não'],
+/* ───────────────────── Modelo de importação (planilha) ─────────────── */
+/** A importação por planilha é só para alunos — professor/embaixador são
+ * cadastrados manualmente, então não há coluna de Papel aqui. */
+export const IMPORT_TEMPLATE_COLUMNS = [
+  'Nome', 'Sobrenome', 'Email', 'Telefone', 'Empresa', 'Turma', 'Cursos', 'Enviar convite',
+] as const;
+
+export const IMPORT_TEMPLATE_SAMPLE_ROWS: string[][] = [
+  ['Maria', 'Souza', 'maria.souza@empresa.com', '(11) 98888-0001', 'Acme Ltda', 'Turma A', 'Introdução; Avançado', 'Sim'],
+  ['', '', 'joao.pereira@empresa.com', '', '', 'T008', '', 'Não'],
 ];
 
 /** Campos canônicos que o mapeador tenta reconhecer no cabeçalho. */
 export type ImportField =
-  | 'nome' | 'sobrenome' | 'email' | 'telefone' | 'empresa' | 'papel' | 'turma' | 'cursos' | 'enviar_convite';
+  | 'nome' | 'sobrenome' | 'email' | 'telefone' | 'empresa' | 'turma' | 'cursos' | 'enviar_convite';
 
 export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   nome: 'Nome', sobrenome: 'Sobrenome', email: 'E-mail', telefone: 'Telefone', empresa: 'Empresa',
-  papel: 'Papel', turma: 'Turma', cursos: 'Cursos', enviar_convite: 'Enviar convite',
+  turma: 'Turma (nome ou ID)', cursos: 'Cursos', enviar_convite: 'Enviar convite',
 };
 
-export const REQUIRED_IMPORT_FIELDS: ImportField[] = ['nome', 'sobrenome', 'email', 'telefone', 'empresa'];
+/** Só e-mail e turma são obrigatórios — o resto (nome, telefone, empresa,
+ * cursos) pode ficar em branco e ser completado depois. */
+export const REQUIRED_IMPORT_FIELDS: ImportField[] = ['email', 'turma'];
 
 /** Heurística de auto-mapeamento coluna → campo canônico. */
 export function guessField(header: string): ImportField | null {
@@ -101,8 +111,7 @@ export function guessField(header: string): ImportField | null {
     email: 'email', 'e-mail': 'email', mail: 'email',
     telefone: 'telefone', fone: 'telefone', celular: 'telefone', phone: 'telefone', whatsapp: 'telefone',
     empresa: 'empresa', company: 'empresa', organizacao: 'empresa', instituicao: 'empresa',
-    papel: 'papel', perfil: 'papel', role: 'papel', funcao: 'papel', tipo: 'papel',
-    turma: 'turma', turmas: 'turma', classe: 'turma', class: 'turma',
+    turma: 'turma', turmas: 'turma', classe: 'turma', class: 'turma', turmaid: 'turma', idturma: 'turma', codigo: 'turma',
     curso: 'cursos', cursos: 'cursos', course: 'cursos', courses: 'cursos',
     enviarconvite: 'enviar_convite', convite: 'enviar_convite', invite: 'enviar_convite', sendinvite: 'enviar_convite',
   };

@@ -11,7 +11,7 @@ import {
 } from '../../components/ui';
 import { PageHeader } from '../../layouts/AppShell';
 import { ROLE_LABEL, fullName, normalizePhone, type Role } from '../../lib/users';
-import { loadCoursesByTurma, type Turma, type CursoInfo } from './users/pickers';
+import { loadCoursesByTurma, turmaLabel, type Turma, type CursoInfo } from './users/pickers';
 import type { UserRow } from './users/types';
 import { UsersTableDesktop, UsersCardsMobile, type SortKey, type RowActions } from './users/UsersTable';
 import { UserFormDrawer } from './users/UserFormDrawer';
@@ -53,7 +53,7 @@ export default function AdminUsers() {
     try {
       const [{ data: ps, error: pe }, { data: ts }, { data: uts }, byTurma] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('turmas').select('id,nome').order('nome'),
+        supabase.from('turmas').select('id,nome,codigo').order('nome'),
         supabase.from('user_turmas').select('user_id,turma_id'),
         loadCoursesByTurma(),
       ]);
@@ -223,7 +223,7 @@ export default function AdminUsers() {
           </Select>
           <Select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="w-[180px]">
             <option value="">Todas as turmas</option>
-            {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            {turmas.map((t) => <option key={t.id} value={t.id}>{turmaLabel(t)}</option>)}
           </Select>
         </div>
         <Button variant="secondary" className="sm:hidden" icon={<SlidersHorizontal className="w-4 h-4" />} onClick={() => setShowFilters((v) => !v)}>Filtros</Button>
@@ -242,7 +242,7 @@ export default function AdminUsers() {
           </Select>
           <Select value={filterTurma} onChange={(e) => setFilterTurma(e.target.value)} className="col-span-2">
             <option value="">Todas as turmas</option>
-            {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            {turmas.map((t) => <option key={t.id} value={t.id}>{turmaLabel(t)}</option>)}
           </Select>
         </div>
       )}
@@ -253,7 +253,7 @@ export default function AdminUsers() {
           {search && <FilterChip label={<>Busca: <span className="text-fg">{search}</span></>} onRemove={() => setSearch('')} />}
           {filterRole && <FilterChip label={<>Papel: <span className="text-fg">{ROLE_LABEL[filterRole as Role]}</span></>} onRemove={() => setFilterRole('')} />}
           {filterStatus && <FilterChip label={<>Status: <span className="text-fg">{filterStatus === 'active' ? 'Ativo' : filterStatus === 'pending' ? 'Pendente' : 'Bloqueado'}</span></>} onRemove={() => setFilterStatus('')} />}
-          {filterTurma && <FilterChip label={<>Turma: <span className="text-fg">{turmas.find((t) => t.id === filterTurma)?.nome}</span></>} onRemove={() => setFilterTurma('')} />}
+          {filterTurma && <FilterChip label={<>Turma: <span className="text-fg">{(() => { const t = turmas.find((t) => t.id === filterTurma); return t ? turmaLabel(t) : ''; })()}</span></>} onRemove={() => setFilterTurma('')} />}
           <button onClick={clearFilters} className="text-fg-3 hover:text-fg text-xs inline-flex items-center gap-1"><X className="w-3.5 h-3.5" />Limpar tudo</button>
         </div>
       )}

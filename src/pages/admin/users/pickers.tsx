@@ -1,7 +1,12 @@
 import { supabase } from '../../../lib/supabase';
 import { Checkbox, Switch } from '../../../components/ui';
 
-export type Turma = { id: string; nome: string };
+export type Turma = { id: string; nome: string; codigo?: string | null };
+
+/** "Nome - ID" (ex: "Aberta - T008"); sem código cadastrado, mostra só o nome. */
+export function turmaLabel(t: Turma): string {
+  return t.codigo ? `${t.nome} - ${t.codigo}` : t.nome;
+}
 export type CursoInfo = { id: string; titulo: string };
 export type TurmaSelection = { turma_id: string; curso_ids: string[]; embaixador_curso_ids?: string[]; staff_curso_ids?: string[] };
 
@@ -90,7 +95,7 @@ export function TurmaCoursePicker({
         return (
           <div key={t.id} className={selected ? 'rounded-md bg-panel-2/60 p-1.5 -mx-0.5' : ''}>
             <div className="flex items-center gap-2 flex-wrap">
-              <Checkbox checked={selected} onChange={() => toggleTurma(t.id)} label={<span className="text-fg font-medium">{t.nome}</span>} />
+              <Checkbox checked={selected} onChange={() => toggleTurma(t.id)} label={<span className="text-fg font-medium">{turmaLabel(t)}</span>} />
               {missingCourse && <span className="text-danger text-xs">selecione ao menos 1 curso</span>}
             </div>
             {coursesVisible && (

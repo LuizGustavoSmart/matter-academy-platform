@@ -7,7 +7,7 @@ import { supabase, callFn } from '../../../lib/supabase';
 import {
   Drawer, Button, Select, Switch, Radio, Alert, Badge, Tabs, EmptyState, ProgressBar, Pagination, IconButton, cn,
 } from '../../../components/ui';
-import { ROLE_OPTIONS, ROLE_LABEL, IMPORT_FIELD_LABEL, REQUIRED_IMPORT_FIELDS, normalizeEmail, type Role, type ImportField } from '../../../lib/users';
+import { IMPORT_FIELD_LABEL, REQUIRED_IMPORT_FIELDS, normalizeEmail, type ImportField } from '../../../lib/users';
 import { TurmaCoursePicker, type Turma, type CursoInfo, type TurmaSelection } from './pickers';
 import {
   parseSpreadsheet, autoMap, buildRows, validateRows, downloadTemplate, downloadErrorRows, downloadFailureReport,
@@ -39,7 +39,6 @@ export function ImportWizard({
   const [map, setMap] = useState<Record<ImportField, number>>({} as Record<ImportField, number>);
   const [rows, setRows] = useState<RawRow[]>([]);
 
-  const [defRole, setDefRole] = useState<Role>('student');
   const [defSelection, setDefSelection] = useState<TurmaSelection[]>([]);
   const [defSendInvite, setDefSendInvite] = useState(true);
   const [dupPolicy, setDupPolicy] = useState<DupPolicy>('skip');
@@ -56,13 +55,13 @@ export function ImportWizard({
   useEffect(() => {
     if (!open) return;
     setStep(0); setFileName(''); setHeaders([]); setRawRows([]); setRows([]);
-    setDefRole('student'); setDefSelection([]); setDefSendInvite(true); setDupPolicy('skip');
+    setDefSelection([]); setDefSendInvite(true); setDupPolicy('skip');
     setFilter('all'); setPage(1); setParseErr(null); setProcessing(null); setReport(null);
   }, [open]);
 
   const validated = useMemo(
-    () => validateRows(rows, { turmas, coursesByTurma, existingEmails, defaults: { role: defRole, selection: defSelection, sendInvite: defSendInvite } }),
-    [rows, turmas, coursesByTurma, existingEmails, defRole, defSelection, defSendInvite],
+    () => validateRows(rows, { turmas, coursesByTurma, existingEmails, defaults: { selection: defSelection, sendInvite: defSendInvite } }),
+    [rows, turmas, coursesByTurma, existingEmails, defSelection, defSendInvite],
   );
   const counts = useMemo(() => ({
     total: validated.length,
@@ -121,17 +120,14 @@ export function ImportWizard({
           if (dupPolicy === 'update') {
             await callFn('admin-users', 'update', {
               user_id: id, nome: r.nome, sobrenome: r.sobrenome, telefone: r.telefone, empresa: r.empresa,
-              role: r.resolved!.role,
-              ...(r.resolved!.turma_cursos ? { turma_cursos: r.resolved!.turma_cursos } : { turma_ids: r.resolved!.turma_ids ?? [] }),
+              role: 'student', turma_cursos: r.resolved!.turma_cursos,
             });
             rep.updated++;
           } else if (dupPolicy === 'links') {
             const { data: cur } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', id);
             const key = (t: string, c: string | null) => `${t}::${c ?? ''}`;
             const have = new Set((cur ?? []).map((x) => key(x.turma_id, x.curso_id)));
-            const incoming = r.resolved!.turma_cursos
-              ? r.resolved!.turma_cursos.map((p) => ({ turma_id: p.turma_id, curso_id: p.curso_id }))
-              : (r.resolved!.turma_ids ?? []).map((t) => ({ turma_id: t, curso_id: null as string | null }));
+            const incoming = r.resolved!.turma_cursos.map((p) => ({ turma_id: p.turma_id, curso_id: p.curso_id as string | null }));
             const toAdd = incoming.filter((p) => !have.has(key(p.turma_id, p.curso_id)));
             if (toAdd.length) await supabase.from('user_turmas').insert(toAdd.map((p) => ({ user_id: id, ...p })));
             rep.updated++;
@@ -139,8 +135,7 @@ export function ImportWizard({
         } else {
           await callFn('admin-users', 'create', {
             email, nome: r.nome, sobrenome: r.sobrenome, telefone: r.telefone, empresa: r.empresa,
-            role: r.resolved!.role, send_invite: r.resolved!.sendInvite,
-            ...(r.resolved!.turma_cursos ? { turma_cursos: r.resolved!.turma_cursos } : { turma_ids: r.resolved!.turma_ids ?? [] }),
+            role: 'student', send_invite: r.resolved!.sendInvite, turma_cursos: r.resolved!.turma_cursos,
           });
           rep.created++;
         }
@@ -275,16 +270,9 @@ export function ImportWizard({
           {/* Definições globais */}
           <div className="rounded-xl border border-line p-4 space-y-4">
             <p className="text-fg text-sm font-medium">Definições aplicadas às linhas sem valor próprio</p>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label>Papel padrão</label>
-                <Select value={defRole} onChange={(e) => setDefRole(e.target.value as Role)}>
-                  {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Switch checked={defSendInvite} onChange={setDefSendInvite} label="Enviar convite por padrão" />
-              </div>
+            <Alert tone="info">Esta importação cadastra somente alunos. Professores e embaixadores devem ser cadastrados manualmente.</Alert>
+            <div className="flex items-end">
+              <Switch checked={defSendInvite} onChange={setDefSendInvite} label="Enviar convite por padrão" />
             </div>
             <Alert tone={overDailyLimit ? 'warn' : 'info'}>
               O envio de e-mails tem limite de <strong>{DAILY_EMAIL_LIMIT} por dia</strong>.
@@ -292,12 +280,11 @@ export function ImportWizard({
                 ? ` Esta importação vai gerar ${inviteCount} convites por e-mail — acima do limite diário. Os excedentes falharão; divida o envio em lotes de até ${DAILY_EMAIL_LIMIT} ou desative o convite para parte das linhas.`
                 : ' Se for importar mais de 100 usuários com convite, divida em lotes para não ultrapassar o limite diário do provedor de e-mail.'}
             </Alert>
-            {(defRole === 'student' || defRole === 'professor' || defRole === 'monitor') && (
-              <div>
-                <label>{defRole === 'student' ? 'Turmas e cursos padrão' : 'Turmas padrão'}</label>
-                <TurmaCoursePicker turmas={turmas} coursesByTurma={coursesByTurma} value={defSelection} onChange={setDefSelection} showCourses={defRole === 'student'} />
-              </div>
-            )}
+            <div>
+              <label>Turmas e cursos padrão</label>
+              <p className="text-fg-3 text-xs mb-1.5">Usados quando a linha não informa turma, ou como cursos padrão quando a turma é informada mas os cursos não.</p>
+              <TurmaCoursePicker turmas={turmas} coursesByTurma={coursesByTurma} value={defSelection} onChange={setDefSelection} showCourses />
+            </div>
             <div>
               <label>Quando o e-mail já existe</label>
               <div className="flex flex-wrap gap-4 mt-1">
@@ -333,7 +320,6 @@ export function ImportWizard({
                     <tr className="border-b border-line bg-panel-2/50 text-left text-fg-3 text-[11px] uppercase tracking-wider">
                       <th className="px-2 py-2 w-8"></th>
                       {EDITABLE.map((k) => <th key={k} className="px-2 py-2 font-medium">{k}</th>)}
-                      <th className="px-2 py-2 font-medium">papel</th>
                       <th className="px-2 py-2 font-medium min-w-[180px]">situação</th>
                       <th className="px-2 py-2 w-8"></th>
                     </tr>
@@ -356,13 +342,6 @@ export function ImportWizard({
                             />
                           </td>
                         ))}
-                        <td className="px-1 py-1">
-                          <select value={r.papel} onChange={(e) => updateCell(r._id, 'papel', e.target.value)}
-                            className="!py-1 !px-2 !text-[13px] !bg-transparent !border-transparent hover:!border-line">
-                            <option value="">{ROLE_LABEL[defRole]} (padrão)</option>
-                            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                          </select>
-                        </td>
                         <td className="px-2 py-1.5">
                           <div className="flex flex-wrap gap-1">
                             {r.errors.map((m, i) => <Badge key={`e${i}`} tone="danger">{m}</Badge>)}
