@@ -11,6 +11,8 @@ import { staggerContainer, staggerItem } from '../../components/ui/motion';
 import { PageHeader } from '../../layouts/AppShell';
 import { uploadCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
+import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
+import { useTurmaCapas, TURMA_CAPA_OPTIONS } from '../../lib/turmaCapas';
 
 type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; observacao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null };
 
@@ -145,22 +147,24 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
   const [descricao, setDescricao] = useState('');
   const [observacao, setObservacao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
-  const [capaFile, setCapaFile] = useState<File | null>(null);
+  const [capaPending, setCapaPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const turmaCapas = useTurmaCapas();
+  const modelosTurma = TURMA_CAPA_OPTIONS.filter((o) => turmaCapas[o.value]).map((o) => ({ value: o.value, label: o.label, url: turmaCapas[o.value]! }));
 
   useEffect(() => {
     setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? '');
-    setObservacao(turma?.observacao ?? ''); setDataInicio(turma?.data_inicio ?? ''); setCapaFile(null); setErr(null);
+    setObservacao(turma?.observacao ?? ''); setDataInicio(turma?.data_inicio ?? ''); setCapaPending(CAPA_PENDING_EMPTY); setErr(null);
   }, [turma, open]);
 
   const submit = async () => {
     setErr(null);
     if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
     setLoading(true);
-    let capa_url = turma?.capa_url ?? null;
-    if (capaFile) {
-      try { const up = await uploadCapa(capaFile, 'turmas'); capa_url = up.path; }
+    let capa_url = resolveCapaPending(capaPending, turma?.capa_url ?? null);
+    if (capaPending.file) {
+      try { const up = await uploadCapa(capaPending.file, 'turmas'); capa_url = up.path; }
       catch (e) { setLoading(false); setErr((e as Error).message); return; }
     }
     const payload = { nome: nome.trim(), codigo: codigo.trim() || null, descricao: descricao.trim(), observacao: observacao.trim() || null, data_inicio: dataInicio || null, capa_url };
@@ -184,16 +188,8 @@ function TurmaModal({ open, turma, onClose, onDone }: { open: boolean; turma: Tu
         <Field label="Descrição" htmlFor="turma-desc"><Textarea id="turma-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Objetivo ou observações da turma" /></Field>
         <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="turma-obs"><Textarea id="turma-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre esta turma" /></Field>
         <Field label="Data de início" htmlFor="turma-data"><Input id="turma-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
-        <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="turma-capa">
-          <div className="flex items-center gap-3">
-            {(capaFile || turma?.capa_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={turma!.capa_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="turma-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
+        <CapaField id="turma-capa" label="Capa" hint="Envie uma imagem ou escolha um modelo (cadastrados em Modelos, no menu)"
+          existingUrl={turma?.capa_url ?? null} value={capaPending} onChange={setCapaPending} modelos={modelosTurma} />
       </div>
     </Modal>
   );

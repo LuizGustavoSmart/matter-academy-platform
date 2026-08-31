@@ -17,6 +17,8 @@ import { uploadCapa } from '../../lib/storage';
 import { SignedImage } from '../../components/SignedImage';
 import { FAIXA_OPTIONS, labelDaFaixa, ordemDaFaixa } from '../../lib/faixa';
 import { useFaixaCapas, resolveCapaUrl } from '../../lib/faixaCapas';
+import { CapaField, CAPA_PENDING_EMPTY, resolveCapaPending, type CapaPending } from '../../components/CapaField';
+import { useTurmaCapas, TURMA_CAPA_OPTIONS } from '../../lib/turmaCapas';
 
 type Turma = { id: string; nome: string; codigo: string | null; descricao: string | null; observacao: string | null; data_inicio: string | null; capa_url: string | null; created_at: string | null; tipo_cobranca: TipoCobranca | null; valor: number | null };
 type Curso = { id: string; titulo: string; descricao: string | null; observacao: string | null; capa_url: string | null; faixa: string | null };
@@ -324,15 +326,17 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
   const [descricao, setDescricao] = useState('');
   const [observacao, setObservacao] = useState('');
   const [dataInicio, setDataInicio] = useState('');
-  const [capaFile, setCapaFile] = useState<File | null>(null);
+  const [capaPending, setCapaPending] = useState<CapaPending>(CAPA_PENDING_EMPTY);
   const [tipoCobranca, setTipoCobranca] = useState<'' | TipoCobranca>('');
   const [valor, setValor] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const turmaCapas = useTurmaCapas();
+  const modelosTurma = TURMA_CAPA_OPTIONS.filter((o) => turmaCapas[o.value]).map((o) => ({ value: o.value, label: o.label, url: turmaCapas[o.value]! }));
 
   useEffect(() => {
     setNome(turma?.nome ?? ''); setCodigo(turma?.codigo ?? ''); setDescricao(turma?.descricao ?? ''); setObservacao(turma?.observacao ?? ''); setDataInicio(turma?.data_inicio ?? '');
-    setCapaFile(null);
+    setCapaPending(CAPA_PENDING_EMPTY);
     setTipoCobranca(turma?.tipo_cobranca ?? ''); setValor(turma?.valor != null ? String(turma.valor) : ''); setErr(null);
   }, [turma, open]);
 
@@ -343,9 +347,9 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
     if (!nome.trim()) { setErr('Informe o nome da turma.'); return; }
     if (tipoCobranca && (valor === '' || isNaN(parseFloat(valor)))) { setErr('Informe um valor válido para a cobrança.'); return; }
     setLoading(true);
-    let capa_url = turma?.capa_url ?? null;
-    if (capaFile) {
-      try { const up = await uploadCapa(capaFile, 'turmas'); capa_url = up.path; }
+    let capa_url = resolveCapaPending(capaPending, turma?.capa_url ?? null);
+    if (capaPending.file) {
+      try { const up = await uploadCapa(capaPending.file, 'turmas'); capa_url = up.path; }
       catch (e) { setLoading(false); setErr((e as Error).message); return; }
     }
     // codigo/capa_url ainda não estão no schema gerado
@@ -370,16 +374,8 @@ function TurmaEditModal({ open, turma, onClose, onDone }: { open: boolean; turma
         <Field label="Descrição" htmlFor="td-desc"><Textarea id="td-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} /></Field>
         <Field label="Observação interna" hint="Visível apenas para professores, monitores e administradores" htmlFor="td-obs"><Textarea id="td-obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} placeholder="Notas internas da equipe sobre esta turma" /></Field>
         <Field label="Data de início" htmlFor="td-data"><Input id="td-data" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="max-w-[200px]" /></Field>
-        <Field label="Capa" hint="Opcional — usada nas listas" htmlFor="td-capa">
-          <div className="flex items-center gap-3">
-            {(capaFile || turma?.capa_url) && (
-              <div className="w-16 h-9 rounded-md bg-black overflow-hidden flex-shrink-0 border border-line">
-                {capaFile ? <img src={URL.createObjectURL(capaFile)} className="w-full h-full object-cover" alt="" /> : <SignedImage bucket="capas" path={turma!.capa_url} className="w-full h-full object-cover" />}
-              </div>
-            )}
-            <Input id="td-capa" type="file" accept="image/*" onChange={(e) => setCapaFile(e.target.files?.[0] ?? null)} className="!py-2" />
-          </div>
-        </Field>
+        <CapaField id="td-capa" label="Capa" hint="Envie uma imagem ou escolha um modelo (cadastrados em Modelos, no menu)"
+          existingUrl={turma?.capa_url ?? null} value={capaPending} onChange={setCapaPending} modelos={modelosTurma} />
         <div className="border-t border-line pt-4">
           <Field label="Tipo de cobrança" htmlFor="td-tipo">
             <Select id="td-tipo" value={tipoCobranca} onChange={(e) => setTipoCobranca(e.target.value as '' | TipoCobranca)}>

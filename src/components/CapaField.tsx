@@ -13,18 +13,25 @@ export function resolveCapaPending(pending: CapaPending, existingUrl: string | n
   return existingUrl;
 }
 
+export type CapaModeloOption = { value: string; label: string; url: string };
+
 /**
  * Campo de capa com upload de arquivo OU seleção de uma imagem-modelo já
- * cadastrada em "Modelos" (capa por faixa) — mostrado como lista suspensa ao
- * lado do preview. Ao selecionar um modelo, nenhum upload é feito: a mesma
- * imagem já hospedada é reaproveitada diretamente.
+ * cadastrada em "Modelos" — mostrado como lista suspensa ao lado do preview.
+ * Ao selecionar um modelo, nenhum upload é feito: a mesma imagem já
+ * hospedada é reaproveitada diretamente.
+ *
+ * Por padrão usa os modelos por faixa (capa de curso/aula); passe `modelos`
+ * para reaproveitar o mesmo campo com outra fonte de modelos (ex.: capas de
+ * turma).
  */
-export function CapaField({ id, label, hint, existingUrl, value, onChange }: {
+export function CapaField({ id, label, hint, existingUrl, value, onChange, modelos }: {
   id: string; label: string; hint?: string; existingUrl: string | null;
   value: CapaPending; onChange: (v: CapaPending) => void;
+  modelos?: CapaModeloOption[];
 }) {
   const faixaCapas = useFaixaCapas();
-  const modelosDisponiveis = FAIXA_OPTIONS.filter((o) => faixaCapas[o.value]);
+  const modelosDisponiveis = modelos ?? FAIXA_OPTIONS.filter((o) => faixaCapas[o.value]).map((o) => ({ value: o.value, label: o.label, url: faixaCapas[o.value]! }));
   const previewPath = value.file ? null : (value.modeloUrl ?? existingUrl);
 
   return (
@@ -50,7 +57,7 @@ export function CapaField({ id, label, hint, existingUrl, value, onChange }: {
             <option value="">Ou selecione uma imagem-modelo…</option>
             {modelosDisponiveis.length === 0 ? (
               <option value="" disabled>Nenhum modelo cadastrado ainda</option>
-            ) : modelosDisponiveis.map((o) => <option key={o.value} value={faixaCapas[o.value]!}>{o.label}</option>)}
+            ) : modelosDisponiveis.map((o) => <option key={o.value} value={o.url}>{o.label}</option>)}
           </Select>
         </div>
       </div>
