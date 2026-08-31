@@ -915,6 +915,24 @@ export type Database = {
           },
         ]
       }
+      turma_capas: {
+        Row: {
+          capa_url: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          capa_url?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          capa_url?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       turmas: {
         Row: {
           capa_url: string | null
