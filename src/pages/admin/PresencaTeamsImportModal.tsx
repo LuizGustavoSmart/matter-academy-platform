@@ -265,14 +265,15 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
                   : l.situacao === 'manual' ? Lock : XCircle;
                 const detalhe = [l.duracao, l.entrada && l.saida ? `${l.entrada} → ${l.saida}` : null].filter(Boolean).join(' · ');
                 return (
-                  <li key={l.email} className="flex items-center gap-3 px-3 py-2.5">
+                  <li key={`${l.email}|${l.nome}`} className="flex items-center gap-3 px-3 py-2.5">
                     <Icon className={cn('w-4 h-4 flex-shrink-0',
                       l.situacao === 'vinculado' ? 'text-ok'
                         : l.situacao === 'nao_matriculado' ? 'text-warn'
                         : l.situacao === 'manual' ? 'text-fg-3' : 'text-danger')} />
                     <div className="flex-1 min-w-0">
                       <p className="text-fg text-sm truncate">{l.nome || l.email.split('@')[0]}</p>
-                      <p className="text-fg-3 text-xs truncate">{l.email}{detalhe ? ` · ${detalhe}` : ''}</p>
+                      <p className="text-fg-3 text-xs truncate">{[l.email || 'sem e-mail no relatório', detalhe].filter(Boolean).join(' · ')}</p>
+
                     </div>
                     <Badge tone={s.tone} className="flex-shrink-0">{s.label}</Badge>
                   </li>
