@@ -19,7 +19,7 @@ const CAMPOS: CampoTeams[] = ['nome', 'email', 'entrada', 'saida', 'duracao', 'f
 const SITUACAO: Record<Situacao, { label: string; tone: 'success' | 'warn' | 'danger' | 'default'; desc: string }> = {
   vinculado: { label: 'Vinculado', tone: 'success', desc: 'Presença será registrada.' },
   nao_matriculado: { label: 'Não matriculado', tone: 'warn', desc: 'Participou, mas não está matriculado nesta turma/curso.' },
-  nao_encontrado: { label: 'Não encontrado', tone: 'danger', desc: 'Nenhum usuário com este e-mail (ou fora das suas turmas).' },
+  nao_encontrado: { label: 'Não encontrado', tone: 'danger', desc: 'Não foi possível vincular por e-mail nem por nome a um aluno desta turma/curso.' },
   manual: { label: 'Lançamento manual', tone: 'default', desc: 'Já foi marcado pelo professor — será mantido como está.' },
 };
 
