@@ -166,7 +166,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
   ) : etapa === 'mapear' ? (
     <>
       <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-      <Button variant="primary" disabled={!map || CAMPOS_OBRIGATORIOS.some((c) => (map?.[c] ?? -1) < 0)} onClick={aplicarMapeamento}>
+      <Button variant="primary" disabled={!map || (map.email < 0 && map.nome < 0)} onClick={aplicarMapeamento}>
         Continuar
       </Button>
     </>
