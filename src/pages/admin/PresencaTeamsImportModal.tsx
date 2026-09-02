@@ -62,17 +62,30 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
     [alunos],
   );
 
+  /** Vínculo pelo nome quando o relatório não traz o e-mail do participante. */
+  const acharPorNome = (nome: string): AlunoRow | undefined => {
+    if (!nome) return undefined;
+    const cands = alunos.filter((a) => {
+      const alvo = `${a.nome ?? ''} ${a.email.split('@')[0].replace(/[._-]+/g, ' ')}`;
+      return nomesCorrespondem(nome, a.nome ?? '') || nomesCorrespondem(nome, alvo);
+    });
+    // Só vincula quando não há ambiguidade.
+    return cands.length === 1 ? cands[0] : undefined;
+  };
+
   /** Classifica os participantes contra os alunos da turma/curso. */
   const classificar = async (participantes: ParticipanteTeams[]) => {
-    const desconhecidos = participantes.map((p) => p.email).filter((e) => !porEmail.has(e));
+    const desconhecidos = participantes.map((p) => p.email).filter((e) => e && !porEmail.has(e));
     let cadastrados = new Set<string>();
     if (desconhecidos.length) {
       const { data } = await supabase.from('profiles').select('email').in('email', desconhecidos);
       cadastrados = new Set((data ?? []).map((p) => normalizeEmail(p.email)));
     }
     setLinhas(participantes.map((p) => {
-      const aluno = porEmail.get(p.email);
-      if (!aluno) return { ...p, situacao: cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
+      const aluno = (p.email ? porEmail.get(p.email) : undefined) ?? acharPorNome(p.nome);
+      if (!aluno) {
+        return { ...p, situacao: p.email && cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
+      }
       if (existentes[aluno.id]?.editado_por) return { ...p, situacao: 'manual', alunoId: aluno.id };
       return { ...p, situacao: 'vinculado', alunoId: aluno.id };
     }));
@@ -91,8 +104,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
       setPlanilha(pl);
       setMap(pl.map);
 
-      const faltando = CAMPOS_OBRIGATORIOS.filter((c) => pl.map[c] < 0);
-      if (faltando.length) { setEtapa('mapear'); return; }
+      if (pl.map.email < 0 && pl.map.nome < 0) { setEtapa('mapear'); return; }
 
       const participantes = participantesFrom(pl, pl.map);
       if (!participantes.length) { setEtapa('mapear'); return; }
@@ -106,12 +118,13 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
     if (!planilha || !map) return;
     const participantes = participantesFrom(planilha, map);
     if (!participantes.length) {
-      setErro('Nenhum e-mail válido encontrado na coluna escolhida. Confira o mapeamento.');
+      setErro('Nenhum participante identificado nas colunas escolhidas. Confira o mapeamento de nome e e-mail.');
       return;
     }
     setErro(null);
     await classificar(participantes);
   };
+
 
   const contagem = useMemo(() => ({
     todas: linhas?.length ?? 0,
