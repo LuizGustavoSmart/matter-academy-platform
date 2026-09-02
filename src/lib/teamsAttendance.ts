@@ -38,8 +38,8 @@ export const CAMPO_LABEL: Record<CampoTeams, string> = {
   funcao: 'Função',
 };
 
-/** Campos sem os quais a importação não funciona. */
-export const CAMPOS_OBRIGATORIOS: CampoTeams[] = ['email'];
+/** Campos sem os quais a importação não funciona (basta e-mail OU nome). */
+export const CAMPOS_OBRIGATORIOS: CampoTeams[] = [];
 
 const norm = (s: string) =>
   s
