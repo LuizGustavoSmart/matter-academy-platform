@@ -126,6 +126,12 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
   };
 
 
+  /** Participantes que o relatório trouxe sem e-mail e que não puderam ser vinculados. */
+  const semEmail = useMemo(
+    () => linhas?.filter((l) => !l.email && !l.alunoId) ?? [],
+    [linhas],
+  );
+
   const contagem = useMemo(() => ({
     todas: linhas?.length ?? 0,
     vinculado: linhas?.filter((l) => l.situacao === 'vinculado').length ?? 0,
