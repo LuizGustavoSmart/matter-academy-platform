@@ -126,6 +126,12 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
   };
 
 
+  /** Participantes que o relatório trouxe sem e-mail e que não puderam ser vinculados. */
+  const semEmail = useMemo(
+    () => linhas?.filter((l) => !l.email && !l.alunoId) ?? [],
+    [linhas],
+  );
+
   const contagem = useMemo(() => ({
     todas: linhas?.length ?? 0,
     vinculado: linhas?.filter((l) => l.situacao === 'vinculado').length ?? 0,
@@ -242,6 +248,26 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
             <strong className="text-fg">{fileName}</strong> — {contagem.todas} participante{contagem.todas === 1 ? '' : 's'}.
             {' '}Só quem está matriculado nesta turma/curso recebe presença. Nada é gravado até você confirmar.
           </Alert>
+
+          {semEmail.length > 0 && (
+            <Alert tone="warn">
+              <strong className="text-fg">
+                {semEmail.length} participante{semEmail.length === 1 ? '' : 's'} sem e-mail no relatório
+              </strong>
+              <p className="mt-1">
+                O vínculo com o aluno é feito principalmente pelo e-mail. Cadastre o e-mail desses participantes
+                (na reunião do Teams e no cadastro do aluno) e reimporte a lista para que a presença seja registrada.
+                Sem e-mail, só conseguimos vincular quando o nome coincide exatamente com um único aluno da turma.
+              </p>
+              <ul className="mt-2 space-y-0.5 text-xs">
+                {semEmail.slice(0, 8).map((l) => (
+                  <li key={`sem-email-${l.nome}`} className="truncate">• {l.nome || 'Participante sem nome'}</li>
+                ))}
+                {semEmail.length > 8 && <li>• e mais {semEmail.length - 8}…</li>}
+              </ul>
+            </Alert>
+          )}
+
 
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <Tabs value={filtro} onChange={setFiltro} tabs={[
