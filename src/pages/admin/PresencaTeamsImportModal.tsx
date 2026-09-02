@@ -208,7 +208,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
           {erro && <Alert tone="danger">{erro}</Alert>}
           <Alert tone="info">
             <strong className="text-fg">{fileName}</strong> — {planilha.rows.length} linha{planilha.rows.length === 1 ? '' : 's'}.
-            {' '}Confirme de onde vem cada informação. Só o e-mail é obrigatório.
+            {' '}Confirme de onde vem cada informação. Informe ao menos o nome ou o e-mail.
           </Alert>
           <div className="grid sm:grid-cols-2 gap-3">
             {CAMPOS.map((c) => (
