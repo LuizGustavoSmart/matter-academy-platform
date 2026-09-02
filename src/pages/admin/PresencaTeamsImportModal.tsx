@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Modal, Button, Alert, Badge, EmptyState, Tabs, Field, Select, cn } from '../../components/ui';
 import { normalizeEmail } from '../../lib/users';
 import {
-  parsePresencaSheet, participantesFrom, CAMPO_LABEL, CAMPOS_OBRIGATORIOS,
+  parsePresencaSheet, participantesFrom, nomesCorrespondem, CAMPO_LABEL, CAMPOS_OBRIGATORIOS,
   type ParticipanteTeams, type PlanilhaPresenca, type MapaColunas, type CampoTeams,
 } from '../../lib/teamsAttendance';
 import type { Presenca } from '../../lib/presenca';
