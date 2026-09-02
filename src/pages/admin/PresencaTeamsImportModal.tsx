@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Modal, Button, Alert, Badge, EmptyState, Tabs, Field, Select, cn } from '../../components/ui';
 import { normalizeEmail } from '../../lib/users';
 import {
-  parsePresencaSheet, participantesFrom, CAMPO_LABEL, CAMPOS_OBRIGATORIOS,
+  parsePresencaSheet, participantesFrom, nomesCorrespondem, CAMPO_LABEL, CAMPOS_OBRIGATORIOS,
   type ParticipanteTeams, type PlanilhaPresenca, type MapaColunas, type CampoTeams,
 } from '../../lib/teamsAttendance';
 import type { Presenca } from '../../lib/presenca';
@@ -19,7 +19,7 @@ const CAMPOS: CampoTeams[] = ['nome', 'email', 'entrada', 'saida', 'duracao', 'f
 const SITUACAO: Record<Situacao, { label: string; tone: 'success' | 'warn' | 'danger' | 'default'; desc: string }> = {
   vinculado: { label: 'Vinculado', tone: 'success', desc: 'Presença será registrada.' },
   nao_matriculado: { label: 'Não matriculado', tone: 'warn', desc: 'Participou, mas não está matriculado nesta turma/curso.' },
-  nao_encontrado: { label: 'Não encontrado', tone: 'danger', desc: 'Nenhum usuário com este e-mail (ou fora das suas turmas).' },
+  nao_encontrado: { label: 'Não encontrado', tone: 'danger', desc: 'Não foi possível vincular por e-mail nem por nome a um aluno desta turma/curso.' },
   manual: { label: 'Lançamento manual', tone: 'default', desc: 'Já foi marcado pelo professor — será mantido como está.' },
 };
 
@@ -62,17 +62,30 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
     [alunos],
   );
 
+  /** Vínculo pelo nome quando o relatório não traz o e-mail do participante. */
+  const acharPorNome = (nome: string): AlunoRow | undefined => {
+    if (!nome) return undefined;
+    const cands = alunos.filter((a) => {
+      const alvo = `${a.nome ?? ''} ${a.email.split('@')[0].replace(/[._-]+/g, ' ')}`;
+      return nomesCorrespondem(nome, a.nome ?? '') || nomesCorrespondem(nome, alvo);
+    });
+    // Só vincula quando não há ambiguidade.
+    return cands.length === 1 ? cands[0] : undefined;
+  };
+
   /** Classifica os participantes contra os alunos da turma/curso. */
   const classificar = async (participantes: ParticipanteTeams[]) => {
-    const desconhecidos = participantes.map((p) => p.email).filter((e) => !porEmail.has(e));
+    const desconhecidos = participantes.map((p) => p.email).filter((e) => e && !porEmail.has(e));
     let cadastrados = new Set<string>();
     if (desconhecidos.length) {
       const { data } = await supabase.from('profiles').select('email').in('email', desconhecidos);
       cadastrados = new Set((data ?? []).map((p) => normalizeEmail(p.email)));
     }
     setLinhas(participantes.map((p) => {
-      const aluno = porEmail.get(p.email);
-      if (!aluno) return { ...p, situacao: cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
+      const aluno = (p.email ? porEmail.get(p.email) : undefined) ?? acharPorNome(p.nome);
+      if (!aluno) {
+        return { ...p, situacao: p.email && cadastrados.has(p.email) ? 'nao_matriculado' : 'nao_encontrado' };
+      }
       if (existentes[aluno.id]?.editado_por) return { ...p, situacao: 'manual', alunoId: aluno.id };
       return { ...p, situacao: 'vinculado', alunoId: aluno.id };
     }));
@@ -91,8 +104,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
       setPlanilha(pl);
       setMap(pl.map);
 
-      const faltando = CAMPOS_OBRIGATORIOS.filter((c) => pl.map[c] < 0);
-      if (faltando.length) { setEtapa('mapear'); return; }
+      if (pl.map.email < 0 && pl.map.nome < 0) { setEtapa('mapear'); return; }
 
       const participantes = participantesFrom(pl, pl.map);
       if (!participantes.length) { setEtapa('mapear'); return; }
@@ -106,12 +118,13 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
     if (!planilha || !map) return;
     const participantes = participantesFrom(planilha, map);
     if (!participantes.length) {
-      setErro('Nenhum e-mail válido encontrado na coluna escolhida. Confira o mapeamento.');
+      setErro('Nenhum participante identificado nas colunas escolhidas. Confira o mapeamento de nome e e-mail.');
       return;
     }
     setErro(null);
     await classificar(participantes);
   };
+
 
   const contagem = useMemo(() => ({
     todas: linhas?.length ?? 0,
@@ -153,7 +166,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
   ) : etapa === 'mapear' ? (
     <>
       <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-      <Button variant="primary" disabled={!map || CAMPOS_OBRIGATORIOS.some((c) => (map?.[c] ?? -1) < 0)} onClick={aplicarMapeamento}>
+      <Button variant="primary" disabled={!map || (map.email < 0 && map.nome < 0)} onClick={aplicarMapeamento}>
         Continuar
       </Button>
     </>
@@ -195,7 +208,7 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
           {erro && <Alert tone="danger">{erro}</Alert>}
           <Alert tone="info">
             <strong className="text-fg">{fileName}</strong> — {planilha.rows.length} linha{planilha.rows.length === 1 ? '' : 's'}.
-            {' '}Confirme de onde vem cada informação. Só o e-mail é obrigatório.
+            {' '}Confirme de onde vem cada informação. Informe ao menos o nome ou o e-mail.
           </Alert>
           <div className="grid sm:grid-cols-2 gap-3">
             {CAMPOS.map((c) => (
@@ -252,14 +265,15 @@ export default function PresencaTeamsImportModal({ turmaId, aulaId, alunos, onCl
                   : l.situacao === 'manual' ? Lock : XCircle;
                 const detalhe = [l.duracao, l.entrada && l.saida ? `${l.entrada} → ${l.saida}` : null].filter(Boolean).join(' · ');
                 return (
-                  <li key={l.email} className="flex items-center gap-3 px-3 py-2.5">
+                  <li key={`${l.email}|${l.nome}`} className="flex items-center gap-3 px-3 py-2.5">
                     <Icon className={cn('w-4 h-4 flex-shrink-0',
                       l.situacao === 'vinculado' ? 'text-ok'
                         : l.situacao === 'nao_matriculado' ? 'text-warn'
                         : l.situacao === 'manual' ? 'text-fg-3' : 'text-danger')} />
                     <div className="flex-1 min-w-0">
                       <p className="text-fg text-sm truncate">{l.nome || l.email.split('@')[0]}</p>
-                      <p className="text-fg-3 text-xs truncate">{l.email}{detalhe ? ` · ${detalhe}` : ''}</p>
+                      <p className="text-fg-3 text-xs truncate">{[l.email || 'sem e-mail no relatório', detalhe].filter(Boolean).join(' · ')}</p>
+
                     </div>
                     <Badge tone={s.tone} className="flex-shrink-0">{s.label}</Badge>
                   </li>

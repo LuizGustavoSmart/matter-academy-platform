@@ -38,8 +38,8 @@ export const CAMPO_LABEL: Record<CampoTeams, string> = {
   funcao: 'Função',
 };
 
-/** Campos sem os quais a importação não funciona. */
-export const CAMPOS_OBRIGATORIOS: CampoTeams[] = ['email'];
+/** Campos sem os quais a importação não funciona (basta e-mail OU nome). */
+export const CAMPOS_OBRIGATORIOS: CampoTeams[] = [];
 
 const norm = (s: string) =>
   s
@@ -245,18 +245,58 @@ export async function parsePresencaSheet(file: File): Promise<PlanilhaPresenca> 
   return { headers: headersFinais, rows: corpo, map };
 }
 
-/** Converte as linhas em participantes, dado o mapeamento (auto ou manual). */
+/**
+ * Limpa o nome exibido pelo Teams: remove sufixos entre parênteses
+ * ("(Externo)", "(Não verificado)", "(PV)") e o nome da empresa após " - ".
+ */
+export function limpaNomeParticipante(nome: string): string {
+  return nome
+    .replace(/\((?:[^()]*)\)/g, ' ')
+    .split(/\s+[-–|]\s+/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Tokens comparáveis de um nome (sem acentos, minúsculas, sem partículas). */
+export function tokensNome(nome: string): string[] {
+  const PART = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+  return norm(limpaNomeParticipante(nome || ''))
+    .split(' ')
+    .filter((t) => t.length > 1 && !PART.has(t));
+}
+
+/**
+ * Nomes correspondem quando o conjunto menor de tokens está contido no maior
+ * (ex.: "Fernando Mendes" ↔ "Fernando Mauricio de Aquino Mendes").
+ */
+export function nomesCorrespondem(a: string, b: string): boolean {
+  const ta = tokensNome(a);
+  const tb = tokensNome(b);
+  if (ta.length < 2 || tb.length < 2) return false;
+  const [menor, maior] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const set = new Set(maior);
+  return menor.every((t) => set.has(t));
+}
+
+/**
+ * Converte as linhas em participantes, dado o mapeamento (auto ou manual).
+ * Participantes sem e-mail no relatório também são mantidos — o vínculo pode
+ * ser feito pelo nome mais adiante.
+ */
 export function participantesFrom(planilha: PlanilhaPresenca, map: MapaColunas): ParticipanteTeams[] {
   const val = (row: string[], i: number) => (i >= 0 ? (row[i] ?? '').trim() : '');
   const out: ParticipanteTeams[] = [];
   const vistos = new Map<string, number>();
 
   for (const row of planilha.rows) {
-    const email = normalizeEmail(val(row, map.email));
-    if (!email || !isValidEmail(email)) continue;
+    const emailBruto = normalizeEmail(val(row, map.email));
+    const email = emailBruto && isValidEmail(emailBruto) ? emailBruto : '';
+    const nome = val(row, map.nome);
+    // Sem e-mail nem nome não há o que importar.
+    if (!email && tokensNome(nome).length === 0) continue;
 
     const p: ParticipanteTeams = {
-      nome: val(row, map.nome),
+      nome,
       email,
       duracao: val(row, map.duracao),
       entrada: val(row, map.entrada) || undefined,
@@ -264,14 +304,17 @@ export function participantesFrom(planilha: PlanilhaPresenca, map: MapaColunas):
       funcao: val(row, map.funcao) || undefined,
     };
 
-    // O Teams repete quem entra e sai várias vezes: mantém a primeira entrada,
-    // a última saída e a maior duração informada.
-    const idx = vistos.get(email);
-    if (idx === undefined) { vistos.set(email, out.length); out.push(p); continue; }
+    // O Teams repete quem entra e sai várias vezes (e repete a lista em outra
+    // seção do relatório): mantém a primeira entrada, a última saída e a maior
+    // duração informada. A chave é o e-mail ou, na falta dele, o nome.
+    const chave = email || `nome:${tokensNome(nome).join(' ')}`;
+    const idx = vistos.get(chave);
+    if (idx === undefined) { vistos.set(chave, out.length); out.push(p); continue; }
     const atual = out[idx];
     out[idx] = {
       ...atual,
       nome: atual.nome || p.nome,
+      email: atual.email || p.email,
       duracao: duracaoSegundos(p.duracao) > duracaoSegundos(atual.duracao) ? p.duracao : atual.duracao,
       entrada: atual.entrada ?? p.entrada,
       saida: p.saida ?? atual.saida,
@@ -280,6 +323,7 @@ export function participantesFrom(planilha: PlanilhaPresenca, map: MapaColunas):
   }
   return out;
 }
+
 
 /** "27m 54s", "1h 05m", "00:27:54" → segundos (0 quando não reconhecido). */
 export function duracaoSegundos(d: string): number {
