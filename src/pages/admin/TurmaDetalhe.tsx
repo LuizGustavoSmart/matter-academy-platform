@@ -244,7 +244,7 @@ export default function TurmaDetalhe() {
                     <div className="p-4 pt-3">
                       {labelDaFaixa(c.faixa) && <Badge tone="outline" className="mb-2">{labelDaFaixa(c.faixa)}</Badge>}
                       <h3 className="mb-1 pr-8 line-clamp-1">{c.titulo}</h3>
-                      <p className="text-fg-3 text-sm mb-3 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>
+                      <p className="text-fg-3 text-sm mb-3 line-clamp-2 min-h-[40px]">{c.descricao}</p>
                       <div className="flex items-center gap-1.5 text-sm text-fg-2"><PlayCircle className="w-4 h-4 text-fg-3" /> {aulaCounts[c.id] ?? 0} aulas</div>
                     </div>
                   </Card>

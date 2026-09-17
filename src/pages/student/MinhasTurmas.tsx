@@ -83,7 +83,7 @@ export default function MinhasTurmas() {
         <div className="p-4 pt-3">
           {labelDaFaixa(b.faixa) && <Badge tone="outline" className="mb-2">{labelDaFaixa(b.faixa)}</Badge>}
           <h3 className="mb-1 line-clamp-1">{b.cursoTitulo}</h3>
-          <p className="text-fg-3 text-sm line-clamp-2 min-h-[40px]">{b.cursoDescricao || 'Sem descrição'}</p>
+          <p className="text-fg-3 text-sm line-clamp-2 min-h-[40px]">{b.cursoDescricao}</p>
         </div>
       </Card>
     );

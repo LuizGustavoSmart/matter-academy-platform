@@ -217,7 +217,7 @@ function ViewAsSwitcher({ collapsed }: { collapsed: boolean }) {
  * turma/curso. */
 function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () => void }) {
   const { startViewAs } = useAuth();
-  const [turmas, setTurmas] = useState<{ id: string; nome: string }[]>([]);
+  const [turmas, setTurmas] = useState<{ id: string; nome: string; codigo: string | null }[]>([]);
   const [cursosByTurma, setCursosByTurma] = useState<Record<string, { id: string; titulo: string }[]>>({});
   const [turmaId, setTurmaId] = useState('');
   const [cursoId, setCursoId] = useState('');
@@ -227,7 +227,7 @@ function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () =>
   useEffect(() => {
     (async () => {
       const [{ data: ts }, { data: cts }, { data: cs }] = await Promise.all([
-        supabase.from('turmas').select('id,nome').order('nome'),
+        supabase.from('turmas').select('id,nome,codigo').order('nome'),
         supabase.from('curso_turmas').select('turma_id,curso_id'),
         supabase.from('cursos').select('id,titulo'),
       ]);
@@ -269,7 +269,7 @@ function ViewAsPickerModal({ role, onClose }: { role: ViewAsRole; onClose: () =>
           <Field label="Turma" required htmlFor="viewas-turma">
             <Select id="viewas-turma" value={turmaId} onChange={(e) => { setTurmaId(e.target.value); setCursoId(''); }}>
               <option value="">Selecione uma turma</option>
-              {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              {turmas.map((t) => <option key={t.id} value={t.id}>{t.codigo ? `${t.nome} - ${t.codigo}` : t.nome}</option>)}
             </Select>
           </Field>
           <Field label="Curso" required htmlFor="viewas-curso" hint={!turmaId ? 'Selecione uma turma primeiro' : cursosDaTurma.length === 0 ? 'Essa turma ainda não tem cursos vinculados' : undefined}>

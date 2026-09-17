@@ -86,7 +86,7 @@ export default function AdminCursos() {
                   </div>
                   {labelDaFaixa(c.faixa) && <Badge tone="outline" className="self-start mb-2">{labelDaFaixa(c.faixa)}</Badge>}
                   <h3 className="mb-1 line-clamp-1">{c.titulo}</h3>
-                  <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao || 'Sem descrição'}</p>
+                  <p className="text-fg-3 text-sm mb-4 line-clamp-2 min-h-[40px]">{c.descricao}</p>
                   <div className="flex flex-wrap gap-1 mb-3 min-h-[24px]">
                     {names.length === 0 ? <span className="text-fg-3 text-xs">Sem turmas vinculadas</span> : names.map((t) => <Badge key={t.id}>{t.nome}</Badge>)}
                   </div>

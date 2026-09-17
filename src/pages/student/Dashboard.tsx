@@ -389,7 +389,7 @@ export default function StudentDashboard() {
                         </div>
                         <div className="p-4 pt-3">
                           <h3 className="mb-1 group-hover:text-fg transition-colors line-clamp-1">{c.titulo}</h3>
-                          <p className="text-fg-3 text-sm line-clamp-1">{c.descricao || 'Sem descrição'}</p>
+                          <p className="text-fg-3 text-sm line-clamp-1">{c.descricao}</p>
                         </div>
                       </Card>
                     );
