@@ -20,17 +20,21 @@ export function getYouTubeEmbed(url: string): string | null {
 }
 
 /**
- * Link absoluto pro MESMO vídeo cadastrado — nunca troca de vídeo. O campo
- * de cadastro aceita várias formas (URL completa, sem "https://", ou só o
- * ID de 11 caracteres); usadas cruas como href, as duas últimas formas
- * viram um caminho relativo do nosso próprio site em vez de ir ao YouTube.
- * Uma URL já absoluta volta exatamente como veio, sem nenhuma alteração.
+ * Link absoluto pro MESMO vídeo cadastrado (mesmo ID), no formato
+ * youtube.com/watch — nunca troca de vídeo. Sempre canoniza pra esse
+ * formato, por dois motivos: (1) o campo de cadastro aceita várias formas
+ * (URL completa, sem "https://", ou só o ID de 11 caracteres) e as duas
+ * últimas, usadas cruas como href, viram um caminho relativo do nosso
+ * próprio site em vez de ir ao YouTube; (2) links "youtu.be/..." abertos em
+ * nova aba com noopener esbarram num bloqueio do Chrome no redirecionamento
+ * dele pro youtube.com (ERR_BLOCKED_BY_RESPONSE) — não relacionado à
+ * visibilidade do vídeo, só ao domínio do link.
  */
 export function toAbsoluteYouTubeUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
   const id = getYouTubeId(trimmed);
   if (id) return `https://www.youtube.com/watch?v=${id}`;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
