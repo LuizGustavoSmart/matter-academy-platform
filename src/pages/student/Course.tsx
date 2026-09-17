@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle, ClipboardList } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle, ClipboardList, AlertTriangle, ExternalLink } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
+import { Button, Modal, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
 import LessonVideoPlayer, { type WatchProgress } from '../../components/LessonVideoPlayer';
 import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
@@ -33,6 +33,8 @@ export default function StudentCourse() {
   const [duvidaOpen, setDuvidaOpen] = useState(false);
   const [daysSince, setDaysSince] = useState<number | null>(null);
   const [atividadeId, setAtividadeId] = useState<string | null>(null);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [problemaOpen, setProblemaOpen] = useState(false);
 
   // Contexto de presença: turma do aluno neste curso, horários agendados de
   // cada aula e duração da aula (para saber se o acesso é ao vivo ou gravação).
@@ -106,6 +108,7 @@ export default function StudentCourse() {
 
   const selectAula = async (aulaId: string) => {
     setCurrentId(aulaId);
+    setVideoId(null);
     ultimoProgresso.current = null; // o player remonta e recomeça a contagem
     if (profile) await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: aulaId, concluido: done.has(aulaId), updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
   };
@@ -132,8 +135,9 @@ export default function StudentCourse() {
     const aulaId = currentId;
     if (!profile || !aulaId) return;
 
-    // A aula só conta como concluída ao cruzar o percentual assistido mínimo —
-    // não existe mais marcação manual pelo aluno.
+    // Mecanismo duplo: a aula é marcada como concluída automaticamente ao
+    // cruzar o percentual assistido mínimo, OU manualmente pelo botão
+    // "Aula assistida" (markWatched) — o que acontecer primeiro.
     if (!done.has(aulaId) && p.pct >= LIMITE_CONCLUSAO_PCT) {
       salvarProgresso(aulaId, true);
       setDone((prev) => new Set(prev).add(aulaId));
@@ -147,14 +151,19 @@ export default function StudentCourse() {
     });
     salvarProgresso(aulaId, true);
   }, [profile, turmaId, currentId, horarios, duracaoMin, done]); // eslint-disable-line react-hooks/exhaustive-deps
-  const goNext = () => { const next = aulas[currentIdx + 1]; if (next) selectAula(next.id); };
+
+  /** Marcação manual — o aluno pode clicar em "Aula assistida" a qualquer momento. */
+  const markWatched = () => {
+    if (!currentId || done.has(currentId)) return;
+    salvarProgresso(currentId, true);
+    setDone((prev) => new Set(prev).add(currentId));
+  };
 
   if (loading) return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8"><Skeleton className="h-8 w-full max-w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-64 sm:h-96 rounded-xl" /><Skeleton className="h-64 sm:h-96 rounded-xl" /></div></div>;
   if (!curso) return null;
 
   const pct = aulas.length ? Math.round((done.size / aulas.length) * 100) : 0;
   const isDone = current ? done.has(current.id) : false;
-  const hasNext = currentIdx < aulas.length - 1;
   const restantes = Math.max(aulas.length - done.size, 0);
 
   const aviso = (() => {
@@ -274,7 +283,7 @@ export default function StudentCourse() {
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
               </div>
               {current.youtube_url ? (
-                <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} hasNext={hasNext} onNext={goNext} onProgress={handleProgress} /></div>
+                <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} onProgress={handleProgress} onVideoId={setVideoId} /></div>
               ) : current.material_pdf_url ? (
                 <div className="mb-6"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>
               ) : null}
@@ -286,9 +295,17 @@ export default function StudentCourse() {
                 </div>
                 <div className="flex flex-col items-stretch sm:items-end gap-2 sm:flex-shrink-0">
                   {current.youtube_url && (
-                    <span className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md', isDone ? 'bg-brand/10 text-brand' : 'text-fg-3 border border-line')}>
-                      {isDone && <Check className="w-4 h-4" />}{isDone ? 'Assistida' : `Assista ${LIMITE_CONCLUSAO_PCT}% para concluir`}
-                    </span>
+                    <>
+                      <button
+                        onClick={markWatched}
+                        disabled={isDone}
+                        className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md transition-colors', isDone ? 'bg-brand/10 text-brand cursor-default' : 'text-fg-2 border border-line hover:bg-panel-2')}
+                      >
+                        {isDone ? <Check className="w-4 h-4" /> : null}
+                        {isDone ? 'Aula assistida' : `Marcar aula assistida (ou assista ${LIMITE_CONCLUSAO_PCT}%)`}
+                      </button>
+                      <Button variant="ghost" size="sm" onClick={() => setProblemaOpen(true)} icon={<AlertTriangle className="w-4 h-4" />}>Problemas para assistir</Button>
+                    </>
                   )}
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
                   {atividadeId && (
@@ -306,6 +323,24 @@ export default function StudentCourse() {
         <DuvidaModal open={duvidaOpen} aulaId={current.id} cursoId={curso.id} onClose={() => setDuvidaOpen(false)}
           onDone={() => { setDuvidaOpen(false); toast.success('Dúvida enviada! Acompanhe em "Dúvidas" no menu.'); }} />
       )}
+
+      <Modal open={problemaOpen} onClose={() => setProblemaOpen(false)} title="Problemas para assistir"
+        footer={<Button variant="secondary" onClick={() => setProblemaOpen(false)}>Fechar</Button>}>
+        <div className="space-y-3">
+          <p className="text-fg-2 text-sm">Se o vídeo não carregar aqui na plataforma, assista direto no YouTube pelo link abaixo.</p>
+          {videoId ? (
+            <a
+              href={`https://www.youtube.com/watch?v=${videoId}`}
+              target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-brand font-medium hover:underline break-all"
+            >
+              <ExternalLink className="w-4 h-4 flex-shrink-0" /> Abrir vídeo no YouTube
+            </a>
+          ) : (
+            <p className="text-fg-3 text-sm">Link ainda não disponível — aguarde o vídeo carregar e tente novamente.</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

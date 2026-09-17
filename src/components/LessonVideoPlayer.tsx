@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize2, RotateCcw, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
-// watermark removed
+import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 declare global {
@@ -14,11 +13,10 @@ export type WatchProgress = { segundosAssistidos: number; duracao: number; pct: 
 
 type Props = {
   lessonId: string;
-  onEnded?: () => void;
-  onNext?: () => void;
-  hasNext?: boolean;
   /** Chamado a cada avanço de reprodução com o total efetivamente assistido. */
   onProgress?: (p: WatchProgress) => void;
+  /** Chamado assim que o id do vídeo é resolvido (ou null se não houver/der erro) — usado pelo botão "Problemas para assistir". */
+  onVideoId?: (id: string | null) => void;
 };
 
 /**
@@ -27,6 +25,10 @@ type Props = {
  * cobre travadas de buffer. Saltos maiores são seek e não somam tempo assistido.
  */
 const MAX_SALTO_CONTINUO = 3;
+
+/** Se o player não avisar que está pronto dentro desse tempo, mostra erro com
+ * "Tentar novamente" em vez de deixar o loader girando pra sempre. */
+const READY_TIMEOUT_MS = 15000;
 
 let ytApiPromise: Promise<void> | null = null;
 function loadYouTubeAPI(): Promise<void> {
@@ -45,19 +47,16 @@ function loadYouTubeAPI(): Promise<void> {
   return ytApiPromise;
 }
 
-function fmt(s: number): string {
-  if (!isFinite(s) || s < 0) s = 0;
-  const m = Math.floor(s / 60);
-  const ss = Math.floor(s % 60);
-  return `${m}:${ss.toString().padStart(2, '0')}`;
-}
-
-export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, onProgress }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
+/**
+ * Player da aula — usa o player e os controles nativos do YouTube (sem
+ * sobreposição própria); a API do YouTube é usada só nos bastidores para
+ * medir o tempo assistido (marcação automática de aula concluída).
+ */
+export default function LessonVideoPlayer({ lessonId, onProgress, onVideoId }: Props) {
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const pollRef = useRef<number | null>(null);
-  const hideControlsTimer = useRef<number | null>(null);
+  const readyTimeoutRef = useRef<number | null>(null);
 
   // Tempo efetivamente reproduzido, somado tick a tick. Não usamos a posição do
   // vídeo como progresso: arrastar a barra para o fim marcaria a aula inteira
@@ -72,20 +71,13 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
   const [isReady, setIsReady] = useState(false);
-
-  const [playerState, setPlayerState] = useState<number>(-1); // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering
-  const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(100);
-  const [muted, setMuted] = useState(false);
-  const [rate, setRate] = useState(1);
-  const [showControls, setShowControls] = useState(true);
-  const [pseudoFs, setPseudoFs] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Fetch videoId from edge function
   const fetchVideo = useCallback(async () => {
     setFetching(true);
     setLoadErr(null);
+    setIsReady(false);
     try {
       const { data, error } = await supabase.functions.invoke('get-lesson-video', {
         body: { lesson_id: lessonId },
@@ -100,20 +92,21 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
         if (ctx?.status === 403) msg = 'Você não tem acesso a esta aula';
         if (ctx?.status === 404) msg = 'Esta aula ainda não possui vídeo cadastrado.';
         setLoadErr(msg);
+        onVideoId?.(null);
         return;
       }
-      setVideoId(data?.videoId ?? null);
-      // userEmail no longer needed (watermark removed)
-    } catch (e) {
+      const id = data?.videoId ?? null;
+      setVideoId(id);
+      onVideoId?.(id);
+    } catch {
       setLoadErr('Erro de rede. Tente novamente.');
+      onVideoId?.(null);
     } finally {
       setFetching(false);
     }
-  }, [lessonId]);
+  }, [lessonId, onVideoId]);
 
-  useEffect(() => {
-    fetchVideo();
-  }, [fetchVideo]);
+  useEffect(() => { fetchVideo(); }, [fetchVideo, reloadKey]);
 
   // Init YT player when videoId ready
   useEffect(() => {
@@ -124,16 +117,10 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
     loadYouTubeAPI().then(() => {
       if (cancelled || !playerHostRef.current) return;
       player = new window.YT.Player(playerHostRef.current, {
-        host: 'https://www.youtube-nocookie.com',
         videoId,
         playerVars: {
-          controls: 0,
           rel: 0,
-          iv_load_policy: 3,
-          fs: 0,
-          disablekb: 1,
           playsinline: 1,
-          cc_load_policy: 0,
           origin: window.location.origin,
           enablejsapi: 1,
         },
@@ -141,37 +128,30 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
           onReady: () => {
             playerRef.current = player;
             setDuration(player.getDuration() ?? 0);
-            setVolume(player.getVolume() ?? 100);
             setIsReady(true);
-            const iframe = player.getIframe?.();
-            if (iframe) {
-              iframe.setAttribute(
-                'sandbox',
-                'allow-scripts allow-same-origin allow-presentation'
-              );
-              iframe.setAttribute('title', 'Aula');
-            }
+            if (readyTimeoutRef.current) { window.clearTimeout(readyTimeoutRef.current); readyTimeoutRef.current = null; }
           },
           onStateChange: (e: any) => {
-            setPlayerState(e.data);
-            if (e.data === 1) {
-              setDuration(player.getDuration() ?? 0);
-            }
-            if (e.data === 0) onEnded?.();
+            if (e.data === 1) setDuration(player.getDuration() ?? 0);
           },
-          onPlaybackRateChange: (e: any) => setRate(e.data),
         },
       });
     });
 
+    readyTimeoutRef.current = window.setTimeout(() => {
+      if (!cancelled) setLoadErr('O vídeo demorou demais para carregar.');
+    }, READY_TIMEOUT_MS);
+
     return () => {
       cancelled = true;
-      try { player?.destroy?.(); } catch {}
+      if (readyTimeoutRef.current) { window.clearTimeout(readyTimeoutRef.current); readyTimeoutRef.current = null; }
+      try { player?.destroy?.(); } catch { /* ignore */ }
       playerRef.current = null;
+      setIsReady(false);
     };
-  }, [videoId, onEnded]);
+  }, [videoId]);
 
-  // Polling current time
+  // Polling do tempo assistido — roda por trás mesmo com os controles nativos do YouTube.
   useEffect(() => {
     if (pollRef.current) window.clearInterval(pollRef.current);
     pollRef.current = window.setInterval(() => {
@@ -179,7 +159,6 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
       if (!p?.getCurrentTime) return;
       try {
         const t = p.getCurrentTime() ?? 0;
-        setCurrent(t);
         const dur = duration || (p.getDuration?.() ?? 0);
         if (!duration && dur) setDuration(dur);
 
@@ -195,334 +174,36 @@ export default function LessonVideoPlayer({ lessonId, onEnded, onNext, hasNext, 
             pct: Math.min(100, (assistidoRef.current / dur) * 100),
           });
         }
-      } catch {}
+      } catch { /* ignore */ }
     }, 500);
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
     };
   }, [duration]);
 
-  // (watermark removed)
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const p = playerRef.current;
-      if (!p) return;
-      const target = e.target as HTMLElement;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        const s = p.getPlayerState?.();
-        if (s === 1) p.pauseVideo(); else p.playVideo();
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        p.seekTo((p.getCurrentTime() ?? 0) + 5, true);
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault();
-        p.seekTo(Math.max(0, (p.getCurrentTime() ?? 0) - 5), true);
-      } else if (e.code === 'ArrowUp') {
-        e.preventDefault();
-        const v = Math.min(100, (p.getVolume() ?? 100) + 10);
-        p.setVolume(v); setVolume(v);
-      } else if (e.code === 'ArrowDown') {
-        e.preventDefault();
-        const v = Math.max(0, (p.getVolume() ?? 100) - 10);
-        p.setVolume(v); setVolume(v);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  const showControlsTemporarily = () => {
-    setShowControls(true);
-    if (hideControlsTimer.current) window.clearTimeout(hideControlsTimer.current);
-    hideControlsTimer.current = window.setTimeout(() => setShowControls(false), 3000);
-  };
-
-  const togglePlay = () => {
-    const p = playerRef.current; if (!p) return;
-    const s = p.getPlayerState();
-    if (s === 1) p.pauseVideo(); else p.playVideo();
-  };
-
-  const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const t = parseFloat(e.target.value);
-    playerRef.current?.seekTo(t, true);
-    setCurrent(t);
-  };
-
-  const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = parseInt(e.target.value);
-    setVolume(v);
-    playerRef.current?.setVolume(v);
-    if (v === 0) { playerRef.current?.mute(); setMuted(true); }
-    else if (muted) { playerRef.current?.unMute(); setMuted(false); }
-  };
-
-  const toggleMute = () => {
-    const p = playerRef.current; if (!p) return;
-    if (muted) { p.unMute(); setMuted(false); } else { p.mute(); setMuted(true); }
-  };
-
-  const changeRate = (r: number) => {
-    setRate(r);
-    playerRef.current?.setPlaybackRate(r);
-  };
-
-  const goFullscreen = async () => {
-    const el = containerRef.current as any;
-    if (!el) return;
-    const doc: any = document;
-    const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
-    if (isFs) {
-      try { (doc.exitFullscreen?.() || doc.webkitExitFullscreen?.()); } catch { /* ignore */ }
-      setPseudoFs(false);
-      return;
-    }
-    if (pseudoFs) { setPseudoFs(false); return; }
-    const ua = navigator.userAgent || '';
-    const isIOS = /iPad|iPhone|iPod/.test(ua) || (/(Macintosh)/.test(ua) && 'ontouchend' in document);
-    // iOS Safari doesn't support requestFullscreen on <div>/<iframe>; go straight to pseudo-fs
-    if (!isIOS) {
-      const req = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (req) {
-        try {
-          await req.call(el);
-          try { await (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
-          return;
-        } catch { /* fallback */ }
-      }
-    }
-    setPseudoFs(true);
-  };
-
-  useEffect(() => {
-    const onFsChange = () => {
-      const doc: any = document;
-      const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
-      if (!isFs) {
-        try { (screen.orientation as any)?.unlock?.(); } catch { /* ignore */ }
-      }
-    };
-    document.addEventListener('fullscreenchange', onFsChange);
-    document.addEventListener('webkitfullscreenchange', onFsChange as any);
-    return () => {
-      document.removeEventListener('fullscreenchange', onFsChange);
-      document.removeEventListener('webkitfullscreenchange', onFsChange as any);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!pseudoFs) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPseudoFs(false); };
-    document.addEventListener('keydown', onKey);
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevBodyPosition = document.body.style.position;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    try { (screen.orientation as any)?.lock?.('landscape'); } catch { /* ignore */ }
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.position = prevBodyPosition;
-      document.body.style.width = '';
-      try { (screen.orientation as any)?.unlock?.(); } catch { /* ignore */ }
-    };
-  }, [pseudoFs]);
-
-  const replay = () => {
-    const p = playerRef.current; if (!p) return;
-    p.seekTo(0, true); p.playVideo();
-  };
+  const retry = () => setReloadKey((k) => k + 1);
 
   if (loadErr) {
     return (
-      <div className="aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black grid place-items-center text-center px-6">
+      <div className="aspect-video rounded-lg overflow-hidden border border-line bg-black grid place-items-center text-center px-6">
         <div>
           <p className="text-white mb-3">{loadErr}</p>
-          {loadErr.includes('rede') && (
-            <button onClick={fetchVideo} className="px-4 py-2 rounded-md bg-[#cbfb00] text-black text-sm font-medium">
-              Tentar novamente
-            </button>
-          )}
+          <button onClick={retry} className="px-4 py-2 rounded-md bg-[#cbfb00] text-black text-sm font-medium">
+            Tentar novamente
+          </button>
         </div>
       </div>
     );
   }
-
-  if (fetching) {
-    return (
-      <div className="aspect-video rounded-lg overflow-hidden border border-[#1c1f26] bg-black grid place-items-center">
-        <Loader2 className="w-8 h-8 text-[#cbfb00] animate-spin" />
-      </div>
-    );
-  }
-
-  const isBuffering = playerState === 3;
-  const isUnstarted = playerState === -1;
-  const isPaused = playerState === 2;
-  const isEnded = playerState === 0;
-  const isPlaying = playerState === 1;
-  const showInitialLoader = !isReady;
-  const showCenterPlay = isReady && (isUnstarted || isPaused);
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative bg-black select-none ${pseudoFs ? 'fixed inset-0 z-[9999]' : 'aspect-video rounded-lg overflow-hidden border border-[#1c1f26]'}`}
-      style={pseudoFs ? { width: '100vw', height: '100dvh', maxHeight: '100dvh' } : undefined}
-      onContextMenu={(e) => e.preventDefault()}
-      onMouseMove={showControlsTemporarily}
-      onMouseLeave={() => setShowControls(false)}
-    >
-      {/* CAMADA 0: player */}
-      <div className="absolute inset-0 z-0">
-        <div ref={playerHostRef} className="w-full h-full pointer-events-none" />
-      </div>
-
-      {/* Botão fechar (pseudo-fullscreen no iOS/mobile) */}
-      {pseudoFs && (
-        <button
-          onClick={() => setPseudoFs(false)}
-          className="absolute top-3 right-3 z-40 w-10 h-10 rounded-full bg-black/70 text-white grid place-items-center hover:bg-black/90"
-          aria-label="Fechar tela cheia"
-          style={{ paddingTop: 'env(safe-area-inset-top)' }}
-        >
-          ✕
-        </button>
-      )}
-
-      {/* CAMADA 1: clique central (play/pause) — sempre presente sobre o vídeo, exceto quando ended */}
-      {!isEnded && (
-        <div
-          className="absolute left-0 right-0 top-0 z-10 cursor-pointer"
-          style={{ bottom: 64 }}
-          onClick={() => {
-            if (!isReady) return;
-            const p = playerRef.current; if (!p) return;
-            const s = p.getPlayerState?.();
-            if (s === 1) p.pauseVideo(); else p.playVideo();
-          }}
-        />
-      )}
-
-      {/* CAMADA 2: loader inicial (apenas antes do player estar pronto) */}
-      {showInitialLoader && (
-        <div className="absolute inset-0 z-20 bg-black grid place-items-center">
-          <Loader2 className="w-10 h-10 text-[#cbfb00] animate-spin" />
+    <div className="relative aspect-video rounded-lg overflow-hidden border border-line bg-black">
+      <div ref={playerHostRef} className="w-full h-full" />
+      {(fetching || !isReady) && (
+        <div className="absolute inset-0 z-10 bg-black grid place-items-center pointer-events-none">
+          <Loader2 className="w-8 h-8 text-[#cbfb00] animate-spin" />
         </div>
       )}
-
-      {/* CAMADA 2b: buffering durante reprodução — spinner discreto, sem cobrir o vídeo */}
-      {isReady && isBuffering && (
-        <div className="absolute inset-0 z-20 grid place-items-center pointer-events-none">
-          <Loader2 className="w-10 h-10 text-white/80 animate-spin drop-shadow-lg" />
-        </div>
-      )}
-
-      {/* CAMADA 3: botão central de play (pronto e não tocando) */}
-      {showCenterPlay && (
-        <div className={`absolute inset-0 z-20 grid place-items-center ${isPaused ? 'bg-black/40' : 'bg-black/20'} pointer-events-none`}>
-          <button
-            onClick={() => playerRef.current?.playVideo()}
-            className="pointer-events-auto w-20 h-20 rounded-full bg-white grid place-items-center hover:scale-105 transition-transform shadow-2xl"
-            aria-label="Reproduzir"
-          >
-            <Play className="w-8 h-8 text-black fill-black ml-1" />
-          </button>
-        </div>
-      )}
-
-      {/* CAMADA 4: ended */}
-      {isEnded && (
-        <div className="absolute inset-0 z-20 bg-black/90 grid place-items-center">
-          <div className="text-center px-6">
-            <CheckCircle2 className="w-14 h-14 text-[#cbfb00] mx-auto mb-4" />
-            <p className="text-white text-xl font-medium mb-6">Aula concluída</p>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={replay}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#1c1f26] text-white hover:bg-white/5 text-sm"
-              >
-                <RotateCcw className="w-4 h-4" /> Assistir novamente
-              </button>
-              {hasNext && (
-                <button
-                  onClick={() => onNext?.()}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#cbfb00] text-black hover:opacity-90 text-sm font-medium"
-                >
-                  Próxima aula <ArrowRight className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* (click overlay is camada 1) */}
-
-      {/* CAMADA 6: barra de controles */}
-      <div
-        className={`absolute inset-x-0 bottom-0 z-30 px-4 pt-10 pb-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent transition-opacity duration-200 ${
-          showControls || isPaused ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.1}
-          value={current}
-          onChange={onSeek}
-          className="w-full h-1 accent-[#cbfb00] cursor-pointer"
-          style={{ background: `linear-gradient(to right, #cbfb00 0%, #cbfb00 ${(current / (duration || 1)) * 100}%, rgba(255,255,255,0.2) ${(current / (duration || 1)) * 100}%, rgba(255,255,255,0.2) 100%)` }}
-        />
-        <div className="mt-2 flex items-center gap-3 text-white">
-          <button onClick={togglePlay} className="p-1 hover:text-[#cbfb00]" aria-label="Play/Pause">
-            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-          </button>
-
-          <span className="text-xs tabular-nums text-white/80">
-            {fmt(current)} / {fmt(duration)}
-          </span>
-
-          <div className="flex items-center gap-2 ml-2">
-            <button onClick={toggleMute} className="p-1 hover:text-[#cbfb00]" aria-label="Mudo">
-              {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={muted ? 0 : volume}
-              onChange={onVolume}
-              className="w-20 h-1 accent-[#cbfb00] cursor-pointer"
-            />
-          </div>
-
-          <div className="ml-auto flex items-center gap-3">
-            <select
-              value={rate}
-              onChange={(e) => changeRate(parseFloat(e.target.value))}
-              className="bg-black/60 border border-white/20 text-white text-xs rounded px-2 py-1 outline-none"
-            >
-              {[0.5, 1, 1.25, 1.5, 2].map((r) => (
-                <option key={r} value={r}>{r}x</option>
-              ))}
-            </select>
-            <button onClick={goFullscreen} className="p-1 hover:text-[#cbfb00]" aria-label="Tela cheia">
-              <Maximize2 className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
