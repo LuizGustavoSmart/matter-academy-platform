@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle, ClipboardList, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, HelpCircle, Flame, Clock, Sparkles, Trophy, PlayCircle, ClipboardList, AlertTriangle, ExternalLink, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, Modal, ProgressBar, Skeleton, useToast, cn } from '../../components/ui';
@@ -333,13 +333,31 @@ export default function StudentCourse() {
         <div className="space-y-3">
           <p className="text-fg-2 text-sm">Se o vídeo não carregar aqui na plataforma, assista direto no YouTube pelo link abaixo.</p>
           {current?.youtube_url && toAbsoluteYouTubeUrl(current.youtube_url) ? (
-            <a
-              href={toAbsoluteYouTubeUrl(current.youtube_url)!}
-              target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-brand font-medium hover:underline break-all"
-            >
-              <ExternalLink className="w-4 h-4 flex-shrink-0" /> Abrir vídeo no YouTube
-            </a>
+            <>
+              <a
+                href={toAbsoluteYouTubeUrl(current.youtube_url)!}
+                target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-brand font-medium hover:underline break-all"
+              >
+                <ExternalLink className="w-4 h-4 flex-shrink-0" /> Abrir vídeo no YouTube
+              </a>
+              <p className="text-fg-3 text-sm pt-2 border-t border-line">
+                Se o clique não funcionar, clique aqui para copiar o link da aula e cole no seu navegador.
+              </p>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(toAbsoluteYouTubeUrl(current.youtube_url!)!);
+                    toast.success('Link copiado!');
+                  } catch {
+                    toast.error('Não foi possível copiar o link.');
+                  }
+                }}
+                className="inline-flex items-center gap-2 text-brand font-medium hover:underline"
+              >
+                <Copy className="w-4 h-4 flex-shrink-0" /> Copiar link da aula
+              </button>
+            </>
           ) : (
             <p className="text-fg-3 text-sm">Link não disponível para esta aula.</p>
           )}
