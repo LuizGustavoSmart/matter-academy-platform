@@ -15,8 +15,6 @@ type Props = {
   lessonId: string;
   /** Chamado a cada avanço de reprodução com o total efetivamente assistido. */
   onProgress?: (p: WatchProgress) => void;
-  /** Chamado assim que o id do vídeo é resolvido (ou null se não houver/der erro) — usado pelo botão "Problemas para assistir". */
-  onVideoId?: (id: string | null) => void;
 };
 
 /**
@@ -52,7 +50,7 @@ function loadYouTubeAPI(): Promise<void> {
  * sobreposição própria); a API do YouTube é usada só nos bastidores para
  * medir o tempo assistido (marcação automática de aula concluída).
  */
-export default function LessonVideoPlayer({ lessonId, onProgress, onVideoId }: Props) {
+export default function LessonVideoPlayer({ lessonId, onProgress }: Props) {
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const pollRef = useRef<number | null>(null);
@@ -92,19 +90,15 @@ export default function LessonVideoPlayer({ lessonId, onProgress, onVideoId }: P
         if (ctx?.status === 403) msg = 'Você não tem acesso a esta aula';
         if (ctx?.status === 404) msg = 'Esta aula ainda não possui vídeo cadastrado.';
         setLoadErr(msg);
-        onVideoId?.(null);
         return;
       }
-      const id = data?.videoId ?? null;
-      setVideoId(id);
-      onVideoId?.(id);
+      setVideoId(data?.videoId ?? null);
     } catch {
       setLoadErr('Erro de rede. Tente novamente.');
-      onVideoId?.(null);
     } finally {
       setFetching(false);
     }
-  }, [lessonId, onVideoId]);
+  }, [lessonId]);
 
   useEffect(() => { fetchVideo(); }, [fetchVideo, reloadKey]);
 

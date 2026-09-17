@@ -33,7 +33,6 @@ export default function StudentCourse() {
   const [duvidaOpen, setDuvidaOpen] = useState(false);
   const [daysSince, setDaysSince] = useState<number | null>(null);
   const [atividadeId, setAtividadeId] = useState<string | null>(null);
-  const [videoId, setVideoId] = useState<string | null>(null);
   const [problemaOpen, setProblemaOpen] = useState(false);
 
   // Contexto de presença: turma do aluno neste curso, horários agendados de
@@ -108,7 +107,6 @@ export default function StudentCourse() {
 
   const selectAula = async (aulaId: string) => {
     setCurrentId(aulaId);
-    setVideoId(null);
     ultimoProgresso.current = null; // o player remonta e recomeça a contagem
     if (profile) await supabase.from('progresso').upsert({ user_id: profile.id, aula_id: aulaId, concluido: done.has(aulaId), updated_at: new Date().toISOString() }, { onConflict: 'user_id,aula_id' });
   };
@@ -283,7 +281,7 @@ export default function StudentCourse() {
                 <Button variant="secondary" onClick={() => selectAula(aulas[currentIdx + 1].id)} disabled={currentIdx >= aulas.length - 1}>Próxima aula</Button>
               </div>
               {current.youtube_url ? (
-                <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} onProgress={handleProgress} onVideoId={setVideoId} /></div>
+                <div className="mb-6"><LessonVideoPlayer key={current.id} lessonId={current.id} onProgress={handleProgress} /></div>
               ) : current.material_pdf_url ? (
                 <div className="mb-6"><MaterialAulaViewer key={current.id} path={current.material_pdf_url} /></div>
               ) : null}
@@ -304,7 +302,7 @@ export default function StudentCourse() {
                         {isDone ? <Check className="w-4 h-4" /> : null}
                         {isDone ? 'Aula assistida' : `Marcar aula assistida (ou assista ${LIMITE_CONCLUSAO_PCT}%)`}
                       </button>
-                      <Button variant="ghost" size="sm" onClick={() => setProblemaOpen(true)} icon={<AlertTriangle className="w-4 h-4" />}>Problemas para assistir</Button>
+                      <Button variant="secondary" onClick={() => setProblemaOpen(true)} icon={<AlertTriangle className="w-4 h-4" />}>Problemas para assistir</Button>
                     </>
                   )}
                   <Button variant="secondary" onClick={() => setDuvidaOpen(true)} icon={<HelpCircle className="w-4 h-4" />}>Tirar dúvida</Button>
@@ -328,16 +326,16 @@ export default function StudentCourse() {
         footer={<Button variant="secondary" onClick={() => setProblemaOpen(false)}>Fechar</Button>}>
         <div className="space-y-3">
           <p className="text-fg-2 text-sm">Se o vídeo não carregar aqui na plataforma, assista direto no YouTube pelo link abaixo.</p>
-          {videoId ? (
+          {current?.youtube_url ? (
             <a
-              href={`https://www.youtube.com/watch?v=${videoId}`}
+              href={current.youtube_url}
               target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-brand font-medium hover:underline break-all"
             >
               <ExternalLink className="w-4 h-4 flex-shrink-0" /> Abrir vídeo no YouTube
             </a>
           ) : (
-            <p className="text-fg-3 text-sm">Link ainda não disponível — aguarde o vídeo carregar e tente novamente.</p>
+            <p className="text-fg-3 text-sm">Link não disponível para esta aula.</p>
           )}
         </div>
       </Modal>
