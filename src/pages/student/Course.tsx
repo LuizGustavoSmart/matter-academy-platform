@@ -9,6 +9,7 @@ import DuvidaModal from './DuvidaModal';
 import { SignedImage } from '../../components/SignedImage';
 import MaterialAulaViewer from '../../components/MaterialAulaViewer';
 import { useFaixaCapas, resolveCapaUrl, resolveAulaCapaUrl } from '../../lib/faixaCapas';
+import { toAbsoluteYouTubeUrl } from '../../lib/youtube';
 import {
   LIMITE_PRESENCA_PCT, LIMITE_CONCLUSAO_PCT, dentroDaJanelaAoVivo, duracaoAulaMin, registrarPresencaAutomatica,
 } from '../../lib/presenca';
@@ -150,11 +151,16 @@ export default function StudentCourse() {
     salvarProgresso(aulaId, true);
   }, [profile, turmaId, currentId, horarios, duracaoMin, done]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Marcação manual — o aluno pode clicar em "Aula assistida" a qualquer momento. */
-  const markWatched = () => {
-    if (!currentId || done.has(currentId)) return;
-    salvarProgresso(currentId, true);
-    setDone((prev) => new Set(prev).add(currentId));
+  /** Marcação manual — o aluno pode clicar em "Aula assistida" para marcar ou desmarcar a qualquer momento. */
+  const toggleWatched = () => {
+    if (!currentId) return;
+    const marcando = !done.has(currentId);
+    salvarProgresso(currentId, marcando);
+    setDone((prev) => {
+      const next = new Set(prev);
+      if (marcando) next.add(currentId); else next.delete(currentId);
+      return next;
+    });
   };
 
   if (loading) return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8"><Skeleton className="h-8 w-full max-w-64 mb-6" /><div className="grid lg:grid-cols-[320px_1fr] gap-6"><Skeleton className="h-64 sm:h-96 rounded-xl" /><Skeleton className="h-64 sm:h-96 rounded-xl" /></div></div>;
@@ -295,9 +301,9 @@ export default function StudentCourse() {
                   {current.youtube_url && (
                     <>
                       <button
-                        onClick={markWatched}
-                        disabled={isDone}
-                        className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md transition-colors', isDone ? 'bg-brand/10 text-brand cursor-default' : 'text-fg-2 border border-line hover:bg-panel-2')}
+                        onClick={toggleWatched}
+                        title={isDone ? 'Clique para desmarcar' : 'Clique para marcar como assistida'}
+                        className={cn('inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 h-9 rounded-md transition-colors', isDone ? 'bg-brand/10 text-brand hover:bg-brand/15' : 'text-fg-2 border border-line hover:bg-panel-2')}
                       >
                         {isDone ? <Check className="w-4 h-4" /> : null}
                         {isDone ? 'Aula assistida' : `Marcar aula assistida (ou assista ${LIMITE_CONCLUSAO_PCT}%)`}
@@ -326,9 +332,9 @@ export default function StudentCourse() {
         footer={<Button variant="secondary" onClick={() => setProblemaOpen(false)}>Fechar</Button>}>
         <div className="space-y-3">
           <p className="text-fg-2 text-sm">Se o vídeo não carregar aqui na plataforma, assista direto no YouTube pelo link abaixo.</p>
-          {current?.youtube_url ? (
+          {current?.youtube_url && toAbsoluteYouTubeUrl(current.youtube_url) ? (
             <a
-              href={current.youtube_url}
+              href={toAbsoluteYouTubeUrl(current.youtube_url)!}
               target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-brand font-medium hover:underline break-all"
             >
