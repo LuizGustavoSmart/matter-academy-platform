@@ -59,7 +59,9 @@ export default function Activate() {
     try {
       await callFn('auth-public', 'activate', { token, password });
       if (invite?.email) {
-        await supabase.auth.signInWithPassword({ email: invite.email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email: invite.email, password });
+        if (error) throw error;
+        if (!data.session?.user) throw new Error('Não foi possível iniciar sua sessão. Tente entrar pelo login.');
       }
       if (isStudent) {
         const { data: session } = await supabase.auth.getSession();
@@ -67,14 +69,17 @@ export default function Activate() {
         if (userId) {
           // sexo/cargo/data_nascimento ainda não estão no schema gerado
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from('profiles').update({
+          const { error: profileError } = await (supabase as any).from('profiles').update({
             nome: nome.trim(), sobrenome: sobrenome.trim(), telefone: telefone.trim(),
             data_nascimento: dataNascimento, sexo, cargo: cargo.trim(), empresa: empresa.trim(),
           }).eq('id', userId);
+          if (profileError) throw profileError;
         }
       }
       setDone(true);
-      setTimeout(() => nav('/'), 1500);
+      // A sessão já foi confirmada acima; ir direto ao destino evita uma
+      // corrida entre o redirect da raiz e o carregamento assíncrono do perfil.
+      setTimeout(() => nav('/dashboard', { replace: true }), 1500);
     } catch (e) {
       setErr((e as Error).message);
     } finally {

@@ -138,14 +138,14 @@ export default function AdminUsers() {
   const clearSelection = () => setSelected(new Set());
 
   /* ── ações individuais ── */
-  const showLink = (token: string) => setLinkModal(`${window.location.origin}/ativar?token=${token}`);
+  const showLink = (token: string, path = 'ativar') => setLinkModal(`${window.location.origin}/${path}?token=${token}`);
   const copyLinkText = (text: string) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
   const actions: RowActions = {
     edit: (u) => setDrawer({ mode: 'edit', user: u }),
     copyLink: (u) => u.invite_token && showLink(u.invite_token),
     reinvite: async (u) => {
-      try { const r = await callFn('admin-users', 'reinvite', { user_id: u.id }); showLink(r.invite_token); toast.success('Convite reenviado.'); load(); }
+      try { const r = await callFn('admin-users', 'reinvite', { user_id: u.id }); showLink(r.token, r.path); toast.success(r.path === 'ativar' ? 'Convite reenviado.' : 'Link de redefinição gerado.'); load(); }
       catch (e) { toast.error((e as Error).message); }
     },
     toggleBlock: async (u) => {

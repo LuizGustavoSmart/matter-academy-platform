@@ -234,14 +234,31 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && action === "reinvite") {
       const { user_id } = body as { user_id: string };
+      const { data: current, error: currentError } = await admin.from("profiles")
+        .select("email,role,nome,status").eq("id", user_id).maybeSingle();
+      if (currentError || !current) return json({ error: currentError?.message ?? "Usuário não encontrado" }, 404);
+      if (current.status === "blocked") return json({ error: "Desbloqueie o usuário antes de reenviar o acesso." }, 400);
+
+      // Um usuário ativo não deve voltar para pending: isso invalida uma
+      // sessão saudável e usa o fluxo de ativação como se fosse recuperação.
+      if (current.status === "active") {
+        const reset_token = genToken();
+        const reset_expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const { error } = await admin.from("profiles").update({ reset_token, reset_expires_at }).eq("id", user_id);
+        if (error) return json({ error: error.message }, 400);
+        const link = buildLink("redefinir-senha", reset_token);
+        const delivery = await sendTransactionalEmail({ kind: "reset", email: current.email, link, nome: current.nome, expires_at: reset_expires_at });
+        return json({ token: reset_token, path: "redefinir-senha", email_sent: delivery.ok, email_error: delivery.error });
+      }
+
       const invite_token = genToken();
-      const invite_expires_at = null; // ver comentário em "create"
+      const invite_expires_at = null;
       const { data: updated, error } = await admin.from("profiles")
-        .update({ invite_token, invite_expires_at, status: "pending" })
+        .update({ invite_token, invite_expires_at })
         .eq("id", user_id)
         .select("email,role,nome")
         .maybeSingle();
-      if (error) return json({ error: error.message }, 400);
+      if (error || !updated) return json({ error: error?.message ?? "Usuário não encontrado" }, 400);
       let email_sent = false;
       let email_error: string | undefined;
       if (updated?.email) {
@@ -256,7 +273,7 @@ Deno.serve(async (req: Request) => {
         email_sent = delivery.ok;
         email_error = delivery.error;
       }
-      return json({ invite_token, email_sent, email_error });
+      return json({ token: invite_token, path: "ativar", invite_token, email_sent, email_error });
     }
 
     if (req.method === "POST" && action === "update") {

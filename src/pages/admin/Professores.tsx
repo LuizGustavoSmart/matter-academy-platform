@@ -78,13 +78,13 @@ export default function AdminProfessores() {
   const clearFilters = () => { setSearch(''); setFilterRole(''); setFilterTurma(''); };
 
   /* ── Ações ── */
-  const showLink = (token: string) =>
-    setLinkModal(`${window.location.origin}/ativar?token=${token}`);
+  const showLink = (token: string, path = 'ativar') =>
+    setLinkModal(`${window.location.origin}/${path}?token=${token}`);
 
   const reinvite = async (s: StaffRow) => {
     try {
       const r = await callFn('admin-users', 'reinvite', { user_id: s.id });
-      showLink(r.invite_token);
+      showLink(r.token, r.path);
       load();
     } catch (e) { showToast((e as Error).message, 'danger'); }
   };

@@ -32,6 +32,8 @@ export default function StudentDashboard() {
   useEffect(() => {
     const load = async () => {
       if (!profile) return;
+      setLoading(true);
+      try {
       const { data: ut } = await supabase.from('user_turmas').select('turma_id,curso_id').eq('user_id', profile.id);
       const turmaIds = [...new Set((ut ?? []).map((r) => r.turma_id))];
       // Cursos vinculados diretamente ao aluno + todos os cursos das turmas dele
@@ -142,8 +144,18 @@ export default function StudentDashboard() {
         }
       }
 
-      setTurmas(ts ?? []);
-      setLoading(false);
+        setTurmas(ts ?? []);
+      } catch (error) {
+        // A tela deve continuar renderizando mesmo se uma consulta ou policy
+        // falhar. O erro fica registrado para suporte identificar a causa.
+        console.error('[student-dashboard] falha ao carregar dados', error);
+        setCourses([]);
+        setTurmas([]);
+        setPendentes([]);
+        setNextAula(null);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [profile, isMonitor]);

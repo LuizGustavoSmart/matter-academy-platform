@@ -40,11 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loadProfile = async (userId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id,email,nome,avatar_url,role,status,tour_visto')
       .eq('id', userId)
       .maybeSingle();
+    if (error) throw error;
     setRealProfile(data as Profile | null);
   };
 
@@ -52,20 +53,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (data.session?.user) {
-        loadProfile(data.session.user.id).finally(() => setLoading(false));
+        loadProfile(data.session.user.id)
+          .catch((error) => {
+            console.error('[auth] não foi possível carregar o perfil inicial', error);
+            setRealProfile(null);
+          })
+          .finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
-    }).catch(() => setLoading(false));
+    }).catch((error) => {
+      console.error('[auth] não foi possível restaurar a sessão', error);
+      setSession(null);
+      setRealProfile(null);
+      setLoading(false);
+    });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
         (async () => {
-          await loadProfile(newSession.user.id);
+          try {
+            await loadProfile(newSession.user.id);
+          } catch (error) {
+            // Sem este tratamento uma falha de RLS/rede deixa a interface sem
+            // contexto de perfil e torna o diagnóstico invisível no navegador.
+            console.error('[auth] não foi possível carregar o perfil', error);
+            setRealProfile(null);
+          } finally {
+            setLoading(false);
+          }
         })();
       } else {
         setRealProfile(null);
+        setLoading(false);
       }
     });
     return () => sub.subscription.unsubscribe();
