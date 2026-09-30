@@ -46,7 +46,9 @@ function RequireAuth({ roles }: { roles?: Array<'admin' | 'student' | 'professor
   if (loading) return <Loading />;
   if (!session || !profile) return <Navigate to="/login" replace />;
   if (profile.status === 'blocked') return <Blocked />;
-  if (profile.status === 'pending') return <Navigate to="/login" replace />;
+  // Redirecionar pending para /login fazia PublicOnly devolver para cá:
+  // loop infinito de navegação = tela preta. Mostramos um estado final.
+  if (profile.status === 'pending') return <Pending />;
   if (roles && !roles.includes(profile.role)) return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
   return <Outlet />;
 }
@@ -59,6 +61,22 @@ function Blocked() {
         <h1 className="mb-3">Conta bloqueada</h1>
         <p className="text-[#d6deed] mb-6">Sua conta foi bloqueada. Entre em contato com o administrador.</p>
         <button onClick={() => signOut()} className="text-[#cbfb00] hover:underline text-sm">Sair</button>
+      </div>
+    </div>
+  );
+}
+
+function Pending() {
+  const { signOut } = useAuth();
+  return (
+    <div className="min-h-screen grid place-items-center px-4">
+      <div className="text-center max-w-md">
+        <h1 className="mb-3">Ativação pendente</h1>
+        <p className="text-[#d6deed] mb-6">Não conseguimos concluir a ativação da sua conta. Recarregue a página; se continuar, fale com o suporte.</p>
+        <div className="flex justify-center gap-6">
+          <button onClick={() => window.location.reload()} className="text-[#cbfb00] hover:underline text-sm">Recarregar</button>
+          <button onClick={() => signOut()} className="text-[#cbfb00] hover:underline text-sm">Sair</button>
+        </div>
       </div>
     </div>
   );
@@ -80,7 +98,7 @@ function PerfilLayout() {
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth();
   if (loading) return <Loading />;
-  if (session && profile) return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
+  if (session && profile && profile.status !== 'pending') return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
   return <>{children}</>;
 }
 

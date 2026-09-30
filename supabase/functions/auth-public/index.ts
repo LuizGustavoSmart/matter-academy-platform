@@ -113,15 +113,42 @@ Deno.serve(async (req: Request) => {
     if (action === "reset") {
       const { token, password } = body as { token: string; password: string };
       if (!password || password.length < 6) return json({ error: "Senha deve ter ao menos 6 caracteres" }, 400);
-      const { data: profile } = await admin.from("profiles").select("id,reset_expires_at").eq("reset_token", token).maybeSingle();
+      const { data: profile } = await admin.from("profiles").select("id,status,reset_expires_at").eq("reset_token", token).maybeSingle();
       if (!profile) return json({ error: "Token inválido" }, 400);
       if (profile.reset_expires_at && new Date(profile.reset_expires_at) < new Date()) {
         return json({ error: "Token expirado" }, 400);
       }
       const { error: authErr } = await admin.auth.admin.updateUserById(profile.id, { password });
       if (authErr) return json({ error: authErr.message }, 400);
-      await admin.from("profiles").update({ reset_token: null, reset_expires_at: null }).eq("id", profile.id);
+      // Aluno que nunca ativou e usou "Esqueci minha senha" passa a ter senha
+      // válida; se continuasse "pending", entraria com sessão num perfil que o
+      // frontend não aceita (era a origem da tela preta).
+      const activation = profile.status === "pending"
+        ? { status: "active", invite_token: null, invite_expires_at: null, activated_at: new Date().toISOString() }
+        : {};
+      await admin.from("profiles").update({ reset_token: null, reset_expires_at: null, ...activation }).eq("id", profile.id);
       return json({ ok: true });
+    }
+
+    if (action === "confirm-session") {
+      // Quem tem sessão válida já provou conhecer a senha que ele mesmo definiu
+      // (ativação, redefinição ou senha anterior ao antigo "reinvite" que
+      // voltava contas ativas para pending). Conclui a ativação no servidor.
+      const jwt = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
+      const { data: userData } = await admin.auth.getUser(jwt);
+      if (!userData?.user) return json({ error: "Sessão inválida" }, 401);
+      const { data: profile } = await admin.from("profiles").select("id,status").eq("id", userData.user.id).maybeSingle();
+      if (!profile) return json({ error: "Perfil não encontrado" }, 404);
+      if (profile.status !== "pending") return json({ status: profile.status });
+      const { error: updErr } = await admin.from("profiles").update({
+        status: "active",
+        invite_token: null,
+        invite_expires_at: null,
+        activated_at: new Date().toISOString(),
+      }).eq("id", profile.id).eq("status", "pending");
+      if (updErr) return json({ error: updErr.message }, 400);
+      console.log(`[confirm-session] perfil ${profile.id} ativado a partir de sessão válida`);
+      return json({ status: "active" });
     }
 
     return json({ error: "Ação desconhecida" }, 400);

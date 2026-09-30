@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, callFn } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
 export type Profile = {
@@ -46,7 +46,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
-    setRealProfile(data as Profile | null);
+    let loaded = data as Profile | null;
+    if (loaded?.status === 'pending') {
+      // Sessão válida + perfil "pending" deixava o aluno preso num loop
+      // /login ⇄ /dashboard (tela preta). O servidor conclui a ativação.
+      try {
+        const r = await callFn('auth-public', 'confirm-session', {});
+        if (r.status === 'active') loaded = { ...loaded, status: 'active' };
+      } catch (e) {
+        console.error('[auth] não foi possível concluir a ativação pendente', e);
+      }
+    }
+    setRealProfile(loaded);
   };
 
   useEffect(() => {
